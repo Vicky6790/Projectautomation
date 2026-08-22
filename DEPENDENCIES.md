@@ -39,13 +39,14 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-19 | Retrospective E2E via Compose | `in_review` | Proxy path: MPP upload → generate → seven-section report |
 | WO-33 | Foundation validation vs blueprints | `in_review` | Health/ready, SPA shells, internal API; notes in docs/FOUNDATION_VALIDATION.md |
 | WO-36 | OpenAPI freeze | `in_review` | docs/openapi.json plus pytest drift check; mapping in docs/OPENAPI_FREEZE.md |
+| WO-31 | On-premise access-control requirements | `in_review` | Feature On-Premise Access Control; mapping in docs/ONPREM_AUTH.md |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-31 / WO-35 | on-prem policy | Auth is out of local MVP |
-| WO-34 | WO-16–19, WO-33 | On-prem Compose verification |
+| WO-35 | WO-31 | Implement on-prem sign-in, isolation, audit |
+| WO-34 | WO-16–19, WO-33, WO-35 | On-prem Compose verification |
 
 ## Integration gap closed in code
 
