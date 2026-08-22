@@ -18,8 +18,20 @@ async def upload_file(
     content = await file.read()
     policy = validate_upload(filename, content, module)
     extracted = extract_sow_text(filename, content) if policy.kind == "sow" else None
+    plan_data = None
+    if policy.kind == "mpp":
+        from app.mpp import read_mpp_bytes
+
+        plan_data = read_mpp_bytes(content, filename).model_dump()
     content_type = file.content_type or "application/octet-stream"
-    return store.save_upload(filename, content, content_type, module, extracted_text=extracted)
+    return store.save_upload(
+        filename,
+        content,
+        content_type,
+        module,
+        extracted_text=extracted,
+        plan_data=plan_data,
+    )
 
 
 @router.get("/{file_id}")
@@ -46,3 +58,8 @@ def get_extracted_text(file_id: str) -> dict:
         raise AppError(404, "TEXT_NOT_FOUND", "No extracted text is available for this file")
     text = text_path.read_text(encoding="utf-8")
     return {"file_id": file_id, "char_count": len(text), "text": text}
+
+
+@router.get("/{file_id}/plan")
+def get_parsed_plan(file_id: str) -> dict:
+    return store.get_plan(file_id).model_dump()

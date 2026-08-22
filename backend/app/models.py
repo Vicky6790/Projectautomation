@@ -33,6 +33,7 @@ class FileRecord(BaseModel):
     module: Module | None = None
     extracted_text_available: bool = False
     extracted_char_count: int | None = None
+    plan_available: bool = False
     created_at: datetime
     last_accessed_at: datetime | None = None
 
@@ -41,13 +42,46 @@ class StartJobRequest(BaseModel):
     file_id: str | None = None
 
 
+class PlanTaskData(BaseModel):
+    id: int
+    name: str
+    outline_level: int = 1
+    is_summary: bool = False
+    is_milestone: bool = False
+    set_name: str | None = None
+    baseline_start: str | None = None
+    baseline_finish: str | None = None
+    actual_start: str | None = None
+    actual_finish: str | None = None
+    percent_complete: float = 0
+    predecessor_ids: list[int] = Field(default_factory=list)
+    comparison_available: bool = False
+
+
 class ProjectPlanData(BaseModel):
-    """Retrospective-ready plan snapshot. Metrics are owned by analysis, not MPP."""
+    """WSR/retrospective plan snapshot. Baseline values stay distinct from scheduled dates."""
 
     name: str
-    tasks: list[dict[str, Any]] = Field(default_factory=list)
+    status_date: str | None = None
+    has_actuals: bool = False
     planned_only: bool = True
+    tasks: list[PlanTaskData] = Field(default_factory=list)
     metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class GeneratedTask(BaseModel):
+    id: int
+    name: str
+    outline_level: int = 1
+    is_summary: bool = False
+    is_milestone: bool = False
+    set_name: str | None = None
+    predecessor_ids: list[int] = Field(default_factory=list)
+
+
+class GeneratedPlan(BaseModel):
+    name: str
+    tasks: list[GeneratedTask] = Field(default_factory=list)
 
 
 class RetrospectiveReport(BaseModel):

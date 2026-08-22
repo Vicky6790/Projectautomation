@@ -37,6 +37,35 @@ def _module_router(module: Module) -> APIRouter:
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
+    if module == "plan":
+        from app.models import GeneratedPlan
+        from app.mpp import write_generated_plan
+
+        @module_router.post("/{job_id}/mpp")
+        def generate_plan_file(job_id: str, body: GeneratedPlan) -> Response:
+            job = store.get_job(job_id)
+            content = write_generated_plan(body)
+            store.save_generated_plan(job.id, content)
+            return Response(
+                content=content,
+                media_type="application/xml",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{body.name or "plan"}.xml"'
+                },
+            )
+
+        @module_router.get("/{job_id}/mpp")
+        def download_plan_file(job_id: str) -> Response:
+            job = store.get_job(job_id)
+            path = store.generated_plan_path(job.id)
+            if not path.exists():
+                raise AppError(409, "MPP_NOT_READY", "Generated plan file is not available yet")
+            return Response(
+                content=path.read_bytes(),
+                media_type="application/xml",
+                headers={"Content-Disposition": 'attachment; filename="generated-plan.xml"'},
+            )
+
     return module_router
 
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.errors import AppError
-from app.models import ApiError, FileRecord, JobStatus, Module, ProcessingResponse
+from app.models import ApiError, FileRecord, JobStatus, Module, ProcessingResponse, ProjectPlanData
 
 
 def _now() -> datetime:
@@ -29,6 +29,12 @@ class LocalStore:
     def report_path(self, handle: str) -> Path:
         return self._dir(handle) / "report.md"
 
+    def plan_path(self, handle: str) -> Path:
+        return self._dir(handle) / "plan.json"
+
+    def generated_plan_path(self, handle: str) -> Path:
+        return self._dir(handle) / "generated-plan.xml"
+
     def save_upload(
         self,
         filename: str,
@@ -36,6 +42,7 @@ class LocalStore:
         content_type: str,
         module: Module | None,
         extracted_text: str | None = None,
+        plan_data: dict | None = None,
     ) -> FileRecord:
         self.purge_expired()
         handle = str(uuid.uuid4())
@@ -44,6 +51,11 @@ class LocalStore:
         (path / "input.bin").write_bytes(content)
         if extracted_text is not None:
             self.extracted_text_path(handle).write_text(extracted_text, encoding="utf-8")
+        if plan_data is not None:
+            self.plan_path(handle).write_text(
+                ProjectPlanData.model_validate(plan_data).model_dump_json(),
+                encoding="utf-8",
+            )
         now = _now()
         record = FileRecord(
             id=handle,
@@ -53,6 +65,7 @@ class LocalStore:
             module=module,
             extracted_text_available=extracted_text is not None,
             extracted_char_count=len(extracted_text) if extracted_text is not None else None,
+            plan_available=plan_data is not None,
             created_at=now,
             last_accessed_at=now,
         )
@@ -76,6 +89,19 @@ class LocalStore:
         )
         self._write_file(record)
         return record
+
+    def get_plan(self, handle: str) -> ProjectPlanData:
+        record, _ = self.get_file(handle)
+        path = self.plan_path(handle)
+        if not record.plan_available or not path.exists():
+            raise AppError(404, "PLAN_NOT_FOUND", "No parsed plan is available for this file")
+        return ProjectPlanData.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def save_generated_plan(self, handle: str, content: bytes) -> Path:
+        path = self.generated_plan_path(handle)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        return path
 
     def get_file(self, handle: str) -> tuple[FileRecord, Path]:
         self.purge_expired()
