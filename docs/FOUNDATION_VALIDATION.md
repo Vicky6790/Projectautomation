@@ -30,6 +30,6 @@ Checked 2026-08-22 against the API Server and Client App container blueprints.
 
 ## Follow-up already on the board
 
-- WO-31 / WO-35 — on-prem authentication
-- WO-34 — on-prem Compose verification
-- New WO — freeze OpenAPI against the API Server contracts
+- WO-31 / WO-35 — on-prem authentication (`in_review`)
+- WO-34 — on-prem Compose verification (`docs/ONPREM_COMPOSE.md`)
+- WO-36 — freeze OpenAPI (`in_review`)

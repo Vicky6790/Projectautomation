@@ -9,6 +9,9 @@ from pathlib import Path
 import httpx
 from docx import Document
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from client_session import ensure_session
+
 BASE = "http://localhost:8080"
 
 
@@ -28,6 +31,11 @@ def main() -> int:
     health = client.get("/health")
     print("health", health.status_code, health.text[:120])
     if health.status_code != 200:
+        return 1
+    try:
+        ensure_session(client, health.json())
+    except RuntimeError as exc:
+        print(exc)
         return 1
     upload = client.post(
         "/api/v1/sow/uploads",

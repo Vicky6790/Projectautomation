@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { useState, type FormEvent } from "react";
 import { ApiRequestError, signIn } from "./api";
 import type { Operator } from "./types";
 

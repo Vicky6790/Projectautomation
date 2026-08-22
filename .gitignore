@@ -17,6 +17,7 @@ frontend/.vite/
 
 # App data
 data/
+onprem-data/
 *.log
 
 # Env

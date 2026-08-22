@@ -41,12 +41,11 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-36 | OpenAPI freeze | `in_review` | docs/openapi.json plus pytest drift check; mapping in docs/OPENAPI_FREEZE.md |
 | WO-31 | On-premise access-control requirements | `in_review` | Feature On-Premise Access Control; mapping in docs/ONPREM_AUTH.md |
 | WO-35 | Implement on-prem authentication | `in_review` | Sessions, isolation, audit, on-prem AUTH_MODE=required |
+| WO-34 | On-prem Compose verification | `in_review` | Overlay AUTH_MODE=required, persistent data dir, `scripts/verify_onprem.py` |
 
-## Explicitly not implemented (blockers remain)
+## Remaining environment check
 
-| WO | Depends on | Why blocked |
-|----|----------|-------------|
-| WO-34 | WO-16–19, WO-33, WO-35 | On-prem Compose verification |
+Physical host sign-off of port 80 and the production `ONPREM_DATA_DIR` path is the same WO-34 runbook on the target server. No extra work order: `docs/ONPREM_COMPOSE.md`.
 
 ## Integration gap closed in code
 
@@ -54,4 +53,4 @@ SOW, Plan Generator, WSR, and Retrospective APIs persist jobs on disk and call i
 
 ## Recommended new work orders (if missing in Factory)
 
-1. **WO-34 On-prem Compose verification** — after WO-35, confirm AUTH_MODE=required, bootstrap, and isolation on the overlay.
+None. WO-34 runbook covers host sign-off of port 80 and `ONPREM_DATA_DIR`.

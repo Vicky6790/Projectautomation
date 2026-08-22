@@ -88,10 +88,12 @@ cd backend
 pytest tests/test_openapi_freeze.py
 ```
 
-On-premise overlay (host port 80, persistent data directory, stub off):
+On-premise overlay (host port 80, persistent data directory, stub off). `AUTH_BOOTSTRAP_PASSWORD` is required. Details: `docs/ONPREM_COMPOSE.md`.
 
 ```powershell
+$env:AUTH_BOOTSTRAP_PASSWORD = "<host-only-secret>"
 docker compose -f docker-compose.yml -f docker-compose.onprem.yml up -d --build
+python scripts/verify_onprem.py
 ```
 
 ## Tests

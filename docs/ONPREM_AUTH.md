@@ -34,6 +34,10 @@ Append-only records for sign-in, sign-out, upload, generate, retry, download, an
 
 SSO, LDAP, TLS termination, and browsing another operator's files (except audit export).
 
+## On-prem Compose (WO-34)
+
+Use `docker-compose.onprem.yml` with `AUTH_BOOTSTRAP_PASSWORD` set. Runbook: `docs/ONPREM_COMPOSE.md`. Verification: `python scripts/verify_onprem.py`.
+
 ## WO-35 implementation
 
 - Sign-in `POST /api/v1/auth/login` sets `pa_session` (HttpOnly, SameSite=Lax).

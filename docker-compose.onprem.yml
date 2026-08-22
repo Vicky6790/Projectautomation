@@ -1,5 +1,9 @@
-# On-premise overlay: docker compose -f docker-compose.yml -f docker-compose.onprem.yml up -d
-# Keep secrets in the host environment or a protected .env, not in git.
+# On-premise overlay:
+#   docker compose -f docker-compose.yml -f docker-compose.onprem.yml up -d --build
+# Required: AUTH_BOOTSTRAP_PASSWORD (stack stays unready until it is set).
+# Windows Docker Desktop: ONPREM_DATA_DIR defaults to ./onprem-data
+# Linux hosts: ONPREM_DATA_DIR=/var/lib/project-automation
+# Keep the client on 8080 for a local rehearsal: ONPREM_HTTP_PORT=8080
 services:
   api:
     environment:
@@ -8,7 +12,7 @@ services:
       AUTH_BOOTSTRAP_USER: ${AUTH_BOOTSTRAP_USER:-admin}
       AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-}
     volumes:
-      - ${ONPREM_DATA_DIR:-/var/lib/project-automation}:/data
+      - ${ONPREM_DATA_DIR:-./onprem-data}:/data
 
   client:
     ports:
