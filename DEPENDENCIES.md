@@ -26,13 +26,16 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-16 | SOW E2E via Compose | `in_review` | Proxy path verified: upload → analyze → report |
 | WO-23 | Template library content | `completed` | Digital delivery phases, sets, CMS prereq, FS rules |
 | WO-20 | Template library expansion | `in_review` | Deterministic WBS expand; GET /api/v1/plan/library |
+| WO-22 | Phase sequence validation | `in_review` | Empty config, set counts, sequence conflicts |
+| WO-8 | Plan Generator API | `in_review` | Preview, retry, approve, MSPDI download |
+| WO-21 | Configurable phase order in UI | `in_review` | Add/remove/reorder phases; empty and sequence errors |
+| WO-12 | Plan Generator view | `in_review` | Deliverables, set counts, WBS review, approve, MPP download |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-22 | WO-20 | Phase sequence conflict reporting |
-| WO-8 | WO-4, WO-20 | Plan Generator API |
+| WO-17 | WO-8, WO-12 | Plan Generator E2E |
 | WO-9 | WO-2, WO-3, WO-4, WO-5 | WSR API |
 | WO-10 | WO-2, WO-3, WO-4, WO-5 | Retrospective API |
 | WO-12–14 | WO-6 + matching API | Remaining module UIs |
@@ -40,7 +43,7 @@ Factory statuses were updated in this increment where the MCP allowed it.
 
 ## Integration gap closed in code
 
-Stub routers exist for SOW / WSR / Retrospective / Plan **start / status / retry** plus upload/download, using the shared `ProcessingResponse` / `ApiError` shapes. They persist jobs on disk but do **not** call ingestion, AI, MPXJ, or exporters.
+SOW and Plan Generator APIs persist jobs on disk and call ingestion, AI, MPXJ, and template expansion. WSR and Retrospective still use the shared job/file stubs and do not yet call those services.
 
 ## Recommended new work orders (if missing in Factory)
 

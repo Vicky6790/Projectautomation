@@ -1,13 +1,27 @@
-import type { FileRecord, HealthResponse, Module, ProcessingResponse } from "./types";
+import type {
+  FileRecord,
+  HealthResponse,
+  Module,
+  PlanConfiguration,
+  PlanLibrary,
+  ProcessingResponse,
+} from "./types";
 
 export class ApiRequestError extends Error {
   code: string;
   retryable: boolean;
+  details?: Record<string, unknown>;
 
-  constructor(message: string, code = "REQUEST_FAILED", retryable = false) {
+  constructor(
+    message: string,
+    code = "REQUEST_FAILED",
+    retryable = false,
+    details?: Record<string, unknown>,
+  ) {
     super(message);
     this.code = code;
     this.retryable = retryable;
+    this.details = details;
   }
 }
 
@@ -15,12 +29,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as
-      | { error?: { message?: string; code?: string; retryable?: boolean } }
+      | {
+          error?: {
+            message?: string;
+            code?: string;
+            retryable?: boolean;
+            details?: Record<string, unknown>;
+          };
+        }
       | null;
     throw new ApiRequestError(
       payload?.error?.message ?? `Request failed: ${response.status}`,
       payload?.error?.code ?? "REQUEST_FAILED",
       Boolean(payload?.error?.retryable),
+      payload?.error?.details,
     );
   }
   return response.json() as Promise<T>;
@@ -120,4 +142,40 @@ export function uploadFileWithProgress(
     xhr.send(body);
   });
   return { promise, abort: () => xhr.abort() };
+}
+
+export function getPlanLibrary(): Promise<PlanLibrary> {
+  return request<PlanLibrary>("/api/v1/plan/library");
+}
+
+export function previewPlan(config: PlanConfiguration): Promise<ProcessingResponse> {
+  return request<ProcessingResponse>("/api/v1/plan/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}
+
+export function retryPlanPreview(handle: string): Promise<ProcessingResponse> {
+  return request<ProcessingResponse>(`/api/v1/plan/requests/${handle}/preview`, {
+    method: "POST",
+  });
+}
+
+export function getPlanRequest(handle: string): Promise<ProcessingResponse> {
+  return request<ProcessingResponse>(`/api/v1/plan/requests/${handle}`);
+}
+
+export function approvePlan(handle: string): Promise<ProcessingResponse> {
+  return request<ProcessingResponse>(`/api/v1/plan/requests/${handle}/approve`, {
+    method: "POST",
+  });
+}
+
+export async function downloadPlanMpp(handle: string): Promise<Blob> {
+  const response = await fetch(`/api/v1/plan/requests/${handle}/mpp`);
+  if (!response.ok) {
+    throw new ApiRequestError("Plan file download failed");
+  }
+  return response.blob();
 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -103,6 +104,23 @@ class LocalStore:
         path.write_bytes(content)
         return path
 
+    def plan_config_path(self, handle: str) -> Path:
+        return self._dir(handle) / "plan-config.json"
+
+    def save_plan_config(self, handle: str, config: dict) -> None:
+        self._dir(handle).mkdir(parents=True, exist_ok=True)
+        self.plan_config_path(handle).write_text(json.dumps(config), encoding="utf-8")
+
+    def load_plan_config(self, handle: str) -> dict:
+        path = self.plan_config_path(handle)
+        if not path.exists():
+            raise AppError(
+                404,
+                "PLAN_CONFIG_NOT_FOUND",
+                "No saved plan configuration for this request",
+            )
+        return json.loads(path.read_text(encoding="utf-8"))
+
     def get_file(self, handle: str) -> tuple[FileRecord, Path]:
         self.purge_expired()
         path = self._dir(handle)
@@ -181,8 +199,7 @@ class LocalStore:
         job = self.get_job(job_id)
         job.status = status
         job.result = result
-        if error is not None:
-            job.error = ApiError.model_validate(error)
+        job.error = ApiError.model_validate(error) if error is not None else None
         job.updated_at = _now()
         self._write_job(job)
         return job

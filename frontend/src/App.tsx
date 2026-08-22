@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getHealth } from "./api";
 import type { HealthResponse, Module } from "./types";
 import { ModulePage } from "./ModulePage";
+import { PlanGeneratorView } from "./PlanGeneratorView";
 import { SowAnalyzerView } from "./SowAnalyzerView";
 
 const MODULES: { id: Module; label: string }[] = [
@@ -45,7 +46,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/sow" replace />} />
           <Route path="/sow" element={<SowAnalyzerView />} />
-          {MODULES.filter((module) => module.id !== "sow").map((module) => (
+          <Route path="/plan" element={<PlanGeneratorView />} />
+          {MODULES.filter((module) => module.id !== "sow" && module.id !== "plan").map((module) => (
             <Route
               key={module.id}
               path={`/${module.id}`}

@@ -75,3 +75,52 @@ nav a.active {
   margin-top: 16px;
 }
 
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.phase-card {
+  border: 1px solid #d5e0ec;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.phase-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.deliverables {
+  list-style: none;
+  padding: 0;
+}
+
+.deliverables li {
+  margin: 6px 0;
+}
+
+.muted {
+  color: #4a6278;
+}
+
+.wbs {
+  margin-top: 16px;
+}
+
+.wbs ol {
+  list-style: none;
+  padding: 0;
+}
+
+label input,
+label select {
+  display: block;
+  margin: 4px 0 12px;
+}
+

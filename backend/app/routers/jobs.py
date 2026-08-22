@@ -24,6 +24,10 @@ def _module_router(module: Module) -> APIRouter:
 
     @module_router.post("/{job_id}/retry", response_model=ProcessingResponse)
     def retry_job(job_id: str) -> ProcessingResponse:
+        if module == "plan":
+            from app.plan.service import retry_plan_job
+
+            return retry_plan_job(job_id)
         return store.retry_job(job_id)
 
     @module_router.get("/{job_id}/report")
