@@ -33,15 +33,16 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-17 | Plan Generator E2E via Compose | `in_review` | Proxy path: library → preview → approve → MSPDI download |
 | WO-9 | WSR Generator API | `in_review` | MPP upload, as-of date, nine-section StatusReport, retry, markdown export |
 | WO-13 | WSR Generator view | `in_review` | MPP upload, nine-section dashboard, health, retry, report download |
+| WO-18 | WSR E2E via Compose | `in_review` | Proxy path: MPP upload → generate → nine-section report |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-18 | WO-9, WO-13 | WSR E2E via Compose |
+| WO-10 | WO-2, WO-3, WO-4, WO-5 | Retrospective API |
 | WO-10 | WO-2, WO-3, WO-4, WO-5 | Retrospective API |
 | WO-14 | WO-6 + matching API | Remaining module UI |
-| WO-18–19 | matching API + UI | Remaining E2E |
+| WO-19 | matching API + UI | Remaining E2E |
 
 ## Integration gap closed in code
 

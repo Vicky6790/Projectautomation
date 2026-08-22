@@ -62,6 +62,12 @@ Verify the Plan Generator path through the proxy (library → preview → approv
 python scripts/verify_plan.py
 ```
 
+Verify the WSR path through the proxy (MPP upload → generate → nine-section report):
+
+```powershell
+python scripts/verify_wsr.py
+```
+
 On-premise overlay (host port 80, persistent data directory, stub off):
 
 ```powershell
