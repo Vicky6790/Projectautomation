@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from app.mpp.mspdi import inspect_mspdi
+
 
 def _config(**kwargs) -> dict:
     payload = {
@@ -83,3 +85,5 @@ def test_preview_then_approve_downloads_xml(client: TestClient) -> None:
     download = client.get(f"/api/v1/plan/requests/{handle}/mpp")
     assert download.status_code == 200
     assert b"Project" in download.content or download.content.startswith(b"<?xml")
+    problems = inspect_mspdi(download.content)
+    assert problems == [], problems

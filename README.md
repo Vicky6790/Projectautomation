@@ -56,6 +56,12 @@ Verify the SOW path through the proxy:
 python scripts/verify_sow.py
 ```
 
+Verify the Plan Generator path through the proxy (library → preview → approve → MSPDI download):
+
+```powershell
+python scripts/verify_plan.py
+```
+
 On-premise overlay (host port 80, persistent data directory, stub off):
 
 ```powershell

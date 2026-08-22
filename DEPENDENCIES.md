@@ -30,16 +30,16 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-8 | Plan Generator API | `in_review` | Preview, retry, approve, MSPDI download |
 | WO-21 | Configurable phase order in UI | `in_review` | Add/remove/reorder phases; empty and sequence errors |
 | WO-12 | Plan Generator view | `in_review` | Deliverables, set counts, WBS review, approve, MPP download |
+| WO-17 | Plan Generator E2E via Compose | `in_review` | Proxy path: library → preview → approve → MSPDI download |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-17 | WO-8, WO-12 | Plan Generator E2E |
 | WO-9 | WO-2, WO-3, WO-4, WO-5 | WSR API |
 | WO-10 | WO-2, WO-3, WO-4, WO-5 | Retrospective API |
-| WO-12–14 | WO-6 + matching API | Remaining module UIs |
-| WO-17–19 | matching API + UI | Remaining E2E |
+| WO-13–14 | WO-6 + matching API | Remaining module UIs |
+| WO-18–19 | matching API + UI | Remaining E2E |
 
 ## Integration gap closed in code
 
