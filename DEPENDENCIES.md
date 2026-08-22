@@ -36,12 +36,15 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-18 | WSR E2E via Compose | `in_review` | Proxy path: MPP upload → generate → nine-section report |
 | WO-10 | Retrospective API | `in_review` | MPP upload, planned-vs-actual, seven-section report, planned-only flag, retry |
 | WO-14 | Retrospective view | `in_review` | MPP upload, seven-section retrospective, planned-only banner, retry, report download |
+| WO-19 | Retrospective E2E via Compose | `in_review` | Proxy path: MPP upload → generate → seven-section report |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-19 | WO-10, WO-14 | Retrospective E2E |
+| WO-31 / WO-35 | on-prem policy | Auth is out of local MVP |
+| WO-33 | foundations | Blueprint-vs-code validation |
+| WO-34 | WO-16–19 | On-prem Compose verification |
 
 ## Integration gap closed in code
 

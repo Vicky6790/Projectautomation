@@ -68,6 +68,12 @@ Verify the WSR path through the proxy (MPP upload → generate → nine-section 
 python scripts/verify_wsr.py
 ```
 
+Verify the Retrospective path through the proxy (MPP upload → generate → seven-section report):
+
+```powershell
+python scripts/verify_retrospective.py
+```
+
 On-premise overlay (host port 80, persistent data directory, stub off):
 
 ```powershell
