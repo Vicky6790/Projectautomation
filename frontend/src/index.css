@@ -1,0 +1,54 @@
+:root {
+  font-family: Segoe UI, sans-serif;
+  color: #102033;
+  background: #f4f7fb;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.topbar h1 {
+  margin: 0 0 8px;
+}
+
+.status {
+  color: #4a6278;
+}
+
+nav {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+
+nav a {
+  color: #0b5cad;
+  text-decoration: none;
+}
+
+nav a.active {
+  font-weight: 700;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #d5e0ec;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.upload {
+  display: inline-block;
+  margin: 12px 0;
+}
+
+.job button {
+  margin-right: 8px;
+}
