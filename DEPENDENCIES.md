@@ -31,19 +31,20 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-21 | Configurable phase order in UI | `in_review` | Add/remove/reorder phases; empty and sequence errors |
 | WO-12 | Plan Generator view | `in_review` | Deliverables, set counts, WBS review, approve, MPP download |
 | WO-17 | Plan Generator E2E via Compose | `in_review` | Proxy path: library → preview → approve → MSPDI download |
+| WO-9 | WSR Generator API | `in_review` | MPP upload, as-of date, nine-section StatusReport, retry, markdown export |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-9 | WO-2, WO-3, WO-4, WO-5 | WSR API |
+| WO-13 | WO-6, WO-9 | WSR Generator UI |
 | WO-10 | WO-2, WO-3, WO-4, WO-5 | Retrospective API |
 | WO-13–14 | WO-6 + matching API | Remaining module UIs |
 | WO-18–19 | matching API + UI | Remaining E2E |
 
 ## Integration gap closed in code
 
-SOW and Plan Generator APIs persist jobs on disk and call ingestion, AI, MPXJ, and template expansion. WSR and Retrospective still use the shared job/file stubs and do not yet call those services.
+SOW, Plan Generator, and WSR APIs persist jobs on disk and call ingestion, AI, MPXJ, and template expansion. Retrospective still uses the shared job/file stubs and does not yet call those services.
 
 ## Recommended new work orders (if missing in Factory)
 

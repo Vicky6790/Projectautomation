@@ -110,6 +110,8 @@ class AnalysisReport(BaseModel):
 
 class StatusReport(BaseModel):
     request_handle: str | None = None
+    as_of_date: str | None = None
+    planned_only: bool = False
     project_health: str | None = None
     progress: list[str] = Field(default_factory=list)
     milestones: list[str] = Field(default_factory=list)

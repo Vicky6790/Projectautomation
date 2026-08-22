@@ -28,7 +28,12 @@ def _module_router(module: Module) -> APIRouter:
             from app.plan.service import retry_plan_job
 
             return retry_plan_job(job_id)
-        return store.retry_job(job_id)
+        queued = store.retry_job(job_id)
+        if module == "wsr":
+            from app.orchestration.wsr import run_wsr_generation
+
+            return run_wsr_generation(job_id)
+        return queued
 
     @module_router.get("/{job_id}/report")
     def download_report(job_id: str) -> Response:

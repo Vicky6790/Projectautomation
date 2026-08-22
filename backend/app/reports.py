@@ -55,7 +55,11 @@ def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, by
         filename = f"sow-analysis-{handle[:8]}.md"
     elif module == "wsr":
         payload = StatusReport.model_validate(job.result)
-        body = _render("Weekly status report", handle, WSR_SECTIONS, payload)
+        extra = []
+        if payload.as_of_date:
+            extra.append(f"As of: {payload.as_of_date}")
+        extra.append(f"Planned only: {'yes' if payload.planned_only else 'no'}")
+        body = _render("Weekly status report", handle, WSR_SECTIONS, payload, extra)
         filename = f"wsr-report-{handle[:8]}.md"
     elif module == "retrospective":
         payload = RetrospectiveReport.model_validate(job.result)

@@ -34,18 +34,34 @@ def analyze_sow(sow_text: str) -> AnalysisReport:
 
 
 def analyze_wsr(plan_data: dict[str, Any]) -> StatusReport:
+    as_of = plan_data.get("as_of_date")
+    metrics = plan_data.get("metrics") or {}
     if settings.ai_stub:
-        return StatusReport(project_health="on_track")
+        overdue = int(metrics.get("overdue_count") or 0)
+        health = "on_track" if overdue == 0 else "at_risk"
+        return StatusReport(
+            as_of_date=as_of,
+            planned_only=bool(plan_data.get("planned_only", True)),
+            project_health=health,
+            progress=list(metrics.get("progress_notes") or []),
+            milestones=list(metrics.get("milestone_notes") or []),
+            next_7_day_priorities=list(metrics.get("next_7_day_names") or []),
+        )
     parsed = _client.complete_json(
         system_prompt=(
             "You are a PMO status analyst. Return JSON only with keys project_health, "
             "progress, milestones, risks, issues, dependencies, management_attention, "
             "decisions_required, next_7_day_priorities. project_health is a string; "
-            "the rest are arrays of strings. " + WSR_CRITERIA
+            "the rest are arrays of strings. Measure progress and next_7_day_priorities "
+            "from as_of_date. " + WSR_CRITERIA
         ),
         user_prompt=json.dumps(plan_data),
     )
-    return StatusReport.model_validate(parsed)
+    report = StatusReport.model_validate(parsed)
+    if not report.as_of_date:
+        report.as_of_date = as_of
+    report.planned_only = bool(plan_data.get("planned_only", report.planned_only))
+    return report
 
 
 def analyze_retrospective(plan_data: dict[str, Any]) -> RetrospectiveReport:

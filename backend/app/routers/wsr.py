@@ -1,0 +1,57 @@
+from fastapi import APIRouter, File, UploadFile
+from fastapi.responses import Response
+
+from app import storage as storage_mod
+from app.errors import AppError
+from app.ingestion import validate_upload
+from app.models import FileRecord, ProcessingResponse
+from app.mpp import read_mpp_bytes
+from app.orchestration.wsr import run_wsr_generation
+from app.reports import export_report
+
+router = APIRouter(prefix="/api/v1/wsr", tags=["wsr"])
+
+
+@router.post("/uploads", response_model=FileRecord)
+async def upload_wsr(file: UploadFile = File(...)) -> FileRecord:
+    filename = file.filename or "upload"
+    content = await file.read()
+    validate_upload(filename, content, "wsr")
+    plan = read_mpp_bytes(content, filename)
+    return storage_mod.store.save_upload(
+        filename,
+        content,
+        file.content_type or "application/octet-stream",
+        "wsr",
+        plan_data=plan.model_dump(),
+    )
+
+
+@router.post("/requests/{handle}/generate", response_model=ProcessingResponse)
+def generate_wsr_request(handle: str) -> ProcessingResponse:
+    job = run_wsr_generation(handle)
+    if job.status == "failed" and job.error:
+        raise AppError(
+            502 if job.error.retryable else 400,
+            job.error.code,
+            job.error.message,
+            retryable=job.error.retryable,
+        )
+    return job
+
+
+@router.get("/requests/{handle}", response_model=ProcessingResponse)
+def get_wsr_request(handle: str) -> ProcessingResponse:
+    return storage_mod.store.get_job(handle)
+
+
+@router.get("/requests/{handle}/report")
+def download_wsr_report(handle: str) -> Response:
+    job = storage_mod.store.get_job(handle)
+    filename, media_type, content = export_report("wsr", job)
+    storage_mod.store.report_path(job.id).write_bytes(content)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
