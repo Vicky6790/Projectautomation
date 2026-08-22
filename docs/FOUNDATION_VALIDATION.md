@@ -33,3 +33,5 @@ Checked 2026-08-22 against the API Server and Client App container blueprints.
 - WO-31 / WO-35 — on-prem authentication (`in_review`)
 - WO-34 — on-prem Compose verification (`docs/ONPREM_COMPOSE.md`)
 - WO-36 — freeze OpenAPI (`in_review`)
+
+Reproduce: `python scripts/validate_foundations.py` (client origin on :8080). The script now also checks `/ready.data_dir`, `/api/v1/plan/library` through the nginx proxy, and signs in if `auth_required` is true.

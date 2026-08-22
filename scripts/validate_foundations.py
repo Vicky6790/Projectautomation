@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import socket
 import sys
+from pathlib import Path
 
 import httpx
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from client_session import ensure_session
 
 BASE = "http://localhost:8080"
 PAGES = ("/sow", "/plan", "/wsr", "/retrospective")
@@ -24,13 +28,29 @@ def main() -> int:
     if health.status_code != 200:
         return 1
     body = health.json()
-    if body.get("status") != "ok":
+    if body.get("status") != "ok" or "auth_mode" not in body:
         print("health payload unexpected", body)
         return 1
 
     ready = client.get("/ready")
     print("ready", ready.status_code, ready.text[:160])
     if ready.status_code != 200:
+        return 1
+    ready_body = ready.json()
+    if ready_body.get("status") != "ready" or not ready_body.get("data_dir"):
+        print("ready payload unexpected", ready_body)
+        return 1
+
+    try:
+        ensure_session(client, body)
+    except RuntimeError as exc:
+        print(exc)
+        return 1
+
+    library = client.get("/api/v1/plan/library")
+    print("library via proxy", library.status_code)
+    if library.status_code != 200:
+        print(library.text[:200])
         return 1
 
     for path in PAGES:
