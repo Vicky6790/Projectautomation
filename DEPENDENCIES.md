@@ -24,12 +24,14 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-11 | SOW Analyzer UI | `in_review` | Upload, category findings, retry, report download |
 | WO-26 | Compose deployment | `in_review` | Local Compose + on-prem overlay; API not published on host |
 | WO-16 | SOW E2E via Compose | `in_review` | Proxy path verified: upload → analyze → report |
+| WO-23 | Template library content | `completed` | Digital delivery phases, sets, CMS prereq, FS rules |
+| WO-20 | Template library expansion | `in_review` | Deterministic WBS expand; GET /api/v1/plan/library |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-20 | WO-1 | Template library required before Plan Generator API |
+| WO-22 | WO-20 | Phase sequence conflict reporting |
 | WO-8 | WO-4, WO-20 | Plan Generator API |
 | WO-9 | WO-2, WO-3, WO-4, WO-5 | WSR API |
 | WO-10 | WO-2, WO-3, WO-4, WO-5 | Retrospective API |

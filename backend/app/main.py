@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.errors import AppError, register_exception_handlers
-from app.routers import files, health, jobs, sow
+from app.routers import files, health, jobs, plan, sow
 from app.storage import store
 
 
@@ -39,6 +39,7 @@ def create_app() -> FastAPI:
     application.include_router(files.router)
     application.include_router(jobs.router)
     application.include_router(sow.router)
+    application.include_router(plan.router)
 
     @application.middleware("http")
     async def auth_gate(request, call_next):
