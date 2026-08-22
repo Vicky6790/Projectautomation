@@ -1,7 +1,9 @@
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getHealth } from "./api";
-import type { HealthResponse, Module } from "./types";
+import { getCurrentOperator, getHealth, signOut } from "./api";
+import type { HealthResponse, Module, Operator } from "./types";
+import { LoginView } from "./LoginView";
+import { OperatorsView } from "./OperatorsView";
 import { PlanGeneratorView } from "./PlanGeneratorView";
 import { SowAnalyzerView } from "./SowAnalyzerView";
 import { RetrospectiveView } from "./RetrospectiveView";
@@ -17,6 +19,8 @@ const MODULES: { id: Module; label: string }[] = [
 export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [operator, setOperator] = useState<Operator | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     getHealth()
@@ -26,6 +30,22 @@ export default function App() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!health) {
+      return;
+    }
+    if (!health.auth_required) {
+      setSessionChecked(true);
+      return;
+    }
+    getCurrentOperator()
+      .then(setOperator)
+      .catch(() => setOperator(null))
+      .finally(() => setSessionChecked(true));
+  }, [health]);
+
+  const locked = Boolean(health?.auth_required && sessionChecked && !operator);
+
   return (
     <div className="app">
       <header className="topbar">
@@ -34,23 +54,46 @@ export default function App() {
           {health
             ? `API ${health.status} · auth ${health.auth_mode}`
             : (healthError ?? "Checking API…")}
+          {operator ? ` · ${operator.username}` : ""}
         </p>
-        <nav>
-          {MODULES.map((module) => (
-            <NavLink key={module.id} to={`/${module.id}`}>
-              {module.label}
-            </NavLink>
-          ))}
-        </nav>
+        {operator ? (
+          <button
+            type="button"
+            onClick={() => {
+              signOut().finally(() => setOperator(null));
+            }}
+          >
+            Sign out
+          </button>
+        ) : null}
+        {!locked ? (
+          <nav>
+            {MODULES.map((module) => (
+              <NavLink key={module.id} to={`/${module.id}`}>
+                {module.label}
+              </NavLink>
+            ))}
+            {operator?.role === "admin" ? <NavLink to="/operators">Operators</NavLink> : null}
+          </nav>
+        ) : null}
       </header>
       <main>
-        <Routes>
-          <Route path="/" element={<Navigate to="/sow" replace />} />
-          <Route path="/sow" element={<SowAnalyzerView />} />
-          <Route path="/plan" element={<PlanGeneratorView />} />
-          <Route path="/wsr" element={<WsrDashboardView />} />
-          <Route path="/retrospective" element={<RetrospectiveView />} />
-        </Routes>
+        {health?.auth_required && !sessionChecked ? <p>Checking session…</p> : null}
+        {locked ? (
+          <LoginView onSignedIn={setOperator} />
+        ) : (
+          <Routes>
+            <Route path="/" element={<Navigate to="/sow" replace />} />
+            <Route path="/sow" element={<SowAnalyzerView />} />
+            <Route path="/plan" element={<PlanGeneratorView />} />
+            <Route path="/wsr" element={<WsrDashboardView />} />
+            <Route path="/retrospective" element={<RetrospectiveView />} />
+            <Route
+              path="/operators"
+              element={operator?.role === "admin" ? <OperatorsView /> : <Navigate to="/sow" replace />}
+            />
+          </Routes>
+        )}
       </main>
     </div>
   );

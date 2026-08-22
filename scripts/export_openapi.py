@@ -33,6 +33,9 @@ FROZEN_PATHS = (
     "/api/v1/retrospective/requests/{handle}/generate",
     "/api/v1/retrospective/requests/{handle}",
     "/api/v1/retrospective/requests/{handle}/report",
+    "/api/v1/auth/login",
+    "/api/v1/auth/logout",
+    "/api/v1/auth/me",
 )
 
 

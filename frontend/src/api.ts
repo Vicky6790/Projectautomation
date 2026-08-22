@@ -2,6 +2,7 @@ import type {
   FileRecord,
   HealthResponse,
   Module,
+  Operator,
   PlanConfiguration,
   PlanLibrary,
   ProcessingResponse,
@@ -25,8 +26,10 @@ export class ApiRequestError extends Error {
   }
 }
 
+const SESSION: RequestInit = { credentials: "include" };
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
+  const response = await fetch(path, { ...SESSION, ...init });
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as
       | {
@@ -96,7 +99,7 @@ export function getSowRequest(handle: string): Promise<ProcessingResponse> {
 }
 
 export async function downloadSowReport(handle: string): Promise<Blob> {
-  const response = await fetch(`/api/v1/sow/requests/${handle}/report`);
+  const response = await fetch(`/api/v1/sow/requests/${handle}/report`, SESSION);
   if (!response.ok) {
     throw new ApiRequestError("Report download failed");
   }
@@ -111,6 +114,7 @@ export function uploadFileWithProgress(
   const xhr = new XMLHttpRequest();
   const promise = new Promise<FileRecord>((resolve, reject) => {
     xhr.open("POST", path);
+    xhr.withCredentials = true;
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
         onProgress(Math.round((event.loaded / event.total) * 100));
@@ -174,7 +178,7 @@ export function approvePlan(handle: string): Promise<ProcessingResponse> {
 }
 
 export async function downloadPlanMpp(handle: string): Promise<Blob> {
-  const response = await fetch(`/api/v1/plan/requests/${handle}/mpp`);
+  const response = await fetch(`/api/v1/plan/requests/${handle}/mpp`, SESSION);
   if (!response.ok) {
     throw new ApiRequestError("Plan file download failed");
   }
@@ -192,11 +196,49 @@ export function getWsrRequest(handle: string): Promise<ProcessingResponse> {
 }
 
 export async function downloadWsrReport(handle: string): Promise<Blob> {
-  const response = await fetch(`/api/v1/wsr/requests/${handle}/report`);
+  const response = await fetch(`/api/v1/wsr/requests/${handle}/report`, SESSION);
   if (!response.ok) {
     throw new ApiRequestError("WSR download failed");
   }
   return response.blob();
+}
+
+export function signIn(username: string, password: string): Promise<Operator> {
+  return request<Operator>("/api/v1/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export function signOut(): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("/api/v1/auth/logout", { method: "POST" });
+}
+
+export function getCurrentOperator(): Promise<Operator> {
+  return request<Operator>("/api/v1/auth/me");
+}
+
+export function listOperators(): Promise<Operator[]> {
+  return request<Operator[]>("/api/v1/auth/users");
+}
+
+export function createOperator(
+  username: string,
+  password: string,
+  role: "operator" | "admin",
+): Promise<Operator> {
+  return request<Operator>("/api/v1/auth/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password, role }),
+  });
+}
+
+export function disableOperator(operatorId: string): Promise<Operator> {
+  return request<Operator>(`/api/v1/auth/users/${operatorId}/disable`, {
+    method: "POST",
+  });
 }
 
 export function generateRetrospective(handle: string): Promise<ProcessingResponse> {
@@ -210,7 +252,7 @@ export function getRetrospectiveRequest(handle: string): Promise<ProcessingRespo
 }
 
 export async function downloadRetrospectiveReport(handle: string): Promise<Blob> {
-  const response = await fetch(`/api/v1/retrospective/requests/${handle}/report`);
+  const response = await fetch(`/api/v1/retrospective/requests/${handle}/report`, SESSION);
   if (!response.ok) {
     throw new ApiRequestError("Retrospective download failed");
   }

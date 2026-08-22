@@ -33,3 +33,14 @@ Append-only records for sign-in, sign-out, upload, generate, retry, download, an
 ## Deferred
 
 SSO, LDAP, TLS termination, and browsing another operator's files (except audit export).
+
+## WO-35 implementation
+
+- Sign-in `POST /api/v1/auth/login` sets `pa_session` (HttpOnly, SameSite=Lax).
+- `GET /api/v1/auth/me` and `POST /api/v1/auth/logout`.
+- Administrators `GET|POST /api/v1/auth/users` and `POST /api/v1/auth/users/{id}/disable`.
+- First administrator: `AUTH_BOOTSTRAP_USER` / `AUTH_BOOTSTRAP_PASSWORD` written to `DATA_DIR/users.json` when the store is empty.
+- Request handles store `owner_id`. Cross-operator access returns `404 FILE_NOT_FOUND` or `JOB_NOT_FOUND`.
+- Audit lines append to `DATA_DIR/audit.jsonl` and are purged with request TTL.
+- Client shows a sign-in panel when `/health` reports `auth_required` and sends cookies on fetch/XHR.
+

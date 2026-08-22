@@ -3,20 +3,21 @@ from fastapi.testclient import TestClient
 from tests.helpers import docx_bytes
 
 
-def _upload(client: TestClient) -> str:
+def _upload(client: TestClient, payload: bytes | None = None) -> tuple[str, bytes]:
+    content = payload if payload is not None else docx_bytes()
     response = client.post(
         "/api/v1/files",
         files={
             "file": (
                 "sow.docx",
-                docx_bytes(),
+                content,
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
         },
         data={"module": "sow"},
     )
     assert response.status_code == 200, response.text
-    return response.json()["id"]
+    return response.json()["id"], content
 
 
 def test_health(client: TestClient) -> None:
@@ -28,16 +29,17 @@ def test_health(client: TestClient) -> None:
 
 
 def test_upload_download_roundtrip(client: TestClient) -> None:
-    file_id = _upload(client)
+    payload = docx_bytes()
+    file_id, content = _upload(client, payload)
     meta = client.get(f"/api/v1/files/{file_id}")
     assert meta.status_code == 200
     downloaded = client.get(f"/api/v1/files/{file_id}/download")
     assert downloaded.status_code == 200
-    assert downloaded.content == docx_bytes()
+    assert downloaded.content == content
 
 
 def test_sow_start_status_retry_contract(client: TestClient) -> None:
-    file_id = _upload(client)
+    file_id, _ = _upload(client)
     started = client.post("/api/v1/sow/jobs", json={"file_id": file_id})
     assert started.status_code == 200
     job = started.json()
@@ -57,7 +59,7 @@ def test_sow_start_status_retry_contract(client: TestClient) -> None:
 
 
 def test_all_modules_have_start_status_retry(client: TestClient) -> None:
-    sow_id = _upload(client)
+    sow_id, _ = _upload(client)
     started = client.post("/api/v1/sow/jobs", json={"file_id": sow_id})
     assert started.status_code == 200
     assert started.json()["id"] == sow_id

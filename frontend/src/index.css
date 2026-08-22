@@ -125,6 +125,14 @@ nav a.active {
   color: #4a6278;
 }
 
+.error {
+  color: #b42318;
+}
+
+.topbar button {
+  margin: 8px 0;
+}
+
 .wbs {
   margin-top: 16px;
 }

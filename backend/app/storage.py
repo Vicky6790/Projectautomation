@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.config import settings
+from app.context import current_operator_id
 from app.errors import AppError
 from app.models import ApiError, FileRecord, JobStatus, Module, ProcessingResponse, ProjectPlanData
 
@@ -67,6 +68,7 @@ class LocalStore:
             extracted_text_available=extracted_text is not None,
             extracted_char_count=len(extracted_text) if extracted_text is not None else None,
             plan_available=plan_data is not None,
+            owner_id=current_operator_id.get(),
             created_at=now,
             last_accessed_at=now,
         )
@@ -85,6 +87,7 @@ class LocalStore:
             content_type="application/json",
             size=0,
             module="plan",
+            owner_id=current_operator_id.get(),
             created_at=now,
             last_accessed_at=now,
         )
@@ -131,6 +134,7 @@ class LocalStore:
         record = FileRecord.model_validate_json(meta.read_text(encoding="utf-8"))
         record.last_accessed_at = _now()
         self._write_file(record)
+        self._assert_owner(record)
         return record, blob if blob.exists() else path
 
     def create_job(self, module: Module, file_id: str | None) -> ProcessingResponse:
@@ -166,6 +170,7 @@ class LocalStore:
 
     def get_job(self, job_id: str) -> ProcessingResponse:
         self.purge_expired()
+        self._assert_handle_owner(job_id, missing_code="JOB_NOT_FOUND")
         job = self._read_job(job_id)
         if job is None:
             raise AppError(404, "JOB_NOT_FOUND", f"Job {job_id} was not found")
@@ -224,7 +229,26 @@ class LocalStore:
             if last < cutoff:
                 shutil.rmtree(path, ignore_errors=True)
                 removed += 1
+        self._purge_audit(cutoff)
         return removed
+
+    def _purge_audit(self, cutoff: datetime) -> None:
+        from app.access import access
+
+        path = access.audit_path()
+        if not path.exists():
+            return
+        kept: list[str] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            stamp = datetime.fromisoformat(record["at"])
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=UTC)
+            if stamp >= cutoff:
+                kept.append(line)
+        path.write_text(("\n".join(kept) + "\n") if kept else "", encoding="utf-8")
 
     def _read_job(self, handle: str) -> ProcessingResponse | None:
         path = self._dir(handle) / "job.json"
@@ -242,6 +266,25 @@ class LocalStore:
         path = self._dir(record.id)
         path.mkdir(parents=True, exist_ok=True)
         (path / "meta.json").write_text(record.model_dump_json(), encoding="utf-8")
+
+    def _assert_owner(self, record: FileRecord, *, missing_code: str = "FILE_NOT_FOUND") -> None:
+        if not settings.auth_required:
+            return
+        operator = current_operator_id.get()
+        if operator and record.owner_id == operator:
+            return
+        if missing_code == "FILE_NOT_FOUND":
+            detail = f"File {record.id} was not found"
+        else:
+            detail = f"Job {record.id} was not found"
+        raise AppError(404, missing_code, detail)
+
+    def _assert_handle_owner(self, handle: str, *, missing_code: str = "FILE_NOT_FOUND") -> None:
+        meta = self._dir(handle) / "meta.json"
+        if not meta.exists():
+            return
+        record = FileRecord.model_validate_json(meta.read_text(encoding="utf-8"))
+        self._assert_owner(record, missing_code=missing_code)
 
     def _touch_file(self, handle: str) -> None:
         meta = self._dir(handle) / "meta.json"

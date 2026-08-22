@@ -40,12 +40,12 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-33 | Foundation validation vs blueprints | `in_review` | Health/ready, SPA shells, internal API; notes in docs/FOUNDATION_VALIDATION.md |
 | WO-36 | OpenAPI freeze | `in_review` | docs/openapi.json plus pytest drift check; mapping in docs/OPENAPI_FREEZE.md |
 | WO-31 | On-premise access-control requirements | `in_review` | Feature On-Premise Access Control; mapping in docs/ONPREM_AUTH.md |
+| WO-35 | Implement on-prem authentication | `in_review` | Sessions, isolation, audit, on-prem AUTH_MODE=required |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-35 | WO-31 | Implement on-prem sign-in, isolation, audit |
 | WO-34 | WO-16–19, WO-33, WO-35 | On-prem Compose verification |
 
 ## Integration gap closed in code
@@ -54,4 +54,4 @@ SOW, Plan Generator, WSR, and Retrospective APIs persist jobs on disk and call i
 
 ## Recommended new work orders (if missing in Factory)
 
-1. **WO-31 / WO-35 Auth adapter** — enable `AUTH_MODE=required` for on-prem multi-user.
+1. **WO-34 On-prem Compose verification** — after WO-35, confirm AUTH_MODE=required, bootstrap, and isolation on the overlay.

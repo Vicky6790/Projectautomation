@@ -14,7 +14,7 @@ Local MVP for SOW analysis, project-plan generation, weekly status reports, and 
 ## Local auth rule
 
 - **Local MVP:** endpoints do **not** authenticate callers (`AUTH_MODE=disabled`).
-- **On-prem multi-user:** set `AUTH_MODE=required` (adapter is a later work order).
+- **On-prem multi-user:** `AUTH_MODE=required` (on-prem Compose default). Set `AUTH_BOOTSTRAP_PASSWORD` so the first administrator can sign in. Sessions are HttpOnly cookies with an 8-hour idle timeout.
 
 Plan generation does **not** use a reference MPP. MPP files supplied by the user are validated later in WO-4.
 

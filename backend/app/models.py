@@ -34,6 +34,7 @@ class FileRecord(BaseModel):
     extracted_text_available: bool = False
     extracted_char_count: int | None = None
     plan_available: bool = False
+    owner_id: str | None = None
     created_at: datetime
     last_accessed_at: datetime | None = None
 

@@ -124,3 +124,10 @@ export type HealthResponse = {
   auth_mode: string;
   auth_required: boolean;
 };
+
+export type Operator = {
+  id: string;
+  username: string;
+  role: "operator" | "admin";
+  enabled: boolean;
+};

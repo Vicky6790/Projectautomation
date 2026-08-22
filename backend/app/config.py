@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     auth_mode: str = "disabled"
+    auth_bootstrap_user: str = "admin"
+    auth_bootstrap_password: str = ""
+    session_idle_hours: int = 8
     data_dir: Path = Path("./data")
     cors_origins: str = "http://localhost:5173"
     openai_api_key: str = ""
