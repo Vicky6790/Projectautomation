@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 from fastapi.testclient import TestClient
 
 from app.models import PlanTaskData, ProjectPlanData, StatusReport
+from tests.helpers import mpp_stub_bytes
 
 
 def _plan(*, status_date: str | None, planned_only: bool = True) -> ProjectPlanData:
@@ -39,7 +40,7 @@ def _upload(client: TestClient, monkeypatch, plan: ProjectPlanData) -> str:
     monkeypatch.setattr("app.routers.wsr.read_mpp_bytes", lambda _content, _name: plan)
     response = client.post(
         "/api/v1/wsr/uploads",
-        files={"file": ("plan.mpp", b"fake-mpp-bytes", "application/vnd.ms-project")},
+        files={"file": ("plan.mpp", mpp_stub_bytes(), "application/vnd.ms-project")},
     )
     assert response.status_code == 200, response.text
     assert response.json()["plan_available"] is True
@@ -52,7 +53,7 @@ def test_invalid_mpp_is_rejected(client: TestClient) -> None:
         files={"file": ("plan.mpp", b"not-an-mpp", "application/vnd.ms-project")},
     )
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "UNREADABLE_MPP"
+    assert response.json()["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
 
 
 def test_generate_uses_mpp_status_date(client: TestClient, monkeypatch) -> None:

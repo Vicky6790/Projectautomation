@@ -102,4 +102,6 @@ def test_upload_rejects_oversize_file(client: TestClient, monkeypatch) -> None:
         data={"module": "sow"},
     )
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "FILE_TOO_LARGE"
+    error = response.json()["error"]
+    assert error["code"] == "FILE_TOO_LARGE"
+    assert "8 bytes" in error["message"]

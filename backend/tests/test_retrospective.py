@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.models import PlanTaskData, ProjectPlanData, RetrospectiveReport
+from tests.helpers import mpp_stub_bytes
 
 
 def _plan(*, planned_only: bool) -> ProjectPlanData:
@@ -40,7 +41,7 @@ def _upload(client: TestClient, monkeypatch, plan: ProjectPlanData) -> str:
     )
     response = client.post(
         "/api/v1/retrospective/uploads",
-        files={"file": ("plan.mpp", b"fake-mpp-bytes", "application/vnd.ms-project")},
+        files={"file": ("plan.mpp", mpp_stub_bytes(), "application/vnd.ms-project")},
     )
     assert response.status_code == 200, response.text
     return response.json()["id"]
@@ -52,7 +53,7 @@ def test_invalid_mpp_is_rejected(client: TestClient) -> None:
         files={"file": ("plan.mpp", b"not-an-mpp", "application/vnd.ms-project")},
     )
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "UNREADABLE_MPP"
+    assert response.json()["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
 
 
 def test_generate_marks_planned_only(client: TestClient, monkeypatch) -> None:

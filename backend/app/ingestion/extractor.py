@@ -43,6 +43,19 @@ def _pdf_text(content: bytes) -> str:
 def _docx_text(content: bytes) -> str:
     try:
         document = Document(BytesIO(content))
-        return "\n".join(paragraph.text for paragraph in document.paragraphs)
+        parts: list[str] = []
+        for paragraph in document.paragraphs:
+            if paragraph.text.strip():
+                parts.append(paragraph.text)
+        for table in document.tables:
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                if cells:
+                    parts.append(" | ".join(cells))
+        for section in document.sections:
+            for paragraph in (*section.header.paragraphs, *section.footer.paragraphs):
+                if paragraph.text.strip():
+                    parts.append(paragraph.text)
+        return "\n".join(parts)
     except Exception as exc:  # noqa: BLE001 - invalid Word file is a user error
         raise AppError(400, "UNSUPPORTED_FILE_TYPE", "The Word document could not be read") from exc

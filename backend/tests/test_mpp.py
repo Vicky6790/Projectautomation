@@ -77,7 +77,7 @@ def test_wsr_upload_rejects_garbage_mpp(client: TestClient) -> None:
         data={"module": "wsr"},
     )
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "UNREADABLE_MPP"
+    assert response.json()["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
 
 
 def test_plan_job_can_download_generated_xml(client: TestClient) -> None:
