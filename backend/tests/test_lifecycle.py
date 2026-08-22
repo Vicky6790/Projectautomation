@@ -24,7 +24,9 @@ def _upload(client: TestClient) -> str:
 def test_ready(client: TestClient) -> None:
     response = client.get("/ready")
     assert response.status_code == 200
-    assert response.json()["status"] == "ready"
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body.get("data_dir")
 
 
 def test_start_is_idempotent_per_handle(client: TestClient) -> None:

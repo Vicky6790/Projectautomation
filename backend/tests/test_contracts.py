@@ -25,6 +25,7 @@ def test_health(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
+    assert body["auth_mode"] == "disabled"
     assert body["auth_required"] is False
 
 
