@@ -51,6 +51,37 @@ class ProjectPlanData(BaseModel):
 
 
 class RetrospectiveReport(BaseModel):
-    summary: str
+    summary: str = ""
     findings: list[str] = Field(default_factory=list)
+    schedule_variance: list[str] = Field(default_factory=list)
+    milestone_delivery: list[str] = Field(default_factory=list)
+    task_completion: list[str] = Field(default_factory=list)
+    what_went_well: list[str] = Field(default_factory=list)
+    what_went_poorly: list[str] = Field(default_factory=list)
+    lessons_learned: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    planned_only: bool = False
     plan: ProjectPlanData | None = None
+
+
+class AnalysisReport(BaseModel):
+    request_handle: str | None = None
+    gray_areas: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    missing_requirements: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    clarification_questions: list[str] = Field(default_factory=list)
+
+
+class StatusReport(BaseModel):
+    request_handle: str | None = None
+    project_health: str | None = None
+    progress: list[str] = Field(default_factory=list)
+    milestones: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    issues: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    management_attention: list[str] = Field(default_factory=list)
+    decisions_required: list[str] = Field(default_factory=list)
+    next_7_day_priorities: list[str] = Field(default_factory=list)

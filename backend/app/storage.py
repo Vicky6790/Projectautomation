@@ -26,6 +26,9 @@ class LocalStore:
     def extracted_text_path(self, handle: str) -> Path:
         return self._dir(handle) / "extracted.txt"
 
+    def report_path(self, handle: str) -> Path:
+        return self._dir(handle) / "report.md"
+
     def save_upload(
         self,
         filename: str,

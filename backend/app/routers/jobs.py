@@ -1,7 +1,9 @@
 from fastapi import APIRouter
+from fastapi.responses import Response
 
 from app.errors import AppError
 from app.models import Module, ProcessingResponse, StartJobRequest
+from app.reports import export_report
 from app.storage import store
 
 router = APIRouter(prefix="/api/v1", tags=["jobs"])
@@ -24,8 +26,37 @@ def _module_router(module: Module) -> APIRouter:
     def retry_job(job_id: str) -> ProcessingResponse:
         return store.retry_job(job_id)
 
+    @module_router.get("/{job_id}/report")
+    def download_report(job_id: str) -> Response:
+        job = store.get_job(job_id)
+        filename, media_type, content = export_report(module, job)
+        store.report_path(job.id).write_bytes(content)
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     return module_router
+
+
+def _requests_router(module: Module) -> APIRouter:
+    requests_router = APIRouter(prefix=f"/{module}/requests")
+
+    @requests_router.get("/{handle}/report")
+    def download_request_report(handle: str) -> Response:
+        job = store.get_job(handle)
+        filename, media_type, content = export_report(module, job)
+        store.report_path(job.id).write_bytes(content)
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    return requests_router
 
 
 for _module in ("sow", "wsr", "retrospective", "plan"):
     router.include_router(_module_router(_module))
+    router.include_router(_requests_router(_module))

@@ -14,13 +14,15 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-2 | Document ingestion | `in_review` | Type/size validation + SOW text extraction |
 | WO-30 | Request retention policy | `completed` | 24h idle TTL on DATA_DIR; survives host restart |
 | WO-32 | Request-handle lifecycle | `in_review` | Idempotent handle, retry, isolation, TTL cleanup |
+| WO-28 | OpenAI residency policy | `completed` | Public OpenAI by default; Azure/on-prem via OPENAI_BASE_URL |
+| WO-5 | Report export | `in_review` | Markdown export of SOW/WSR/retro; empty sections kept |
 | WO-26 | Compose deployment | starter only | `docker-compose.yml` added; on-prem/Windows runbook still open |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-3 | WO-1 | AI analysis / OpenAI adapter not built |
+| WO-3 | WO-1 | AI client not built; WO-28 residency policy is now decided |
 | WO-4 | WO-1 | MPP/MPXJ processing not built (needs Java 17) |
 | WO-5 | WO-1 | Report export/download payloads not generated |
 | WO-20 | WO-1 | Template library required before Plan Generator API |
