@@ -1,10 +1,18 @@
 from fastapi.testclient import TestClient
 
+from tests.helpers import docx_bytes
+
 
 def _upload(client: TestClient) -> str:
     response = client.post(
         "/api/v1/files",
-        files={"file": ("sow.txt", b"statement of work", "text/plain")},
+        files={
+            "file": (
+                "sow.docx",
+                docx_bytes(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
         data={"module": "sow"},
     )
     assert response.status_code == 200, response.text
@@ -25,7 +33,7 @@ def test_upload_download_roundtrip(client: TestClient) -> None:
     assert meta.status_code == 200
     downloaded = client.get(f"/api/v1/files/{file_id}/download")
     assert downloaded.status_code == 200
-    assert downloaded.content == b"statement of work"
+    assert downloaded.content == docx_bytes()
 
 
 def test_sow_start_status_retry_contract(client: TestClient) -> None:
@@ -68,12 +76,28 @@ def test_missing_file_error_shape(client: TestClient) -> None:
 
 
 def test_upload_rejects_oversize_file(client: TestClient, monkeypatch) -> None:
-    from app.config import settings
+    from app.ingestion import policy
 
-    monkeypatch.setattr(settings, "max_upload_bytes", 8)
+    monkeypatch.setattr(
+        policy,
+        "SOW_POLICY",
+        policy.UploadPolicy(
+            kind="sow",
+            extensions=frozenset({".pdf", ".docx"}),
+            max_bytes=8,
+            format_label="PDF (.pdf) and Word (.docx)",
+        ),
+    )
     response = client.post(
         "/api/v1/files",
-        files={"file": ("sow.txt", b"statement of work", "text/plain")},
+        files={
+            "file": (
+                "sow.docx",
+                docx_bytes(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+        data={"module": "sow"},
     )
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "FILE_TOO_LARGE"

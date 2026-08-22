@@ -30,6 +30,8 @@ class FileRecord(BaseModel):
     content_type: str
     size: int
     module: Module | None = None
+    extracted_text_available: bool = False
+    extracted_char_count: int | None = None
     created_at: datetime
 
 

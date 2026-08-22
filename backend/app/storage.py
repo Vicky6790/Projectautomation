@@ -27,16 +27,21 @@ class LocalStore:
         content: bytes,
         content_type: str,
         module: Module | None,
+        extracted_text: str | None = None,
     ) -> FileRecord:
         file_id = str(uuid.uuid4())
         dest = self.uploads / file_id
         dest.write_bytes(content)
+        if extracted_text is not None:
+            (self.uploads / f"{file_id}.txt").write_text(extracted_text, encoding="utf-8")
         record = FileRecord(
             id=file_id,
             filename=filename,
             content_type=content_type,
             size=len(content),
             module=module,
+            extracted_text_available=extracted_text is not None,
+            extracted_char_count=len(extracted_text) if extracted_text is not None else None,
             created_at=_now(),
         )
         (self.uploads / f"{file_id}.json").write_text(record.model_dump_json(), encoding="utf-8")
