@@ -72,6 +72,10 @@ def _module_router(module: Module) -> APIRouter:
 def _requests_router(module: Module) -> APIRouter:
     requests_router = APIRouter(prefix=f"/{module}/requests")
 
+    @requests_router.get("/{handle}", response_model=ProcessingResponse)
+    def get_request(handle: str) -> ProcessingResponse:
+        return store.get_job(handle)
+
     @requests_router.get("/{handle}/report")
     def download_request_report(handle: str) -> Response:
         job = store.get_job(handle)

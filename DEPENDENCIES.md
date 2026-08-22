@@ -20,6 +20,7 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-27 | WSR/retro classification criteria | `completed` | Health thresholds and evidence rules |
 | WO-3 | AI analysis service | `in_review` | OpenAI client + engine emitting report schemas |
 | WO-4 | MPP processing | `in_review` | MPXJ reader/writer; generated file is MSPDI XML |
+| WO-7 | SOW Analyzer API | `in_review` | Upload, analyze, retry, report; six categories always present |
 | WO-26 | Compose deployment | starter only | `docker-compose.yml` added; on-prem/Windows runbook still open |
 
 ## Explicitly not implemented (blockers remain)
@@ -27,7 +28,6 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
 | WO-20 | WO-1 | Template library required before Plan Generator API |
-| WO-7 | WO-2, WO-3, WO-5 | SOW Analyzer API |
 | WO-8 | WO-4, WO-20 | Plan Generator API |
 | WO-9 | WO-2, WO-3, WO-4, WO-5 | WSR API |
 | WO-10 | WO-2, WO-3, WO-4, WO-5 | Retrospective API |

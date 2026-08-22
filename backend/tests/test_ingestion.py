@@ -46,7 +46,7 @@ def test_extracts_docx_text(client: TestClient) -> None:
     assert "Deliverables" in text.json()["text"]
 
 
-def test_wsr_accepts_mpp_without_text_extraction(client: TestClient) -> None:
+def test_wsr_rejects_unreadable_mpp(client: TestClient) -> None:
     response = client.post(
         "/api/v1/files",
         files={
@@ -54,11 +54,8 @@ def test_wsr_accepts_mpp_without_text_extraction(client: TestClient) -> None:
         },
         data={"module": "wsr"},
     )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["extracted_text_available"] is False
-    text = client.get(f"/api/v1/files/{body['id']}/text")
-    assert text.status_code == 404
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "UNREADABLE_MPP"
 
 
 def test_wsr_rejects_pdf(client: TestClient) -> None:
