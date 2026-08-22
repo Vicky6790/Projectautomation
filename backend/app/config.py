@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     cors_origins: str = "http://localhost:5173"
     openai_api_key: str = ""
+    max_upload_bytes: int = 26_214_400
 
     @property
     def cors_origin_list(self) -> list[str]:

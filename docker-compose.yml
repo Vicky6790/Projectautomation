@@ -1,0 +1,38 @@
+# Starter Compose for local Docker-first development.
+# WO-26 still owns on-prem overrides, Windows runbook, and deployment validation.
+services:
+  api:
+    build:
+      context: ./backend
+    environment:
+      AUTH_MODE: disabled
+      DATA_DIR: /data
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-26214400}
+      CORS_ORIGINS: http://localhost:8080
+    volumes:
+      - api-storage:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+      start_period: 20s
+
+  client:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  api-storage:

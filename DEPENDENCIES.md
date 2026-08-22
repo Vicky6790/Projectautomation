@@ -7,8 +7,9 @@ Factory MCP could not be updated from this session. Apply these status/dependenc
 | WO | Intent | Status to set | Notes |
 |----|--------|---------------|--------|
 | WO-15 | Cross-module API contracts | `completed` (already) | Encoded as FastAPI models + routes |
-| WO-1 | FastAPI skeleton | `in_review` | Health, CORS, errors, job/file routers |
-| WO-6 | React scaffold | `in_review` | Vite + React, module shells, API client |
+| WO-1 | FastAPI skeleton + API Dockerfile | `in_review` | Health, CORS, errors, job/file routers, Python+JRE 17 image |
+| WO-6 | React scaffold + client Dockerfile | `in_review` | Vite + React, nginx image, `/api` proxy |
+| WO-26 | Compose deployment | starter only | `docker-compose.yml` added; on-prem/Windows runbook still open |
 
 ## Explicitly not implemented (blockers remain)
 

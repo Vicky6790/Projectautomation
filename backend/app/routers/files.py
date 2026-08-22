@@ -1,6 +1,7 @@
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import FileResponse
 
+from app.config import settings
 from app.errors import AppError
 from app.models import FileRecord, Module
 from app.storage import store
@@ -27,6 +28,13 @@ async def upload_file(
     content = await file.read()
     if not content:
         raise AppError(400, "EMPTY_FILE", "Uploaded file is empty")
+    if len(content) > settings.max_upload_bytes:
+        limit_mb = settings.max_upload_bytes / (1024 * 1024)
+        raise AppError(
+            400,
+            "FILE_TOO_LARGE",
+            f"File exceeds the {limit_mb:g} MB upload limit",
+        )
     return store.save_upload(file.filename or "upload", content, content_type, module)
 
 

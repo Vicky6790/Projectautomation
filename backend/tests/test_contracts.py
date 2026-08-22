@@ -65,3 +65,15 @@ def test_missing_file_error_shape(client: TestClient) -> None:
     error = response.json()["error"]
     assert error["code"] == "FILE_NOT_FOUND"
     assert "retryable" in error
+
+
+def test_upload_rejects_oversize_file(client: TestClient, monkeypatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "max_upload_bytes", 8)
+    response = client.post(
+        "/api/v1/files",
+        files={"file": ("sow.txt", b"statement of work", "text/plain")},
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "FILE_TOO_LARGE"

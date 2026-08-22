@@ -6,8 +6,9 @@ Local MVP for SOW analysis, project-plan generation, weekly status reports, and 
 
 | Path | Work order | Role |
 |------|------------|------|
-| `backend/` | WO-1 | FastAPI app, shared contracts, local filesystem storage |
-| `frontend/` | WO-6 | React + Vite UI shell |
+| `backend/` | WO-1 | FastAPI app, API Docker image (Python + JRE 17) |
+| `frontend/` | WO-6 | React UI shell, nginx image with `/api` proxy |
+| `docker-compose.yml` | WO-26 starter | Local Compose; on-prem runbook still WO-26 |
 | `data/` | — | Uploads and job JSON (gitignored) |
 
 ## Local auth rule
@@ -38,6 +39,16 @@ npm run dev
 ```
 
 API docs: http://localhost:8000/docs
+
+## Docker (preferred local path)
+
+Requires Docker Desktop. The API is not published on the host; the browser uses the client on port 8080, which proxies `/api` and `/health`.
+
+```powershell
+docker compose up --build
+```
+
+App: http://localhost:8080
 
 ## Tests
 
