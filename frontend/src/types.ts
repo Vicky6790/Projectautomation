@@ -60,6 +60,21 @@ export type PlanResult = {
   mpp_available?: boolean;
 };
 
+export type StatusReport = {
+  request_handle?: string | null;
+  as_of_date?: string | null;
+  planned_only?: boolean;
+  project_health?: string | null;
+  progress: string[];
+  milestones: string[];
+  risks: string[];
+  issues: string[];
+  dependencies: string[];
+  management_attention: string[];
+  decisions_required: string[];
+  next_7_day_priorities: string[];
+};
+
 export type AnalysisReport = {
   request_handle?: string | null;
   gray_areas: string[];

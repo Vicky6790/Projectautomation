@@ -4,11 +4,21 @@ import type { FileRecord } from "../types";
 
 type Props = {
   disabled?: boolean;
+  accept?: string;
+  label?: string;
+  endpoint?: string;
   onUploaded: (file: FileRecord) => void;
   onError: (message: string) => void;
 };
 
-export function FileUploader({ disabled, onUploaded, onError }: Props) {
+export function FileUploader({
+  disabled,
+  accept = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  label = "Choose SOW (PDF or Word)",
+  endpoint = "/api/v1/sow/uploads",
+  onUploaded,
+  onError,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<(() => void) | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -18,7 +28,7 @@ export function FileUploader({ disabled, onUploaded, onError }: Props) {
     if (!file) {
       return;
     }
-    const { promise, abort } = uploadFileWithProgress(file, setProgress);
+    const { promise, abort } = uploadFileWithProgress(file, setProgress, endpoint);
     abortRef.current = abort;
     setProgress(0);
     void promise
@@ -38,11 +48,11 @@ export function FileUploader({ disabled, onUploaded, onError }: Props) {
   return (
     <div className="uploader">
       <label className="upload">
-        Choose SOW (PDF or Word)
+        {label}
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          accept={accept}
           onChange={chooseFile}
           disabled={disabled || progress !== null}
         />

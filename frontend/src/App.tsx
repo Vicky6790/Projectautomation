@@ -5,6 +5,7 @@ import type { HealthResponse, Module } from "./types";
 import { ModulePage } from "./ModulePage";
 import { PlanGeneratorView } from "./PlanGeneratorView";
 import { SowAnalyzerView } from "./SowAnalyzerView";
+import { WsrDashboardView } from "./WsrDashboardView";
 
 const MODULES: { id: Module; label: string }[] = [
   { id: "sow", label: "SOW Analyzer" },
@@ -47,7 +48,8 @@ export default function App() {
           <Route path="/" element={<Navigate to="/sow" replace />} />
           <Route path="/sow" element={<SowAnalyzerView />} />
           <Route path="/plan" element={<PlanGeneratorView />} />
-          {MODULES.filter((module) => module.id !== "sow" && module.id !== "plan").map((module) => (
+          <Route path="/wsr" element={<WsrDashboardView />} />
+          {MODULES.filter((module) => module.id === "retrospective").map((module) => (
             <Route
               key={module.id}
               path={`/${module.id}`}

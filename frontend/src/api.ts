@@ -106,10 +106,11 @@ export async function downloadSowReport(handle: string): Promise<Blob> {
 export function uploadFileWithProgress(
   file: File,
   onProgress: (percent: number) => void,
+  path = "/api/v1/sow/uploads",
 ): { promise: Promise<FileRecord>; abort: () => void } {
   const xhr = new XMLHttpRequest();
   const promise = new Promise<FileRecord>((resolve, reject) => {
-    xhr.open("POST", "/api/v1/sow/uploads");
+    xhr.open("POST", path);
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
         onProgress(Math.round((event.loaded / event.total) * 100));
@@ -176,6 +177,24 @@ export async function downloadPlanMpp(handle: string): Promise<Blob> {
   const response = await fetch(`/api/v1/plan/requests/${handle}/mpp`);
   if (!response.ok) {
     throw new ApiRequestError("Plan file download failed");
+  }
+  return response.blob();
+}
+
+export function generateWsr(handle: string): Promise<ProcessingResponse> {
+  return request<ProcessingResponse>(`/api/v1/wsr/requests/${handle}/generate`, {
+    method: "POST",
+  });
+}
+
+export function getWsrRequest(handle: string): Promise<ProcessingResponse> {
+  return request<ProcessingResponse>(`/api/v1/wsr/requests/${handle}`);
+}
+
+export async function downloadWsrReport(handle: string): Promise<Blob> {
+  const response = await fetch(`/api/v1/wsr/requests/${handle}/report`);
+  if (!response.ok) {
+    throw new ApiRequestError("WSR download failed");
   }
   return response.blob();
 }
