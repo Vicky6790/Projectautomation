@@ -8,6 +8,8 @@ services:
       AUTH_MODE: disabled
       DATA_DIR: /data
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-52428800}
       REQUEST_TTL_HOURS: ${REQUEST_TTL_HOURS:-24}
       CORS_ORIGINS: http://localhost:8080

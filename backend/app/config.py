@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     cors_origins: str = "http://localhost:5173"
     openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-4o-mini"
+    openai_timeout_seconds: float = 60
     max_upload_bytes: int = 52_428_800
     request_ttl_hours: int = 24
 
