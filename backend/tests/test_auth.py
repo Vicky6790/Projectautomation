@@ -103,3 +103,44 @@ def test_operator_cannot_call_admin_routes(tmp_path: Path, monkeypatch) -> None:
     listed = operator.get("/api/v1/auth/users")
     assert listed.status_code == 403
     assert listed.json()["error"]["code"] == "ADMIN_REQUIRED"
+
+
+def test_idle_session_requires_sign_in_again(tmp_path: Path, monkeypatch) -> None:
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    client = _auth_client(tmp_path, monkeypatch)
+    signed = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret"})
+    assert signed.status_code == 200
+    path = tmp_path / "sessions.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    stale = (datetime.now(UTC) - timedelta(hours=9)).isoformat()
+    for session in payload.get("sessions", []):
+        session["last_seen"] = stale
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    denied = client.get("/api/v1/plan/library")
+    assert denied.status_code == 401
+    assert denied.json()["error"]["code"] == "AUTH_REQUIRED"
+
+
+def test_disabled_operator_session_is_rejected(tmp_path: Path, monkeypatch) -> None:
+    app_client = _auth_client(tmp_path, monkeypatch)
+    admin = app_client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret"})
+    assert admin.status_code == 200
+    created = app_client.post(
+        "/api/v1/auth/users",
+        json={"username": "operator", "password": "operator-secret", "role": "operator"},
+    )
+    assert created.status_code == 200
+    operator_id = created.json()["id"]
+    operator = TestClient(app_client.app)
+    signed = operator.post(
+        "/api/v1/auth/login",
+        json={"username": "operator", "password": "operator-secret"},
+    )
+    assert signed.status_code == 200
+    disabled = app_client.post(f"/api/v1/auth/users/{operator_id}/disable")
+    assert disabled.status_code == 200
+    denied = operator.get("/api/v1/plan/library")
+    assert denied.status_code == 401
+    assert denied.json()["error"]["code"] == "AUTH_REQUIRED"

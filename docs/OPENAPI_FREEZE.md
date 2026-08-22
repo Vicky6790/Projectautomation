@@ -18,6 +18,6 @@ CI/local check: `pytest backend/tests/test_openapi_freeze.py`.
 
 ## Required frozen paths
 
-Health `/health`, `/ready`, module upload / process / status / download routes, and auth `login` / `logout` / `me` listed in `backend/tests/test_openapi_freeze.py`.
+Health `/health`, `/ready`, module upload / process / status / download routes, and auth `login` / `logout` / `me` / `users` listed in `backend/tests/test_openapi_freeze.py`.
 
 Do not change those paths or the status enum without updating this freeze and WO-36.

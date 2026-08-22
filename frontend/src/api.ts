@@ -27,6 +27,13 @@ export class ApiRequestError extends Error {
 }
 
 const SESSION: RequestInit = { credentials: "include" };
+export const AUTH_LOST_EVENT = "pa-auth-lost";
+
+function notifyAuthLost(code?: string) {
+  if (code === "AUTH_REQUIRED" && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_LOST_EVENT));
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...SESSION, ...init });
@@ -41,6 +48,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
           };
         }
       | null;
+    notifyAuthLost(payload?.error?.code);
     throw new ApiRequestError(
       payload?.error?.message ?? `Request failed: ${response.status}`,
       payload?.error?.code ?? "REQUEST_FAILED",
@@ -129,6 +137,7 @@ export function uploadFileWithProgress(
           resolve(payload);
           return;
         }
+        notifyAuthLost(payload.error?.code);
         reject(
           new ApiRequestError(
             payload.error?.message ?? `Upload failed: ${xhr.status}`,

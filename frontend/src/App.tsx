@@ -1,6 +1,6 @@
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getCurrentOperator, getHealth, signOut } from "./api";
+import { AUTH_LOST_EVENT, getCurrentOperator, getHealth, signOut } from "./api";
 import type { HealthResponse, Module, Operator } from "./types";
 import { LoginView } from "./LoginView";
 import { OperatorsView } from "./OperatorsView";
@@ -43,6 +43,12 @@ export default function App() {
       .catch(() => setOperator(null))
       .finally(() => setSessionChecked(true));
   }, [health]);
+
+  useEffect(() => {
+    const onLost = () => setOperator(null);
+    window.addEventListener(AUTH_LOST_EVENT, onLost);
+    return () => window.removeEventListener(AUTH_LOST_EVENT, onLost);
+  }, []);
 
   const locked = Boolean(health?.auth_required && sessionChecked && !operator);
 
