@@ -33,6 +33,10 @@ def _module_router(module: Module) -> APIRouter:
             from app.orchestration.wsr import run_wsr_generation
 
             return run_wsr_generation(job_id)
+        if module == "retrospective":
+            from app.orchestration.retrospective import run_retrospective_generation
+
+            return run_retrospective_generation(job_id)
         return queued
 
     @module_router.get("/{job_id}/report")

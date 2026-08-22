@@ -65,8 +65,22 @@ def analyze_wsr(plan_data: dict[str, Any]) -> StatusReport:
 
 
 def analyze_retrospective(plan_data: dict[str, Any]) -> RetrospectiveReport:
+    metrics = plan_data.get("metrics") or {}
+    planned_only = bool(plan_data.get("planned_only", True))
     if settings.ai_stub:
-        return RetrospectiveReport(summary="[stub] Planned-only retrospective", planned_only=True)
+        return RetrospectiveReport(
+            summary=(
+                "[stub] Planned-only retrospective"
+                if planned_only
+                else "[stub] Planned-versus-actual retrospective"
+            ),
+            planned_only=planned_only,
+            schedule_variance=list(metrics.get("schedule_notes") or []),
+            milestone_delivery=list(metrics.get("milestone_notes") or []),
+            task_completion=list(metrics.get("completion_notes") or []),
+            what_went_well=list(metrics.get("on_time_names") or []),
+            what_went_poorly=list(metrics.get("slipped_names") or []),
+        )
     parsed = _client.complete_json(
         system_prompt=(
             "You are a PMO retrospective analyst. Return JSON only with keys summary, "
@@ -77,4 +91,6 @@ def analyze_retrospective(plan_data: dict[str, Any]) -> RetrospectiveReport:
         ),
         user_prompt=json.dumps(plan_data),
     )
-    return RetrospectiveReport.model_validate(parsed)
+    report = RetrospectiveReport.model_validate(parsed)
+    report.planned_only = planned_only or report.planned_only
+    return report

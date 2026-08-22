@@ -12,6 +12,7 @@ from app.storage import LocalStore
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(config.settings, "data_dir", tmp_path)
     monkeypatch.setattr(config.settings, "auth_mode", "disabled")
+    monkeypatch.setattr(config.settings, "ai_stub", True)
     store = LocalStore(tmp_path)
     monkeypatch.setattr(storage, "store", store)
     from app.routers import files, jobs
