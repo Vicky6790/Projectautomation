@@ -74,6 +74,12 @@ Verify the Retrospective path through the proxy (MPP upload → generate → sev
 python scripts/verify_retrospective.py
 ```
 
+Check API Server and Client App foundations (health, ready, SPA shells, API not published):
+
+```powershell
+python scripts/validate_foundations.py
+```
+
 On-premise overlay (host port 80, persistent data directory, stub off):
 
 ```powershell

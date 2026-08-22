@@ -37,14 +37,14 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-10 | Retrospective API | `in_review` | MPP upload, planned-vs-actual, seven-section report, planned-only flag, retry |
 | WO-14 | Retrospective view | `in_review` | MPP upload, seven-section retrospective, planned-only banner, retry, report download |
 | WO-19 | Retrospective E2E via Compose | `in_review` | Proxy path: MPP upload → generate → seven-section report |
+| WO-33 | Foundation validation vs blueprints | `in_review` | Health/ready, SPA shells, internal API; notes in docs/FOUNDATION_VALIDATION.md |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
 | WO-31 / WO-35 | on-prem policy | Auth is out of local MVP |
-| WO-33 | foundations | Blueprint-vs-code validation |
-| WO-34 | WO-16–19 | On-prem Compose verification |
+| WO-34 | WO-16–19, WO-33 | On-prem Compose verification |
 
 ## Integration gap closed in code
 
@@ -52,5 +52,5 @@ SOW, Plan Generator, WSR, and Retrospective APIs persist jobs on disk and call i
 
 ## Recommended new work orders (if missing in Factory)
 
-1. **OpenAPI contract freeze** — generate `openapi.json` from this app and diff against the API Server blueprint.
-2. **Auth adapter** — enable `AUTH_MODE=required` for on-prem multi-user (out of local MVP).
+1. **WO-36 OpenAPI freeze** — export live OpenAPI and lock `/api/v1` plus status-name mapping.
+2. **WO-31 / WO-35 Auth adapter** — enable `AUTH_MODE=required` for on-prem multi-user.
