@@ -2,9 +2,9 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getHealth } from "./api";
 import type { HealthResponse, Module } from "./types";
-import { ModulePage } from "./ModulePage";
 import { PlanGeneratorView } from "./PlanGeneratorView";
 import { SowAnalyzerView } from "./SowAnalyzerView";
+import { RetrospectiveView } from "./RetrospectiveView";
 import { WsrDashboardView } from "./WsrDashboardView";
 
 const MODULES: { id: Module; label: string }[] = [
@@ -49,13 +49,7 @@ export default function App() {
           <Route path="/sow" element={<SowAnalyzerView />} />
           <Route path="/plan" element={<PlanGeneratorView />} />
           <Route path="/wsr" element={<WsrDashboardView />} />
-          {MODULES.filter((module) => module.id === "retrospective").map((module) => (
-            <Route
-              key={module.id}
-              path={`/${module.id}`}
-              element={<ModulePage module={module.id} title={module.label} />}
-            />
-          ))}
+          <Route path="/retrospective" element={<RetrospectiveView />} />
         </Routes>
       </main>
     </div>

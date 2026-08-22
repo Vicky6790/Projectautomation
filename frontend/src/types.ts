@@ -75,6 +75,19 @@ export type StatusReport = {
   next_7_day_priorities: string[];
 };
 
+export type RetrospectiveReport = {
+  request_handle?: string | null;
+  summary?: string;
+  planned_only?: boolean;
+  schedule_variance: string[];
+  milestone_delivery: string[];
+  task_completion: string[];
+  what_went_well: string[];
+  what_went_poorly: string[];
+  lessons_learned: string[];
+  recommendations: string[];
+};
+
 export type AnalysisReport = {
   request_handle?: string | null;
   gray_areas: string[];

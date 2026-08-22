@@ -35,17 +35,17 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-13 | WSR Generator view | `in_review` | MPP upload, nine-section dashboard, health, retry, report download |
 | WO-18 | WSR E2E via Compose | `in_review` | Proxy path: MPP upload → generate → nine-section report |
 | WO-10 | Retrospective API | `in_review` | MPP upload, planned-vs-actual, seven-section report, planned-only flag, retry |
+| WO-14 | Retrospective view | `in_review` | MPP upload, seven-section retrospective, planned-only banner, retry, report download |
 
 ## Explicitly not implemented (blockers remain)
 
 | WO | Depends on | Why blocked |
 |----|----------|-------------|
-| WO-14 | WO-6, WO-10 | Retrospective UI |
 | WO-19 | WO-10, WO-14 | Retrospective E2E |
 
 ## Integration gap closed in code
 
-SOW, Plan Generator, WSR, and Retrospective APIs persist jobs on disk and call ingestion, AI, and MPXJ. The WSR dashboard is wired to those APIs. Retrospective UI remains WO-14.
+SOW, Plan Generator, WSR, and Retrospective APIs persist jobs on disk and call ingestion, AI, and MPXJ. WSR and Retrospective dashboards are wired to those APIs.
 
 ## Recommended new work orders (if missing in Factory)
 

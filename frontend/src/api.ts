@@ -198,3 +198,21 @@ export async function downloadWsrReport(handle: string): Promise<Blob> {
   }
   return response.blob();
 }
+
+export function generateRetrospective(handle: string): Promise<ProcessingResponse> {
+  return request<ProcessingResponse>(`/api/v1/retrospective/requests/${handle}/generate`, {
+    method: "POST",
+  });
+}
+
+export function getRetrospectiveRequest(handle: string): Promise<ProcessingResponse> {
+  return request<ProcessingResponse>(`/api/v1/retrospective/requests/${handle}`);
+}
+
+export async function downloadRetrospectiveReport(handle: string): Promise<Blob> {
+  const response = await fetch(`/api/v1/retrospective/requests/${handle}/report`);
+  if (!response.ok) {
+    throw new ApiRequestError("Retrospective download failed");
+  }
+  return response.blob();
+}
