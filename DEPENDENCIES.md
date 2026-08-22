@@ -15,10 +15,10 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-30 | Request retention policy | `completed` | 24h idle TTL on DATA_DIR; survives host restart |
 | WO-32 | Request-handle lifecycle | `in_review` | Idempotent handle, retry, isolation, TTL cleanup |
 | WO-28 | OpenAI residency policy | `completed` | Public OpenAI by default; Azure/on-prem via OPENAI_BASE_URL |
-| WO-5 | Report export | `in_review` | Markdown export of SOW/WSR/retro; empty sections kept |
+| WO-5 | Report export | `in_review` | Markdown for SOW/WSR/retro; empty sections; full request id in filename |
 | WO-29 | SOW classification criteria | `completed` | Six finding categories with empty-list rule |
 | WO-27 | WSR/retro classification criteria | `completed` | Health thresholds and evidence rules |
-| WO-3 | AI analysis service | `in_review` | OpenAI client + engine emitting report schemas |
+| WO-3 | AI analysis service | `in_review` | WO-28 summary-only outbound; Azure api-key; schema parse retryable |
 | WO-4 | MPP processing | `in_review` | MPXJ reader/writer; generated file is MSPDI XML |
 | WO-7 | SOW Analyzer API | `in_review` | Upload, analyze, retry, report; six categories always present |
 | WO-11 | SOW Analyzer UI | `in_review` | Upload, category findings, retry, report download |

@@ -1,6 +1,24 @@
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
+from app.errors import AppError
+from app.models import ProcessingResponse
+from app.reports import RETRO_SECTIONS, SOW_SECTIONS, WSR_SECTIONS, export_report
 from tests.helpers import docx_bytes
+
+
+def _job(module: str, status: str, result: dict | None) -> ProcessingResponse:
+    now = datetime.now(UTC)
+    return ProcessingResponse(
+        id="11111111-1111-1111-1111-111111111111",
+        request_handle="11111111-1111-1111-1111-111111111111",
+        module=module,  # type: ignore[arg-type]
+        status=status,  # type: ignore[arg-type]
+        result=result,
+        created_at=now,
+        updated_at=now,
+    )
 
 
 def _complete_sow(client: TestClient) -> str:
@@ -43,7 +61,9 @@ def test_export_refuses_incomplete_job(client: TestClient) -> None:
     client.post("/api/v1/sow/jobs", json={"file_id": handle})
     response = client.get(f"/api/v1/sow/jobs/{handle}/report")
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "EXPORT_NOT_READY"
+    error = response.json()["error"]
+    assert error["code"] == "EXPORT_NOT_READY"
+    assert "analysis must finish first" in error["message"].lower()
 
 
 def test_export_includes_empty_sow_sections(client: TestClient) -> None:
@@ -51,10 +71,84 @@ def test_export_includes_empty_sow_sections(client: TestClient) -> None:
     response = client.get(f"/api/v1/sow/requests/{handle}/report")
     assert response.status_code == 200
     text = response.text
-    assert "Gray areas" in text
+    for _key, heading in SOW_SECTIONS:
+        assert f"## {heading}" in text
     assert "Empty" in text
     assert "Scope may grow" in text
-    assert "attachment;" in response.headers["content-disposition"]
+    disposition = response.headers["content-disposition"]
+    assert "attachment;" in disposition
+    assert handle in disposition
+    assert response.headers["content-type"].startswith("text/markdown")
+
+
+def test_sow_report_lists_every_category() -> None:
+    filename, media, body = export_report(
+        "sow",
+        _job("sow", "succeeded", {"risks": ["Late vendor"], "gray_areas": []}),
+    )
+    text = body.decode()
+    assert filename.endswith(".md")
+    assert "11111111-1111-1111-1111-111111111111" in filename
+    assert media.startswith("text/markdown")
+    for _key, heading in SOW_SECTIONS:
+        assert f"## {heading}" in text
+    assert "- Late vendor" in text
+    assert text.count("Empty") == 5
+
+
+def test_wsr_report_matches_dashboard_sections() -> None:
+    filename, _media, body = export_report(
+        "wsr",
+        _job(
+            "wsr",
+            "succeeded",
+            {
+                "as_of_date": "2026-08-22",
+                "planned_only": True,
+                "project_health": "on_track",
+                "progress": ["2 of 4 complete"],
+            },
+        ),
+    )
+    text = body.decode()
+    assert filename.startswith("wsr-report-")
+    assert "As of: 2026-08-22" in text
+    assert "Planned only: yes" in text
+    assert "On track" in text
+    for _key, heading in WSR_SECTIONS:
+        assert f"## {heading}" in text
+    assert "Empty" in text
+
+
+def test_retro_report_includes_summary_and_seven_sections() -> None:
+    _filename, _media, body = export_report(
+        "retrospective",
+        _job(
+            "retrospective",
+            "succeeded",
+            {
+                "summary": "Delivery slipped on Build",
+                "planned_only": False,
+                "what_went_poorly": ["Build"],
+            },
+        ),
+    )
+    text = body.decode()
+    assert "Summary: Delivery slipped on Build" in text
+    assert "Planned only: no" in text
+    for _key, heading in RETRO_SECTIONS:
+        assert f"## {heading}" in text
+    assert "- Build" in text
+
+
+def test_failed_job_cannot_export() -> None:
+    try:
+        export_report("sow", _job("sow", "failed", {"error": "nope"}))
+    except AppError as exc:
+        assert exc.code == "EXPORT_NOT_READY"
+        assert "analysis must finish first" in exc.message.lower()
+    else:
+        raise AssertionError("expected EXPORT_NOT_READY")
 
 
 def test_plan_has_no_document_report(client: TestClient) -> None:

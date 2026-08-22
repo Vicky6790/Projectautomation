@@ -35,6 +35,19 @@ RETRO_SECTIONS = (
 )
 
 
+_NOT_READY = {
+    "sow": "Analysis must finish first before a report can be downloaded",
+    "wsr": "Generation must finish first before a report can be downloaded",
+    "retrospective": "Generation must finish first before a report can be downloaded",
+}
+
+_HEALTH_LABELS = {
+    "on_track": "On track",
+    "at_risk": "At risk",
+    "off_track": "Off track",
+}
+
+
 def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, bytes]:
     if module == "plan":
         raise AppError(
@@ -46,13 +59,13 @@ def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, by
         raise AppError(
             409,
             "EXPORT_NOT_READY",
-            "Export is available only after processing has completed",
+            _NOT_READY.get(module, "Export is available only after processing has completed"),
         )
     handle = job.request_handle or job.id
     if module == "sow":
         payload = AnalysisReport.model_validate(job.result)
         body = _render("SOW analysis report", handle, SOW_SECTIONS, payload)
-        filename = f"sow-analysis-{handle[:8]}.md"
+        filename = f"sow-analysis-{handle}.md"
     elif module == "wsr":
         payload = StatusReport.model_validate(job.result)
         extra = []
@@ -60,14 +73,15 @@ def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, by
             extra.append(f"As of: {payload.as_of_date}")
         extra.append(f"Planned only: {'yes' if payload.planned_only else 'no'}")
         body = _render("Weekly status report", handle, WSR_SECTIONS, payload, extra)
-        filename = f"wsr-report-{handle[:8]}.md"
+        filename = f"wsr-report-{handle}.md"
     elif module == "retrospective":
         payload = RetrospectiveReport.model_validate(job.result)
-        extra = ["", f"Planned only: {'yes' if payload.planned_only else 'no'}"]
+        extra: list[str] = []
         if payload.summary:
-            extra = [f"Summary: {payload.summary}", *extra]
+            extra.append(f"Summary: {payload.summary}")
+        extra.append(f"Planned only: {'yes' if payload.planned_only else 'no'}")
         body = _render("Project retrospective", handle, RETRO_SECTIONS, payload, extra)
-        filename = f"retrospective-{handle[:8]}.md"
+        filename = f"retrospective-{handle}.md"
     else:
         raise AppError(400, "REPORT_NOT_SUPPORTED", f"No report export for module {module}")
     return filename, "text/markdown; charset=utf-8", body.encode("utf-8")
@@ -90,8 +104,14 @@ def _render(
         if value in (None, "", []):
             lines.append("Empty")
         elif isinstance(value, list):
-            lines.extend(f"- {item}" for item in value)
+            lines.extend(f"- {_one_line(item)}" for item in value)
+        elif key == "project_health":
+            lines.append(_HEALTH_LABELS.get(str(value), str(value)))
         else:
-            lines.append(str(value))
+            lines.append(_one_line(value))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _one_line(value: object) -> str:
+    return " ".join(str(value).split())
