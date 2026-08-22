@@ -49,6 +49,29 @@ nav a.active {
   margin: 12px 0;
 }
 
-.job button {
+.job button,
+.findings button,
+.uploader button {
   margin-right: 8px;
 }
+
+.processing {
+  font-weight: 600;
+}
+
+.categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.categories button.active {
+  font-weight: 700;
+}
+
+.category-detail {
+  margin-top: 16px;
+}
+
