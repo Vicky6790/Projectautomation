@@ -38,6 +38,7 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-14 | Retrospective view | `in_review` | MPP upload, seven-section retrospective, planned-only banner, retry, report download |
 | WO-19 | Retrospective E2E via Compose | `in_review` | Proxy path: MPP upload → generate → seven-section report |
 | WO-33 | Foundation validation vs blueprints | `in_review` | Health/ready, SPA shells, internal API; notes in docs/FOUNDATION_VALIDATION.md |
+| WO-36 | OpenAPI freeze | `in_review` | docs/openapi.json plus pytest drift check; mapping in docs/OPENAPI_FREEZE.md |
 
 ## Explicitly not implemented (blockers remain)
 
@@ -52,5 +53,4 @@ SOW, Plan Generator, WSR, and Retrospective APIs persist jobs on disk and call i
 
 ## Recommended new work orders (if missing in Factory)
 
-1. **WO-36 OpenAPI freeze** — export live OpenAPI and lock `/api/v1` plus status-name mapping.
-2. **WO-31 / WO-35 Auth adapter** — enable `AUTH_MODE=required` for on-prem multi-user.
+1. **WO-31 / WO-35 Auth adapter** — enable `AUTH_MODE=required` for on-prem multi-user.

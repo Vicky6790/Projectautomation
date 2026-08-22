@@ -80,6 +80,14 @@ Check API Server and Client App foundations (health, ready, SPA shells, API not 
 python scripts/validate_foundations.py
 ```
 
+Freeze/check OpenAPI (`docs/openapi.json`):
+
+```powershell
+python scripts/export_openapi.py
+cd backend
+pytest tests/test_openapi_freeze.py
+```
+
 On-premise overlay (host port 80, persistent data directory, stub off):
 
 ```powershell

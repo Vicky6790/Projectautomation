@@ -23,7 +23,10 @@ def create_app() -> FastAPI:
         version="0.1.0",
         description=(
             "Local MVP API. Auth is disabled unless AUTH_MODE=required. "
-            "Module processing (ingestion, AI, MPP, export) is stubbed until later work orders."
+            "Public routes are versioned under /api/v1. "
+            "ProcessingResponse.status is queued|running|succeeded|failed "
+            "(blueprint state processing|complete|failed). "
+            "See docs/OPENAPI_FREEZE.md."
         ),
         lifespan=lifespan,
     )
