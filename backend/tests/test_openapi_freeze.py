@@ -2,35 +2,10 @@ import json
 from pathlib import Path
 
 from app.main import create_app
+from app.openapi_contract import FROZEN_PATHS
 
 ROOT = Path(__file__).resolve().parents[2]
 FROZEN = ROOT / "docs" / "openapi.json"
-
-FROZEN_PATHS = (
-    "/health",
-    "/ready",
-    "/api/v1/sow/uploads",
-    "/api/v1/sow/requests/{handle}/analyze",
-    "/api/v1/sow/requests/{handle}",
-    "/api/v1/sow/requests/{handle}/report",
-    "/api/v1/plan/library",
-    "/api/v1/plan/preview",
-    "/api/v1/plan/requests/{handle}",
-    "/api/v1/plan/requests/{handle}/approve",
-    "/api/v1/plan/requests/{handle}/mpp",
-    "/api/v1/wsr/uploads",
-    "/api/v1/wsr/requests/{handle}/generate",
-    "/api/v1/wsr/requests/{handle}",
-    "/api/v1/wsr/requests/{handle}/report",
-    "/api/v1/retrospective/uploads",
-    "/api/v1/retrospective/requests/{handle}/generate",
-    "/api/v1/retrospective/requests/{handle}",
-    "/api/v1/retrospective/requests/{handle}/report",
-    "/api/v1/auth/login",
-    "/api/v1/auth/logout",
-    "/api/v1/auth/me",
-    "/api/v1/auth/users",
-)
 
 
 def test_frozen_openapi_matches_live_schema() -> None:

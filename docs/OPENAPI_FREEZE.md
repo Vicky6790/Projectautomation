@@ -18,6 +18,10 @@ CI/local check: `pytest backend/tests/test_openapi_freeze.py`.
 
 ## Required frozen paths
 
-Health `/health`, `/ready`, module upload / process / status / download routes, and auth `login` / `logout` / `me` / `users` listed in `backend/tests/test_openapi_freeze.py`.
+Canonical list: `backend/app/openapi_contract.py` (imported by the freeze test and `scripts/export_openapi.py`).
+
+Includes health `/health` `/ready`, generic `POST /api/v1/files`, module request-handle upload/process/status/download, client job start/status/retry aliases, plan preview retry, and auth `login` / `logout` / `me` / `users` / `users/{operator_id}/disable`.
+
+After WO-35, auth routes are part of this freeze (WO-36 originally deferred them). No extra WO.
 
 Do not change those paths or the status enum without updating this freeze and WO-36.

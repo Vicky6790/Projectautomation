@@ -9,35 +9,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.main import create_app
+from app.main import create_app  # noqa: E402
+from app.openapi_contract import FROZEN_PATHS  # noqa: E402
 
 DEST = ROOT / "docs" / "openapi.json"
-
-FROZEN_PATHS = (
-    "/health",
-    "/ready",
-    "/api/v1/sow/uploads",
-    "/api/v1/sow/requests/{handle}/analyze",
-    "/api/v1/sow/requests/{handle}",
-    "/api/v1/sow/requests/{handle}/report",
-    "/api/v1/plan/library",
-    "/api/v1/plan/preview",
-    "/api/v1/plan/requests/{handle}",
-    "/api/v1/plan/requests/{handle}/approve",
-    "/api/v1/plan/requests/{handle}/mpp",
-    "/api/v1/wsr/uploads",
-    "/api/v1/wsr/requests/{handle}/generate",
-    "/api/v1/wsr/requests/{handle}",
-    "/api/v1/wsr/requests/{handle}/report",
-    "/api/v1/retrospective/uploads",
-    "/api/v1/retrospective/requests/{handle}/generate",
-    "/api/v1/retrospective/requests/{handle}",
-    "/api/v1/retrospective/requests/{handle}/report",
-    "/api/v1/auth/login",
-    "/api/v1/auth/logout",
-    "/api/v1/auth/me",
-    "/api/v1/auth/users",
-)
 
 
 def schema() -> dict:
@@ -45,8 +20,12 @@ def schema() -> dict:
 
 
 def write() -> Path:
+    payload = schema()
+    missing = [path for path in FROZEN_PATHS if path not in payload["paths"]]
+    if missing:
+        raise SystemExit(f"frozen paths missing from live schema: {missing}")
     DEST.parent.mkdir(parents=True, exist_ok=True)
-    DEST.write_text(json.dumps(schema(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    DEST.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return DEST
 
 
