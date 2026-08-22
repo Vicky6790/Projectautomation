@@ -8,6 +8,7 @@ import {
   retryJob,
   retryPlanPreview,
 } from "./api";
+import { ReportDownloadControl } from "./components/ReportDownloadControl";
 import type {
   GeneratedPlan,
   LibraryPhase,
@@ -338,11 +339,11 @@ export function PlanGeneratorView() {
             Approve and generate MPP
           </button>
         ) : null}
-        {approved && mppAvailable ? (
-          <button type="button" onClick={() => void download()} disabled={busy}>
-            Download MPP
-          </button>
-        ) : null}
+        <ReportDownloadControl
+          enabled={Boolean(approved && mppAvailable && !busy)}
+          onDownload={() => void download()}
+          label="Download MPP"
+        />
       </div>
       {busy ? <p className="processing">Processing…</p> : null}
       {plan ? <WbsPreview plan={plan} /> : null}
