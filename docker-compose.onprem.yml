@@ -1,0 +1,13 @@
+# On-premise overlay: docker compose -f docker-compose.yml -f docker-compose.onprem.yml up -d
+# Keep secrets in the host environment or a protected .env, not in git.
+services:
+  api:
+    environment:
+      AI_STUB: "false"
+      AUTH_MODE: ${AUTH_MODE:-disabled}
+    volumes:
+      - ${ONPREM_DATA_DIR:-/var/lib/project-automation}:/data
+
+  client:
+    ports:
+      - "${ONPREM_HTTP_PORT:-80}:80"

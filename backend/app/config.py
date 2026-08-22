@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
     openai_timeout_seconds: float = 60
+    ai_stub: bool = False
     max_upload_bytes: int = 52_428_800
     request_ttl_hours: int = 24
 

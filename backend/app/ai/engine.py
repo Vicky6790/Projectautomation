@@ -5,12 +5,23 @@ from typing import Any
 
 from app.ai.client import OpenAiClient
 from app.ai.criteria import RETRO_CRITERIA, SOW_CRITERIA, WSR_CRITERIA
+from app.config import settings
 from app.models import AnalysisReport, RetrospectiveReport, StatusReport
 
 _client = OpenAiClient()
 
 
 def analyze_sow(sow_text: str) -> AnalysisReport:
+    if settings.ai_stub:
+        snippet = sow_text.strip()[:80] or "uploaded SOW"
+        return AnalysisReport(
+            gray_areas=[f"[stub] Review undefined terms in: {snippet}"],
+            risks=[],
+            missing_requirements=[],
+            assumptions=[],
+            dependencies=[],
+            clarification_questions=[],
+        )
     parsed = _client.complete_json(
         system_prompt=(
             "You are a PMO analyst. Return JSON only with keys gray_areas, risks, "
@@ -23,6 +34,8 @@ def analyze_sow(sow_text: str) -> AnalysisReport:
 
 
 def analyze_wsr(plan_data: dict[str, Any]) -> StatusReport:
+    if settings.ai_stub:
+        return StatusReport(project_health="on_track")
     parsed = _client.complete_json(
         system_prompt=(
             "You are a PMO status analyst. Return JSON only with keys project_health, "
@@ -36,6 +49,8 @@ def analyze_wsr(plan_data: dict[str, Any]) -> StatusReport:
 
 
 def analyze_retrospective(plan_data: dict[str, Any]) -> RetrospectiveReport:
+    if settings.ai_stub:
+        return RetrospectiveReport(summary="[stub] Planned-only retrospective", planned_only=True)
     parsed = _client.complete_json(
         system_prompt=(
             "You are a PMO retrospective analyst. Return JSON only with keys summary, "

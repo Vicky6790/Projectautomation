@@ -57,9 +57,20 @@ def _sow_payload() -> dict:
     }
 
 
+def test_analyze_sow_stub_skips_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_stub", True)
+    monkeypatch.setattr(settings, "openai_api_key", "")
+    result = engine.analyze_sow("The vendor shall deliver a portal.")
+    assert result.gray_areas
+    assert result.risks == []
+
+
 def test_analyze_sow_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.config import settings
 
+    monkeypatch.setattr(settings, "ai_stub", False)
     monkeypatch.setattr(settings, "openai_api_key", "")
     with pytest.raises(AppError) as exc:
         engine.analyze_sow("A statement of work.")

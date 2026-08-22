@@ -42,13 +42,25 @@ API docs: http://localhost:8000/docs
 
 ## Docker (preferred local path)
 
-Requires Docker Desktop. The API is not published on the host; the browser uses the client on port 8080, which proxies `/api` and `/health`.
+Requires Docker Desktop on Windows. The API is not published on the host; the browser uses the client on port 8080, which proxies `/api` and `/health`. Local Compose sets `AI_STUB=true` so SOW analysis can complete without an OpenAI key.
 
 ```powershell
 docker compose up --build
 ```
 
 App: http://localhost:8080
+
+Verify the SOW path through the proxy:
+
+```powershell
+python scripts/verify_sow.py
+```
+
+On-premise overlay (host port 80, persistent data directory, stub off):
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.onprem.yml up -d --build
+```
 
 ## Tests
 

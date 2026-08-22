@@ -1,15 +1,18 @@
-# Starter Compose for local Docker-first development.
-# WO-26 still owns on-prem overrides, Windows runbook, and deployment validation.
+# Local Docker Compose. On-prem host settings live in docker-compose.onprem.yml.
 services:
   api:
     build:
       context: ./backend
+    env_file:
+      - path: .env
+        required: false
     environment:
-      AUTH_MODE: disabled
+      AUTH_MODE: ${AUTH_MODE:-disabled}
       DATA_DIR: /data
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      AI_STUB: ${AI_STUB:-true}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-52428800}
       REQUEST_TTL_HOURS: ${REQUEST_TTL_HOURS:-24}
       CORS_ORIGINS: http://localhost:8080
@@ -21,12 +24,12 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')",
         ]
       interval: 10s
       timeout: 3s
       retries: 8
-      start_period: 20s
+      start_period: 40s
 
   client:
     build:
@@ -36,6 +39,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+      start_period: 10s
 
 volumes:
   api-storage:

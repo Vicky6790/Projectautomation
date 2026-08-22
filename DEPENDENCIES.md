@@ -22,7 +22,8 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-4 | MPP processing | `in_review` | MPXJ reader/writer; generated file is MSPDI XML |
 | WO-7 | SOW Analyzer API | `in_review` | Upload, analyze, retry, report; six categories always present |
 | WO-11 | SOW Analyzer UI | `in_review` | Upload, category findings, retry, report download |
-| WO-26 | Compose deployment | starter only | `docker-compose.yml` added; on-prem/Windows runbook still open |
+| WO-26 | Compose deployment | `in_review` | Local Compose + on-prem overlay; API not published on host |
+| WO-16 | SOW E2E via Compose | `in_review` | Proxy path verified: upload → analyze → report |
 
 ## Explicitly not implemented (blockers remain)
 
@@ -33,7 +34,7 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-9 | WO-2, WO-3, WO-4, WO-5 | WSR API |
 | WO-10 | WO-2, WO-3, WO-4, WO-5 | Retrospective API |
 | WO-12–14 | WO-6 + matching API | Remaining module UIs |
-| WO-16–19 | matching API + UI | E2E |
+| WO-17–19 | matching API + UI | Remaining E2E |
 
 ## Integration gap closed in code
 
