@@ -9,6 +9,7 @@ services:
       DATA_DIR: /data
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-52428800}
+      REQUEST_TTL_HOURS: ${REQUEST_TTL_HOURS:-24}
       CORS_ORIGINS: http://localhost:8080
     volumes:
       - api-storage:/data

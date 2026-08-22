@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.errors import AppError
 from app.models import Module, ProcessingResponse, StartJobRequest
 from app.storage import store
 
@@ -11,6 +12,8 @@ def _module_router(module: Module) -> APIRouter:
 
     @module_router.post("", response_model=ProcessingResponse)
     def start_job(body: StartJobRequest) -> ProcessingResponse:
+        if module != "plan" and not body.file_id:
+            raise AppError(400, "FILE_ID_REQUIRED", "file_id is required for this module")
         return store.create_job(module, body.file_id)
 
     @module_router.get("/{job_id}", response_model=ProcessingResponse)

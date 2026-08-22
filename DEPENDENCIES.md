@@ -12,6 +12,8 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-24 | Upload format and size policies | `completed` | SOW PDF/DOCX 25 MB; MPP 50 MB |
 | WO-25 | Connect source repository | `completed` | GitHub `Vicky6790/Projectautomation` |
 | WO-2 | Document ingestion | `in_review` | Type/size validation + SOW text extraction |
+| WO-30 | Request retention policy | `completed` | 24h idle TTL on DATA_DIR; survives host restart |
+| WO-32 | Request-handle lifecycle | `in_review` | Idempotent handle, retry, isolation, TTL cleanup |
 | WO-26 | Compose deployment | starter only | `docker-compose.yml` added; on-prem/Windows runbook still open |
 
 ## Explicitly not implemented (blockers remain)

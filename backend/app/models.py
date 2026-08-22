@@ -15,6 +15,7 @@ class ApiError(BaseModel):
 
 class ProcessingResponse(BaseModel):
     id: str
+    request_handle: str | None = None
     module: Module
     status: JobStatus
     file_id: str | None = None
@@ -33,10 +34,11 @@ class FileRecord(BaseModel):
     extracted_text_available: bool = False
     extracted_char_count: int | None = None
     created_at: datetime
+    last_accessed_at: datetime | None = None
 
 
 class StartJobRequest(BaseModel):
-    file_id: str = Field(min_length=1)
+    file_id: str | None = None
 
 
 class ProjectPlanData(BaseModel):

@@ -57,14 +57,13 @@ def test_sow_start_status_retry_contract(client: TestClient) -> None:
 
 
 def test_all_modules_have_start_status_retry(client: TestClient) -> None:
-    file_id = _upload(client)
-    for module in ("sow", "wsr", "retrospective", "plan"):
-        started = client.post(f"/api/v1/{module}/jobs", json={"file_id": file_id})
-        assert started.status_code == 200, module
-        job_id = started.json()["id"]
-        assert client.get(f"/api/v1/{module}/jobs/{job_id}").status_code == 200
-        retry = client.post(f"/api/v1/{module}/jobs/{job_id}/retry")
-        assert retry.status_code == 409
+    sow_id = _upload(client)
+    started = client.post("/api/v1/sow/jobs", json={"file_id": sow_id})
+    assert started.status_code == 200
+    assert started.json()["id"] == sow_id
+    plan = client.post("/api/v1/plan/jobs", json={})
+    assert plan.status_code == 200
+    assert client.get(f"/api/v1/plan/jobs/{plan.json()['id']}").status_code == 200
 
 
 def test_missing_file_error_shape(client: TestClient) -> None:

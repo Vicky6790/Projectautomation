@@ -41,7 +41,7 @@ def download_file(file_id: str) -> FileResponse:
 @router.get("/{file_id}/text")
 def get_extracted_text(file_id: str) -> dict:
     record, _ = store.get_file(file_id)
-    text_path = store.uploads / f"{file_id}.txt"
+    text_path = store.extracted_text_path(file_id)
     if not record.extracted_text_available or not text_path.exists():
         raise AppError(404, "TEXT_NOT_FOUND", "No extracted text is available for this file")
     text = text_path.read_text(encoding="utf-8")
