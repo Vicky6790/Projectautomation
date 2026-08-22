@@ -20,9 +20,7 @@ class OpenAiClient:
                 "OPENAI_API_KEY is not configured",
                 retryable=False,
             )
-        url = settings.openai_base_url.rstrip("/")
-        if not url.endswith("/chat/completions"):
-            url = f"{url}/chat/completions"
+        url = completions_url(settings.openai_base_url)
         payload = {
             "model": settings.openai_model,
             "temperature": 0,
@@ -32,10 +30,7 @@ class OpenAiClient:
                 {"role": "user", "content": user_prompt},
             ],
         }
-        headers = {
-            "Authorization": f"Bearer {settings.openai_api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = provider_headers(url, settings.openai_api_key)
         last_error: Exception | None = None
         for attempt in range(3):
             try:
@@ -50,6 +45,13 @@ class OpenAiClient:
                     )
                     time.sleep(0.2 * (attempt + 1))
                     continue
+                if 400 <= response.status_code < 500:
+                    raise AppError(
+                        502,
+                        "AI_PROVIDER_REJECTED",
+                        "The AI provider rejected the request",
+                        retryable=False,
+                    )
                 response.raise_for_status()
                 content = response.json()["choices"][0]["message"]["content"]
                 return _parse_json_object(content)
@@ -64,6 +66,22 @@ class OpenAiClient:
             "The AI provider request failed",
             retryable=True,
         ) from last_error
+
+
+def completions_url(base_url: str) -> str:
+    url = base_url.strip()
+    if "chat/completions" in url:
+        return url
+    return f"{url.rstrip('/')}/chat/completions"
+
+
+def provider_headers(url: str, api_key: str) -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    if "openai.azure.com" in url.lower() or "azure" in url.lower():
+        headers["api-key"] = api_key
+        return headers
+    headers["Authorization"] = f"Bearer {api_key}"
+    return headers
 
 
 def _parse_json_object(content: str) -> dict:
