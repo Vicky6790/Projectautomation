@@ -102,6 +102,8 @@ def _audit_action(method: str, path: str) -> str | None:
         return "retry"
     if path.endswith("/report") or path.endswith("/mpp"):
         return "download"
+    if method == "PATCH" and "/items/" in path:
+        return "review"
     generate_tokens = ("analyze", "preview", "approve", "generate")
     if method == "POST" and any(token in path for token in generate_tokens):
         return "generate"

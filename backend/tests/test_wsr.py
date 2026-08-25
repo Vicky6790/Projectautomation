@@ -147,3 +147,156 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     ):
         assert heading in report.text
     assert "No items identified from the plan" in report.text
+
+
+def _pending_ai(_data: dict) -> dict:
+    empty = _empty_ai(_data)
+    empty["risks"] = [
+        {
+            "id": "risk-1",
+            "section": "risk_or_focus_area",
+            "content": "Build may slip before Go Live",
+            "evidence_references": [
+                {
+                    "task_or_milestone_name": "Build",
+                    "date": "2026-08-25",
+                    "progress": 0,
+                    "predecessor_names": ["Kickoff"],
+                    "resource_assignments": ["Alex"],
+                    "dependency_description": "Depends on Kickoff",
+                }
+            ],
+            "review_status": "pending",
+        }
+    ]
+    empty["issues"] = [
+        {
+            "id": "issue-1",
+            "section": "issue",
+            "content": "Kickoff evidence is incomplete",
+            "evidence_references": [{"task_or_milestone_name": "Kickoff", "date": "2026-08-12"}],
+            "review_status": "pending",
+        }
+    ]
+    return empty
+
+
+def _generate_pending(client: TestClient, monkeypatch) -> str:
+    handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _pending_ai)
+    response = client.post(f"/api/v1/wsr/requests/{handle}/generate")
+    assert response.status_code == 200, response.text
+    assert response.json()["result"]["exportable"] is False
+    return handle
+
+
+def test_pending_report_cannot_download(client: TestClient, monkeypatch) -> None:
+    handle = _generate_pending(client, monkeypatch)
+    report = client.get(f"/api/v1/wsr/requests/{handle}/report")
+    assert report.status_code == 409
+    assert report.json()["error"]["code"] == "REVIEW_REQUIRED"
+    jobs = client.get(f"/api/v1/wsr/jobs/{handle}/report")
+    assert jobs.status_code == 409
+    assert jobs.json()["error"]["code"] == "REVIEW_REQUIRED"
+
+
+def test_review_keep_edit_remove_and_download(client: TestClient, monkeypatch) -> None:
+    handle = _generate_pending(client, monkeypatch)
+    generated = client.get(f"/api/v1/wsr/requests/{handle}").json()["result"]
+    generated_at = generated["generated_at"]
+    as_of = generated["as_of_date"]
+
+    missing = client.patch(
+        f"/api/v1/wsr/requests/{handle}/items/00000000-0000-0000-0000-000000000099",
+        json={"decision": "kept"},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "ITEM_NOT_FOUND"
+
+    blank = client.patch(
+        f"/api/v1/wsr/requests/{handle}/items/risk-1",
+        json={"decision": "edited", "content": "   "},
+    )
+    assert blank.status_code == 400
+    assert blank.json()["error"]["code"] == "INVALID_REVIEW"
+
+    keep = client.patch(
+        f"/api/v1/wsr/requests/{handle}/items/issue-1",
+        json={"decision": "kept"},
+    )
+    assert keep.status_code == 200
+    assert keep.json()["result"]["exportable"] is False
+    assert keep.json()["result"]["issues"][0]["review_status"] == "kept"
+
+    edit = client.patch(
+        f"/api/v1/wsr/requests/{handle}/items/risk-1",
+        json={"decision": "edited", "content": "Build is at risk against Go Live"},
+    )
+    assert edit.status_code == 200
+    result = edit.json()["result"]
+    assert result["exportable"] is True
+    assert result["as_of_date"] == as_of
+    assert result["generated_at"] == generated_at
+    assert result["risks"][0]["content"] == "Build is at risk against Go Live"
+    assert result["risks"][0]["review_status"] == "edited"
+
+    report = client.get(f"/api/v1/wsr/requests/{handle}/report")
+    assert report.status_code == 200
+    assert "Build is at risk against Go Live" in report.text
+    assert "Source / Evidence: Build" in report.text
+    assert "Kickoff evidence is incomplete" in report.text
+
+    removed = client.patch(
+        f"/api/v1/wsr/requests/{handle}/items/issue-1",
+        json={"decision": "removed"},
+    )
+    assert removed.status_code == 200
+    assert removed.json()["result"]["exportable"] is True
+    assert removed.json()["result"]["issues"][0]["review_status"] == "removed"
+
+    after_remove = client.get(f"/api/v1/wsr/requests/{handle}/report")
+    assert after_remove.status_code == 200
+    assert "Kickoff evidence is incomplete" not in after_remove.text
+    assert "Build is at risk against Go Live" in after_remove.text
+
+
+def test_review_not_allowed_until_generation_succeeds(client: TestClient, monkeypatch) -> None:
+    handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+
+    def boom(_data: dict) -> dict:
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", boom)
+    failed = client.post(f"/api/v1/wsr/requests/{handle}/generate")
+    assert failed.status_code == 502
+    review = client.patch(
+        f"/api/v1/wsr/requests/{handle}/items/risk-1",
+        json={"decision": "kept"},
+    )
+    assert review.status_code == 409
+    assert review.json()["error"]["code"] == "REVIEW_NOT_ALLOWED"
+
+
+def test_evidence_is_isolated_to_the_request(client: TestClient, monkeypatch) -> None:
+    handle = _generate_pending(client, monkeypatch)
+    evidence = client.get(f"/api/v1/wsr/requests/{handle}/items/risk-1/evidence")
+    assert evidence.status_code == 200
+    body = evidence.json()
+    assert body["item_id"] == "risk-1"
+    assert body["review_status"] == "pending"
+    assert body["evidence_references"][0]["task_or_milestone_name"] == "Build"
+    assert body["evidence_references"][0]["predecessor_names"] == ["Kickoff"]
+    assert body["evidence_references"][0]["resource_assignments"] == ["Alex"]
+
+    other = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _empty_ai)
+    generated = client.post(f"/api/v1/wsr/requests/{other}/generate")
+    assert generated.status_code == 200
+    isolated = client.get(f"/api/v1/wsr/requests/{other}/items/risk-1/evidence")
+    assert isolated.status_code == 404
+    assert isolated.json()["error"]["code"] == "ITEM_NOT_FOUND"
+    patched = client.patch(
+        f"/api/v1/wsr/requests/{other}/items/risk-1",
+        json={"decision": "kept"},
+    )
+    assert patched.status_code == 404

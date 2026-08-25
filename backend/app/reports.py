@@ -74,6 +74,12 @@ def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, by
         filename = f"sow-analysis-{handle}.md"
     elif module == "wsr":
         payload = StatusReport.model_validate(job.result)
+        if not payload.exportable:
+            raise AppError(
+                409,
+                "REVIEW_REQUIRED",
+                "Review is required before a report can be downloaded",
+            )
         body = _render_wsr(handle, payload)
         filename = f"wsr-report-{handle}.md"
     elif module == "retrospective":
@@ -142,13 +148,11 @@ def _render_wsr(handle: str, payload: StatusReport) -> str:
             "decisions_required",
             "next_7_day_priorities",
         ):
-            items = getattr(payload, key)
+            items = [item for item in getattr(payload, key) if item.review_status != "removed"]
             if not items:
                 lines.append(_EMPTY_AI)
             else:
                 for item in items:
-                    if item.review_status == "removed":
-                        continue
                     lines.append(f"- {item.content}")
                     source = item.evidence_references[0]
                     lines.append(f"  Source / Evidence: {source.task_or_milestone_name}")
@@ -183,8 +187,7 @@ def _render_wsr(handle: str, payload: StatusReport) -> str:
                 lines.append("No upcoming milestone was identified")
             else:
                 lines.extend(
-                    f"- {item.get('name')}: {item.get('date') or 'Unavailable'}"
-                    for item in items
+                    f"- {item.get('name')}: {item.get('date') or 'Unavailable'}" for item in items
                 )
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"

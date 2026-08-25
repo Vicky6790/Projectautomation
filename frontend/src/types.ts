@@ -60,12 +60,34 @@ export type PlanResult = {
   mpp_available?: boolean;
 };
 
+export type EvidenceReference = {
+  task_or_milestone_name: string;
+  date?: string | null;
+  progress?: number | null;
+  predecessor_names?: string[] | null;
+  resource_assignments?: string[] | null;
+  dependency_description?: string | null;
+};
+
 export type AiDerivedItem = {
   id: string;
   section: string;
   content: string;
-  evidence_references: { task_or_milestone_name: string; date?: string | null }[];
+  evidence_references: EvidenceReference[];
   review_status: "pending" | "kept" | "edited" | "removed";
+};
+
+export type WsrItemDecision = {
+  decision: "kept" | "edited" | "removed";
+  content?: string | null;
+};
+
+export type WsrEvidenceResponse = {
+  item_id: string;
+  content: string;
+  section: string;
+  review_status: AiDerivedItem["review_status"];
+  evidence_references: EvidenceReference[];
 };
 
 export type StatusReport = {

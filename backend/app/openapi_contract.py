@@ -27,6 +27,8 @@ FROZEN_PATHS = (
     "/api/v1/wsr/requests/{handle}/generate",
     "/api/v1/wsr/requests/{handle}",
     "/api/v1/wsr/requests/{handle}/report",
+    "/api/v1/wsr/requests/{handle}/items/{item_id}",
+    "/api/v1/wsr/requests/{handle}/items/{item_id}/evidence",
     "/api/v1/retrospective/uploads",
     "/api/v1/retrospective/jobs",
     "/api/v1/retrospective/jobs/{job_id}",

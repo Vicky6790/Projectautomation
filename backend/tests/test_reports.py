@@ -106,6 +106,7 @@ def test_wsr_report_matches_dashboard_sections() -> None:
                 "as_of_date": "2026-08-22",
                 "generated_at": "2026-08-22T10:00:00Z",
                 "planned_only": True,
+                "exportable": True,
                 "project_health": "on_track",
                 "facts": {
                     "project_name": "Demo",
@@ -140,6 +141,95 @@ def test_wsr_report_matches_dashboard_sections() -> None:
         assert f"## {heading}" in text
     assert "No items identified from the plan" in text
     assert "A timeline cannot be generated" in text
+
+
+def test_wsr_pending_report_cannot_export() -> None:
+    try:
+        export_report(
+            "wsr",
+            _job(
+                "wsr",
+                "succeeded",
+                {
+                    "as_of_date": "2026-08-22",
+                    "generated_at": "2026-08-22T10:00:00Z",
+                    "exportable": False,
+                    "project_health": "on_track",
+                    "facts": {
+                        "project_name": "Demo",
+                        "as_of_date": "2026-08-22",
+                        "generated_at": "2026-08-22T10:00:00Z",
+                        "project_health": "on_track",
+                    },
+                    "risks": [
+                        {
+                            "id": "risk-1",
+                            "section": "risk_or_focus_area",
+                            "content": "Build may slip",
+                            "review_status": "pending",
+                            "evidence_references": [{"task_or_milestone_name": "Build"}],
+                        }
+                    ],
+                },
+            ),
+        )
+    except AppError as exc:
+        assert exc.code == "REVIEW_REQUIRED"
+    else:
+        raise AssertionError("expected REVIEW_REQUIRED")
+
+
+def test_wsr_report_omits_removed_items() -> None:
+    _filename, _media, body = export_report(
+        "wsr",
+        _job(
+            "wsr",
+            "succeeded",
+            {
+                "as_of_date": "2026-08-22",
+                "generated_at": "2026-08-22T10:00:00Z",
+                "exportable": True,
+                "project_health": "on_track",
+                "facts": {
+                    "project_name": "Demo",
+                    "as_of_date": "2026-08-22",
+                    "generated_at": "2026-08-22T10:00:00Z",
+                    "project_health": "on_track",
+                },
+                "risks": [
+                    {
+                        "id": "risk-1",
+                        "section": "risk_or_focus_area",
+                        "content": "Kept risk",
+                        "review_status": "kept",
+                        "evidence_references": [{"task_or_milestone_name": "Build"}],
+                    },
+                    {
+                        "id": "risk-2",
+                        "section": "risk_or_focus_area",
+                        "content": "Removed risk",
+                        "review_status": "removed",
+                        "evidence_references": [{"task_or_milestone_name": "Kickoff"}],
+                    },
+                ],
+                "issues": [
+                    {
+                        "id": "issue-1",
+                        "section": "issue",
+                        "content": "Removed issue",
+                        "review_status": "removed",
+                        "evidence_references": [{"task_or_milestone_name": "Build"}],
+                    }
+                ],
+            },
+        ),
+    )
+    text = body.decode()
+    assert "Kept risk" in text
+    assert "Source / Evidence: Build" in text
+    assert "Removed risk" not in text
+    assert "Removed issue" not in text
+    assert "No items identified from the plan" in text
 
 
 def test_retro_report_includes_summary_and_seven_sections() -> None:

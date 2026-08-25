@@ -4,10 +4,11 @@ from fastapi.responses import Response
 from app import storage as storage_mod
 from app.errors import AppError
 from app.ingestion import validate_upload
-from app.models import FileRecord, ProcessingResponse
+from app.models import FileRecord, ProcessingResponse, WsrEvidenceResponse, WsrItemDecision
 from app.mpp import read_mpp_bytes
 from app.orchestration.wsr import run_wsr_generation
 from app.reports import export_report
+from app.wsr.review import item_evidence, review_item
 
 router = APIRouter(prefix="/api/v1/wsr", tags=["wsr"])
 
@@ -55,3 +56,13 @@ def download_wsr_report(handle: str) -> Response:
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.patch("/requests/{handle}/items/{item_id}", response_model=ProcessingResponse)
+def review_wsr_item(handle: str, item_id: str, body: WsrItemDecision) -> ProcessingResponse:
+    return review_item(handle, item_id, body)
+
+
+@router.get("/requests/{handle}/items/{item_id}/evidence", response_model=WsrEvidenceResponse)
+def get_wsr_item_evidence(handle: str, item_id: str) -> WsrEvidenceResponse:
+    return item_evidence(handle, item_id)

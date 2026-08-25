@@ -210,6 +210,19 @@ class WsrPlanFacts(BaseModel):
     upcoming_milestones: list[MilestoneItem] = Field(default_factory=list)
 
 
+class WsrItemDecision(BaseModel):
+    decision: Literal["kept", "edited", "removed"]
+    content: str | None = None
+
+
+class WsrEvidenceResponse(BaseModel):
+    item_id: str
+    content: str
+    section: str
+    review_status: Literal["pending", "kept", "edited", "removed"]
+    evidence_references: list[EvidenceReference]
+
+
 class StatusReport(BaseModel):
     request_handle: str | None = None
     as_of_date: str | None = None

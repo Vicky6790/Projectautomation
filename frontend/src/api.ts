@@ -6,6 +6,8 @@ import type {
   PlanConfiguration,
   PlanLibrary,
   ProcessingResponse,
+  WsrEvidenceResponse,
+  WsrItemDecision,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -207,9 +209,43 @@ export function getWsrRequest(handle: string): Promise<ProcessingResponse> {
 export async function downloadWsrReport(handle: string): Promise<Blob> {
   const response = await fetch(`/api/v1/wsr/requests/${handle}/report`, SESSION);
   if (!response.ok) {
-    throw new ApiRequestError("WSR download failed");
+    const payload = (await response.json().catch(() => null)) as
+      | {
+          error?: {
+            message?: string;
+            code?: string;
+            retryable?: boolean;
+            details?: Record<string, unknown>;
+          };
+        }
+      | null;
+    notifyAuthLost(payload?.error?.code);
+    throw new ApiRequestError(
+      payload?.error?.message ?? "WSR download failed",
+      payload?.error?.code ?? "REQUEST_FAILED",
+      Boolean(payload?.error?.retryable),
+      payload?.error?.details,
+    );
   }
   return response.blob();
+}
+
+export function reviewWsrItem(
+  handle: string,
+  itemId: string,
+  body: WsrItemDecision,
+): Promise<ProcessingResponse> {
+  return request<ProcessingResponse>(`/api/v1/wsr/requests/${handle}/items/${itemId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function getWsrEvidence(handle: string, itemId: string): Promise<WsrEvidenceResponse> {
+  return request<WsrEvidenceResponse>(
+    `/api/v1/wsr/requests/${handle}/items/${itemId}/evidence`,
+  );
 }
 
 export function signIn(username: string, password: string): Promise<Operator> {

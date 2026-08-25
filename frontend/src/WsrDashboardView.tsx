@@ -51,8 +51,15 @@ function asReport(result: ProcessingResponse["result"]): StatusReport | null {
   };
 }
 
+function visibleItems(value: string[] | AiDerivedItem[]): string[] | AiDerivedItem[] {
+  if (value.length === 0 || typeof value[0] === "string") {
+    return value;
+  }
+  return (value as AiDerivedItem[]).filter((item) => item.review_status !== "removed");
+}
+
 function rows(value: string[] | AiDerivedItem[]): { key: string; text: string }[] {
-  return value.map((item, index) => {
+  return visibleItems(value).map((item, index) => {
     if (typeof item === "string") {
       return { key: `${item}-${index}`, text: item };
     }
@@ -89,7 +96,7 @@ export function WsrDashboardView() {
       return {};
     }
     return Object.fromEntries(
-      SECTIONS.map((section) => [section.key, report[section.key].length]),
+      SECTIONS.map((section) => [section.key, visibleItems(report[section.key]).length]),
     ) as Record<string, number>;
   }, [report]);
 

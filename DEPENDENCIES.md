@@ -15,7 +15,7 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-30 | Request retention policy | `completed` | 24h idle TTL on DATA_DIR; survives host restart |
 | WO-32 | Request-handle lifecycle | `in_review` | Idempotent handle, retry, isolation, TTL cleanup |
 | WO-28 | OpenAI residency policy | `completed` | Public OpenAI by default; Azure/on-prem via OPENAI_BASE_URL |
-| WO-5 | Report export | `in_review` | Markdown for SOW/WSR/retro; empty sections; full request id in filename |
+| WO-5 | Report export | `blocked` | Markdown still serves SOW/retro; WSR download is gated `REVIEW_REQUIRED` until PDF (this WO) |
 | WO-29 | SOW classification criteria | `completed` | Six finding categories with empty-list rule |
 | WO-27 | WSR/retro classification criteria | `completed` | Health thresholds and evidence rules |
 | WO-3 | AI analysis service | `in_review` | WO-28 summary-only outbound; Azure api-key; schema parse retryable |
@@ -33,8 +33,9 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-12 | Plan Generator view | `in_review` | Deliverables, set counts, WBS review, approve, MPP download |
 | WO-17 | Plan Generator E2E via Compose | `in_review` | Proxy path: library → preview → approve → MSPDI download |
 | WO-9 | WSR Generator API | `in_review` | Deterministic WsrPlanFacts; evidence-backed AI items; pending review state |
-| WO-13 | WSR Generator view | `in_review` | MPP upload, nine-section dashboard, health, retry, report download |
-| WO-18 | WSR E2E via Compose | `in_review` | Proxy path: MPP upload → generate → nine-section report |
+| WO-41 | WSR insight review API | `in_review` | Keep/Edit/Remove + evidence GET; exportable only when no item is pending |
+| WO-13 | WSR Generator view | `blocked` | Waits on WO-5 PDF, WO-39 review panel, and WO-6 |
+| WO-18 | WSR E2E via Compose | `blocked` | Waits on WO-5 PDF and WO-13 dashboard; WSR path only |
 | WO-10 | Retrospective API | `in_review` | MPP upload, planned-vs-actual, seven-section report, planned-only flag, retry |
 | WO-14 | Retrospective view | `in_review` | MPP upload, seven-section retrospective, planned-only banner, retry, report download |
 | WO-19 | Retrospective E2E via Compose | `in_review` | Proxy path: MPP upload → generate → seven-section report |

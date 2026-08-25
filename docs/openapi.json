@@ -120,6 +120,80 @@
         "title": "CreateOperatorRequest",
         "type": "object"
       },
+      "EvidenceReference": {
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "dependency_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dependency Description"
+          },
+          "predecessor_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor Names"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "resource_assignments": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Assignments"
+          },
+          "task_or_milestone_name": {
+            "title": "Task Or Milestone Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_or_milestone_name"
+        ],
+        "title": "EvidenceReference",
+        "type": "object"
+      },
       "FileRecord": {
         "properties": {
           "content_type": {
@@ -544,6 +618,77 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WsrEvidenceResponse": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "evidence_references": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceReference"
+            },
+            "title": "Evidence References",
+            "type": "array"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "review_status": {
+            "enum": [
+              "pending",
+              "kept",
+              "edited",
+              "removed"
+            ],
+            "title": "Review Status",
+            "type": "string"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "content",
+          "section",
+          "review_status",
+          "evidence_references"
+        ],
+        "title": "WsrEvidenceResponse",
+        "type": "object"
+      },
+      "WsrItemDecision": {
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "decision": {
+            "enum": [
+              "kept",
+              "edited",
+              "removed"
+            ],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "WsrItemDecision",
         "type": "object"
       }
     }
@@ -2384,6 +2529,118 @@
           }
         },
         "summary": "Generate Wsr Request",
+        "tags": [
+          "wsr"
+        ]
+      }
+    },
+    "/api/v1/wsr/requests/{handle}/items/{item_id}": {
+      "patch": {
+        "operationId": "review_wsr_item_api_v1_wsr_requests__handle__items__item_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "title": "Handle",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WsrItemDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Wsr Item",
+        "tags": [
+          "wsr"
+        ]
+      }
+    },
+    "/api/v1/wsr/requests/{handle}/items/{item_id}/evidence": {
+      "get": {
+        "operationId": "get_wsr_item_evidence_api_v1_wsr_requests__handle__items__item_id__evidence_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "title": "Handle",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WsrEvidenceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Wsr Item Evidence",
         "tags": [
           "wsr"
         ]

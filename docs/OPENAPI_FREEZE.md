@@ -20,7 +20,7 @@ CI/local check: `pytest backend/tests/test_openapi_freeze.py`.
 
 Canonical list: `backend/app/openapi_contract.py` (imported by the freeze test and `scripts/export_openapi.py`).
 
-Includes health `/health` `/ready`, generic `POST /api/v1/files`, module request-handle upload/process/status/download, client job start/status/retry aliases, plan preview retry, and auth `login` / `logout` / `me` / `users` / `users/{operator_id}/disable`.
+Includes health `/health` `/ready`, generic `POST /api/v1/files`, module request-handle upload/process/status/download, WSR insight review `PATCH /api/v1/wsr/requests/{handle}/items/{item_id}` and `GET .../evidence`, client job start/status/retry aliases, plan preview retry, and auth `login` / `logout` / `me` / `users` / `users/{operator_id}/disable`.
 
 After WO-35, auth routes are part of this freeze (WO-36 originally deferred them). No extra WO.
 
