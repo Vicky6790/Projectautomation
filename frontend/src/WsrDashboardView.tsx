@@ -2,22 +2,29 @@ import { useMemo, useState } from "react";
 import { downloadWsrReport, generateWsr, retryJob } from "./api";
 import { FileUploader } from "./components/FileUploader";
 import { ReportDownloadControl } from "./components/ReportDownloadControl";
-import type { FileRecord, ProcessingResponse, StatusReport } from "./types";
+import type { AiDerivedItem, FileRecord, ProcessingResponse, StatusReport } from "./types";
 
-type SectionKey = Exclude<
-  keyof StatusReport,
-  "request_handle" | "as_of_date" | "planned_only" | "project_health"
->;
+type ListKey =
+  | "progress"
+  | "milestones"
+  | "client_needs"
+  | "risks"
+  | "issues"
+  | "dependencies"
+  | "management_attention"
+  | "decisions_required"
+  | "next_7_day_priorities";
 
-const SECTIONS: { key: SectionKey; label: string }[] = [
-  { key: "progress", label: "Progress" },
-  { key: "milestones", label: "Milestones" },
-  { key: "risks", label: "Risks" },
+const SECTIONS: { key: ListKey; label: string }[] = [
+  { key: "progress", label: "Progress to Date" },
+  { key: "milestones", label: "Upcoming Milestones" },
+  { key: "client_needs", label: "What We Need From the Bank Team" },
   { key: "issues", label: "Issues" },
   { key: "dependencies", label: "Dependencies" },
-  { key: "management_attention", label: "Management attention" },
-  { key: "decisions_required", label: "Decisions required" },
-  { key: "next_7_day_priorities", label: "Next 7-day priorities" },
+  { key: "risks", label: "Risks & Focus Areas" },
+  { key: "management_attention", label: "Management Attention" },
+  { key: "decisions_required", label: "Decisions Required" },
+  { key: "next_7_day_priorities", label: "Next Seven-Day Priorities" },
 ];
 
 function asReport(result: ProcessingResponse["result"]): StatusReport | null {
@@ -27,10 +34,14 @@ function asReport(result: ProcessingResponse["result"]): StatusReport | null {
   const data = result as StatusReport;
   return {
     as_of_date: data.as_of_date ?? null,
+    generated_at: data.generated_at ?? null,
     planned_only: Boolean(data.planned_only),
-    project_health: data.project_health ?? null,
+    exportable: Boolean(data.exportable),
+    project_health: data.project_health ?? data.facts?.project_health ?? null,
+    facts: data.facts ?? null,
     progress: data.progress ?? [],
     milestones: data.milestones ?? [],
+    client_needs: data.client_needs ?? [],
     risks: data.risks ?? [],
     issues: data.issues ?? [],
     dependencies: data.dependencies ?? [],
@@ -38,6 +49,15 @@ function asReport(result: ProcessingResponse["result"]): StatusReport | null {
     decisions_required: data.decisions_required ?? [],
     next_7_day_priorities: data.next_7_day_priorities ?? [],
   };
+}
+
+function rows(value: string[] | AiDerivedItem[]): { key: string; text: string }[] {
+  return value.map((item, index) => {
+    if (typeof item === "string") {
+      return { key: `${item}-${index}`, text: item };
+    }
+    return { key: item.id || String(index), text: item.content };
+  });
 }
 
 function healthLabel(value: string | null | undefined): string {
@@ -50,15 +70,18 @@ function healthLabel(value: string | null | undefined): string {
   if (value === "off_track") {
     return "Off track";
   }
-  return value || "Unknown";
+  if (value === "unavailable") {
+    return "Unavailable — insufficient plan data";
+  }
+  return value || "Unavailable";
 }
 
 export function WsrDashboardView() {
   const [uploaded, setUploaded] = useState<FileRecord | null>(null);
   const [job, setJob] = useState<ProcessingResponse | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Upload a Microsoft Project (.mpp) file to generate a weekly status report.");
-  const [selected, setSelected] = useState<SectionKey>("progress");
+  const [message, setMessage] = useState("Upload a Microsoft Project (.mpp) file to generate WSR & Insights.");
+  const [selected, setSelected] = useState<ListKey>("progress");
 
   const report = asReport(job?.result ?? null);
   const counts = useMemo(() => {
@@ -114,6 +137,8 @@ export function WsrDashboardView() {
     }
   }
 
+  const selectedRows = report ? rows(report[selected]) : [];
+
   return (
     <section className="panel">
       <h2>WSR & Insights</h2>
@@ -137,16 +162,26 @@ export function WsrDashboardView() {
           Retry generation
         </button>
       ) : null}
-      <ReportDownloadControl enabled={job?.status === "succeeded" && !busy} onDownload={() => void download()} />
+      <ReportDownloadControl
+        enabled={Boolean(report?.exportable) && job?.status === "succeeded" && !busy}
+        onDownload={() => void download()}
+      />
+      {report && !report.exportable && job?.status === "succeeded" ? (
+        <p>Review is required before the report can be downloaded.</p>
+      ) : null}
       {report ? (
         <div className="dashboard">
-          <p className={`health health-${report.project_health ?? "unknown"}`}>
+          <p className={`health health-${report.project_health ?? "unavailable"}`}>
             Project health: {healthLabel(report.project_health)}
           </p>
           <p className="muted">
-            As of {report.as_of_date ?? "today"}
+            {report.facts?.project_name ?? "Project"}
+            {report.facts?.project_owner ? ` · ${report.facts.project_owner}` : ""}
+            {` · as of ${report.as_of_date ?? "today"}`}
+            {report.generated_at ? ` · generated ${report.generated_at}` : ""}
             {report.planned_only ? " · planned data only" : ""}
           </p>
+          {report.facts?.executive_overview ? <p>{report.facts.executive_overview}</p> : null}
           <div className="findings">
             <ul className="categories">
               {SECTIONS.map((section) => (
@@ -163,12 +198,12 @@ export function WsrDashboardView() {
             </ul>
             <div className="category-detail">
               <h3>{SECTIONS.find((section) => section.key === selected)?.label}</h3>
-              {report[selected].length === 0 ? (
-                <p>Empty</p>
+              {selectedRows.length === 0 ? (
+                <p>No items identified from the plan</p>
               ) : (
                 <ul>
-                  {report[selected].map((item) => (
-                    <li key={item}>{item}</li>
+                  {selectedRows.map((item) => (
+                    <li key={item.key}>{item.text}</li>
                   ))}
                 </ul>
               )}

@@ -1,83 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
-
 from app import storage as storage_mod
 from app.ai.engine import analyze_wsr
 from app.errors import AppError
-from app.models import ProcessingResponse, ProjectPlanData, StatusReport
-
-_SECTIONS = (
-    "progress",
-    "milestones",
-    "risks",
-    "issues",
-    "dependencies",
-    "management_attention",
-    "decisions_required",
-    "next_7_day_priorities",
-)
-
-
-def _parse_date(value: str | None) -> date | None:
-    if not value:
-        return None
-    text = value.strip().replace("Z", "+00:00")
-    try:
-        return datetime.fromisoformat(text[:19]).date()
-    except ValueError:
-        try:
-            return date.fromisoformat(text[:10])
-        except ValueError:
-            return None
-
-
-def resolve_as_of(plan: ProjectPlanData) -> str:
-    parsed = _parse_date(plan.status_date)
-    return (parsed or datetime.now(UTC).date()).isoformat()
-
-
-def plan_metrics(plan: ProjectPlanData, as_of: str) -> dict:
-    as_of_d = date.fromisoformat(as_of)
-    horizon = as_of_d + timedelta(days=7)
-    due = 0
-    done = 0
-    overdue = 0
-    next_names: list[str] = []
-    milestone_notes: list[str] = []
-    for task in plan.tasks:
-        finish = _parse_date(task.baseline_finish)
-        complete = bool(task.actual_finish) or task.percent_complete >= 100
-        if finish and finish <= as_of_d:
-            due += 1
-            if complete:
-                done += 1
-            else:
-                overdue += 1
-        if finish and as_of_d < finish <= horizon and not complete:
-            next_names.append(task.name)
-        if task.is_milestone:
-            if complete:
-                state = "complete"
-            elif finish and finish <= as_of_d:
-                state = "due"
-            else:
-                state = "upcoming"
-            milestone_notes.append(f"{task.name}: {state}")
-    progress_notes = [
-        f"As of {as_of}, {done} of {due} baseline-due tasks are complete.",
-        f"Overdue tasks: {overdue}.",
-    ]
-    if plan.planned_only:
-        progress_notes.append("MPP has no actuals; progress is planned-only.")
-    return {
-        "due_count": due,
-        "done_count": done,
-        "overdue_count": overdue,
-        "next_7_day_names": next_names,
-        "milestone_notes": milestone_notes,
-        "progress_notes": progress_notes,
-    }
+from app.models import AiDerivedItem, ProcessingResponse, StatusReport
+from app.wsr.evidence import AI_SECTIONS, items_exportable
+from app.wsr.facts import derive_wsr_facts, resolve_as_of
 
 
 def run_wsr_generation(handle: str, *, force: bool = False) -> ProcessingResponse:
@@ -91,18 +19,28 @@ def run_wsr_generation(handle: str, *, force: bool = False) -> ProcessingRespons
     try:
         plan = store.get_plan(handle)
         as_of = resolve_as_of(plan)
+        facts = derive_wsr_facts(plan, as_of)
         snapshot = plan.model_dump()
         snapshot["as_of_date"] = as_of
-        snapshot["metrics"] = plan_metrics(plan, as_of)
-        report = analyze_wsr(snapshot)
-        payload = report.model_dump()
-        payload["request_handle"] = handle
-        payload["as_of_date"] = as_of
-        payload["planned_only"] = plan.planned_only
-        for key in _SECTIONS:
-            payload.setdefault(key, [])
-        StatusReport.model_validate(payload)
-        return store.set_status(handle, "succeeded", result=payload)
+        snapshot["facts"] = facts.model_dump()
+        grouped = analyze_wsr(snapshot)
+        ai_fields = {
+            key: [AiDerivedItem.model_validate(item) for item in grouped.get(key) or []]
+            for key in AI_SECTIONS
+        }
+        report = StatusReport(
+            request_handle=handle,
+            as_of_date=as_of,
+            generated_at=facts.generated_at,
+            planned_only=plan.planned_only,
+            exportable=items_exportable(*ai_fields.values()),
+            project_health=facts.project_health,
+            facts=facts,
+            progress=[item.name for item in facts.progress_to_date],
+            milestones=[item.name for item in facts.upcoming_milestones],
+            **ai_fields,
+        )
+        return store.set_status(handle, "succeeded", result=report.model_dump())
     except AppError as exc:
         store.set_status(
             handle,

@@ -139,48 +139,9 @@ def test_analyze_sow_schema_mismatch_is_retryable(monkeypatch: pytest.MonkeyPatc
     assert exc.value.retryable is True
 
 
-def test_analyze_wsr_uses_plan_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "ai_stub", False)
-    monkeypatch.setattr(settings, "openai_api_key", "test-key")
+def _wsr_ai_body(**overrides: object) -> dict:
     body = {
-        "project_health": "at_risk",
-        "progress": ["12 of 20 tasks complete"],
-        "milestones": [],
-        "risks": ["Vendor delay"],
-        "issues": [],
-        "dependencies": [],
-        "management_attention": [],
-        "decisions_required": [],
-        "next_7_day_priorities": ["Close design review"],
-    }
-    payload = {"choices": [{"message": {"content": json.dumps(body)}}]}
-    fake = _FakeClient(_FakeResponse(200, payload))
-    monkeypatch.setattr("app.ai.client.httpx.Client", lambda **_kwargs: fake)
-    result = engine.analyze_wsr(
-        {
-            "as_of_date": "2026-08-22",
-            "planned_only": True,
-            "metrics": {"overdue_count": 2},
-        }
-    )
-    assert result.project_health == "at_risk"
-    assert result.risks == ["Vendor delay"]
-    assert result.milestones == []
-    assert result.as_of_date == "2026-08-22"
-    assert result.planned_only is True
-
-
-def test_wsr_outbound_omits_task_dump(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "ai_stub", False)
-    monkeypatch.setattr(settings, "openai_api_key", "test-key")
-    body = {
-        "project_health": "on_track",
-        "progress": [],
-        "milestones": [],
+        "client_needs": [],
         "risks": [],
         "issues": [],
         "dependencies": [],
@@ -188,21 +149,74 @@ def test_wsr_outbound_omits_task_dump(monkeypatch: pytest.MonkeyPatch) -> None:
         "decisions_required": [],
         "next_7_day_priorities": [],
     }
+    body.update(overrides)
+    return body
+
+
+def test_analyze_wsr_keeps_evidence_backed_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_stub", False)
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
+    body = _wsr_ai_body(risks=[{"content": "Vendor delay", "evidence_names": ["Build"]}])
     payload = {"choices": [{"message": {"content": json.dumps(body)}}]}
+    fake = _FakeClient(_FakeResponse(200, payload))
+    monkeypatch.setattr("app.ai.client.httpx.Client", lambda **_kwargs: fake)
+    result = engine.analyze_wsr(
+        {
+            "name": "Demo",
+            "as_of_date": "2026-08-22",
+            "planned_only": True,
+            "tasks": [{"id": 1, "name": "Build", "scheduled_finish": "2026-08-25"}],
+            "facts": {"project_health": "at_risk"},
+        }
+    )
+    assert result["risks"][0]["content"] == "Vendor delay"
+    assert result["risks"][0]["review_status"] == "pending"
+    assert result["risks"][0]["evidence_references"][0]["task_or_milestone_name"] == "Build"
+    assert result["issues"] == []
+
+
+def test_analyze_wsr_omits_items_without_plan_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_stub", False)
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
+    body = _wsr_ai_body(risks=[{"content": "Ghost risk", "evidence_names": ["Missing Task"]}])
+    payload = {"choices": [{"message": {"content": json.dumps(body)}}]}
+    fake = _FakeClient(_FakeResponse(200, payload))
+    monkeypatch.setattr("app.ai.client.httpx.Client", lambda **_kwargs: fake)
+    result = engine.analyze_wsr(
+        {
+            "name": "Demo",
+            "as_of_date": "2026-08-22",
+            "tasks": [{"id": 1, "name": "Build"}],
+        }
+    )
+    assert result["risks"] == []
+
+
+def test_wsr_outbound_sends_catalog_not_raw_task_dump(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_stub", False)
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
+    payload = {"choices": [{"message": {"content": json.dumps(_wsr_ai_body())}}]}
     fake = _FakeClient(_FakeResponse(200, payload))
     monkeypatch.setattr("app.ai.client.httpx.Client", lambda **_kwargs: fake)
     engine.analyze_wsr(
         {
+            "name": "Demo",
             "as_of_date": "2026-08-22",
             "planned_only": True,
-            "tasks": [{"name": "Confidential Vendor Task", "baseline_finish": "2026-09-01"}],
-            "metrics": {"overdue_count": 0, "progress_notes": ["ok"]},
+            "tasks": [{"id": 1, "name": "Build", "baseline_finish": "2026-09-01"}],
+            "facts": {"project_health": "on_track"},
         }
     )
-    user_content = fake.calls[0]["json"]["messages"][1]["content"]
-    assert "Confidential Vendor Task" not in user_content
-    assert "overdue_count" in user_content
-    assert "task_count" in user_content
+    user_content = json.loads(fake.calls[0]["json"]["messages"][1]["content"])
+    assert "tasks" not in user_content
+    assert "evidence_catalog" in user_content
+    assert user_content["facts"]["project_health"] == "on_track"
 
 
 def test_analyze_retrospective_sets_planned_only(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -32,7 +32,7 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-21 | Configurable phase order in UI | `in_review` | Add/remove/reorder phases; empty and sequence errors |
 | WO-12 | Plan Generator view | `in_review` | Deliverables, set counts, WBS review, approve, MPP download |
 | WO-17 | Plan Generator E2E via Compose | `in_review` | Proxy path: library → preview → approve → MSPDI download |
-| WO-9 | WSR Generator API | `in_review` | MPP upload, as-of date, nine-section StatusReport, retry, markdown export |
+| WO-9 | WSR Generator API | `in_review` | Deterministic WsrPlanFacts; evidence-backed AI items; pending review state |
 | WO-13 | WSR Generator view | `in_review` | MPP upload, nine-section dashboard, health, retry, report download |
 | WO-18 | WSR E2E via Compose | `in_review` | Proxy path: MPP upload → generate → nine-section report |
 | WO-10 | Retrospective API | `in_review` | MPP upload, planned-vs-actual, seven-section report, planned-only flag, retry |

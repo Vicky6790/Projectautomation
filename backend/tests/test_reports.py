@@ -104,20 +104,42 @@ def test_wsr_report_matches_dashboard_sections() -> None:
             "succeeded",
             {
                 "as_of_date": "2026-08-22",
+                "generated_at": "2026-08-22T10:00:00Z",
                 "planned_only": True,
                 "project_health": "on_track",
-                "progress": ["2 of 4 complete"],
+                "facts": {
+                    "project_name": "Demo",
+                    "project_owner": "Alex",
+                    "as_of_date": "2026-08-22",
+                    "generated_at": "2026-08-22T10:00:00Z",
+                    "project_health": "on_track",
+                    "executive_overview": "Demo is On track as of 2026-08-22.",
+                    "timeline": None,
+                    "phase_statuses": [],
+                    "progress_to_date": [
+                        {"name": "Kickoff", "date": "2026-08-10", "progress": 100}
+                    ],
+                    "upcoming_milestones": [{"name": "Go Live", "date": "2026-09-11"}],
+                },
+                "client_needs": [],
+                "risks": [],
+                "issues": [],
+                "dependencies": [],
+                "management_attention": [],
+                "decisions_required": [],
+                "next_7_day_priorities": [],
             },
         ),
     )
     text = body.decode()
     assert filename.startswith("wsr-report-")
+    assert "WSR & Insights" in text
     assert "As of: 2026-08-22" in text
-    assert "Planned only: yes" in text
     assert "On track" in text
     for _key, heading in WSR_SECTIONS:
         assert f"## {heading}" in text
-    assert "Empty" in text
+    assert "No items identified from the plan" in text
+    assert "A timeline cannot be generated" in text
 
 
 def test_retro_report_includes_summary_and_seven_sections() -> None:

@@ -14,8 +14,8 @@ BASE = "http://localhost:8080"
 
 SECTIONS = (
     "project_health",
-    "progress",
-    "milestones",
+    "facts",
+    "client_needs",
     "risks",
     "issues",
     "dependencies",
@@ -114,15 +114,19 @@ def main() -> int:
         return 1
     text = report.text
     for heading in (
-        "Project health",
-        "Progress",
-        "Milestones",
-        "Risks",
+        "WSR & Insights",
+        "Executive Overview",
+        "Project Timeline",
+        "Phase-Wise Status",
+        "Progress to Date",
+        "Upcoming Milestones",
+        "What We Need From the Bank Team",
         "Issues",
         "Dependencies",
-        "Management attention",
-        "Decisions required",
-        "Next 7-day priorities",
+        "Risks & Focus Areas",
+        "Management Attention",
+        "Decisions Required",
+        "Next Seven-Day Priorities",
     ):
         if heading not in text:
             print("report missing heading", heading)

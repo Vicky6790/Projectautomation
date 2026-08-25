@@ -60,19 +60,38 @@ export type PlanResult = {
   mpp_available?: boolean;
 };
 
+export type AiDerivedItem = {
+  id: string;
+  section: string;
+  content: string;
+  evidence_references: { task_or_milestone_name: string; date?: string | null }[];
+  review_status: "pending" | "kept" | "edited" | "removed";
+};
+
 export type StatusReport = {
   request_handle?: string | null;
   as_of_date?: string | null;
+  generated_at?: string | null;
   planned_only?: boolean;
+  exportable?: boolean;
   project_health?: string | null;
+  facts?: {
+    project_name?: string | null;
+    project_owner?: string | null;
+    project_health?: string | null;
+    generated_at?: string | null;
+    planned_go_live_date?: string | null;
+    executive_overview?: string | null;
+  } | null;
   progress: string[];
   milestones: string[];
-  risks: string[];
-  issues: string[];
-  dependencies: string[];
-  management_attention: string[];
-  decisions_required: string[];
-  next_7_day_priorities: string[];
+  client_needs: AiDerivedItem[];
+  risks: AiDerivedItem[];
+  issues: AiDerivedItem[];
+  dependencies: AiDerivedItem[];
+  management_attention: AiDerivedItem[];
+  decisions_required: AiDerivedItem[];
+  next_7_day_priorities: AiDerivedItem[];
 };
 
 export type RetrospectiveReport = {

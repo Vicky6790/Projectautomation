@@ -145,16 +145,85 @@ class AnalysisReport(BaseModel):
     clarification_questions: list[str] = Field(default_factory=list)
 
 
+class EvidenceReference(BaseModel):
+    task_or_milestone_name: str
+    date: str | None = None
+    progress: float | None = None
+    predecessor_names: list[str] | None = None
+    resource_assignments: list[str] | None = None
+    dependency_description: str | None = None
+
+
+class AiDerivedItem(BaseModel):
+    id: str
+    section: str
+    content: str
+    evidence_references: list[EvidenceReference] = Field(min_length=1)
+    review_status: Literal["pending", "kept", "edited", "removed"] = "pending"
+
+
+class NamedDateValue(BaseModel):
+    name: str
+    date: str | None = None
+
+
+class PhaseStatus(BaseModel):
+    name: str
+    planned_start: str | None = None
+    planned_finish: str | None = None
+    progress: float | None = None
+    state: Literal["not_started", "in_progress", "complete"]
+
+
+class ProgressItem(BaseModel):
+    name: str
+    date: str | None = None
+    progress: float | None = None
+
+
+class MilestoneItem(BaseModel):
+    name: str
+    date: str | None = None
+
+
+class WsrPlanFacts(BaseModel):
+    project_name: str | None = None
+    project_owner: str | None = None
+    as_of_date: str
+    generated_at: str
+    project_health: Literal["on_track", "at_risk", "off_track", "unavailable"]
+    countdown_days: int | None = None
+    overall_progress: float | None = None
+    planned_work_items: int | None = None
+    completed_work_items: int | None = None
+    capacity_utilization: float | None = None
+    people_planned: int | None = None
+    resources_deployed: int | None = None
+    phase_count: int | None = None
+    last_signed_off_milestone: NamedDateValue | None = None
+    next_gate: NamedDateValue | None = None
+    planned_go_live_date: str | None = None
+    executive_overview: str | None = None
+    timeline: list[PhaseStatus] | None = None
+    phase_statuses: list[PhaseStatus] = Field(default_factory=list)
+    progress_to_date: list[ProgressItem] = Field(default_factory=list)
+    upcoming_milestones: list[MilestoneItem] = Field(default_factory=list)
+
+
 class StatusReport(BaseModel):
     request_handle: str | None = None
     as_of_date: str | None = None
+    generated_at: str | None = None
     planned_only: bool = False
+    exportable: bool = False
     project_health: str | None = None
+    facts: WsrPlanFacts | None = None
     progress: list[str] = Field(default_factory=list)
     milestones: list[str] = Field(default_factory=list)
-    risks: list[str] = Field(default_factory=list)
-    issues: list[str] = Field(default_factory=list)
-    dependencies: list[str] = Field(default_factory=list)
-    management_attention: list[str] = Field(default_factory=list)
-    decisions_required: list[str] = Field(default_factory=list)
-    next_7_day_priorities: list[str] = Field(default_factory=list)
+    client_needs: list[AiDerivedItem] = Field(default_factory=list)
+    risks: list[AiDerivedItem] = Field(default_factory=list)
+    issues: list[AiDerivedItem] = Field(default_factory=list)
+    dependencies: list[AiDerivedItem] = Field(default_factory=list)
+    management_attention: list[AiDerivedItem] = Field(default_factory=list)
+    decisions_required: list[AiDerivedItem] = Field(default_factory=list)
+    next_7_day_priorities: list[AiDerivedItem] = Field(default_factory=list)

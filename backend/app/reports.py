@@ -13,15 +13,18 @@ SOW_SECTIONS = (
 )
 
 WSR_SECTIONS = (
-    ("project_health", "Project health"),
-    ("progress", "Progress"),
-    ("milestones", "Milestones"),
-    ("risks", "Risks"),
+    ("executive_overview", "Executive Overview"),
+    ("timeline", "Project Timeline"),
+    ("phase_statuses", "Phase-Wise Status"),
+    ("progress_to_date", "Progress to Date"),
+    ("upcoming_milestones", "Upcoming Milestones"),
+    ("client_needs", "What We Need From the Bank Team"),
     ("issues", "Issues"),
     ("dependencies", "Dependencies"),
-    ("management_attention", "Management attention"),
-    ("decisions_required", "Decisions required"),
-    ("next_7_day_priorities", "Next 7-day priorities"),
+    ("risks", "Risks & Focus Areas"),
+    ("management_attention", "Management Attention"),
+    ("decisions_required", "Decisions Required"),
+    ("next_7_day_priorities", "Next Seven-Day Priorities"),
 )
 
 RETRO_SECTIONS = (
@@ -45,7 +48,10 @@ _HEALTH_LABELS = {
     "on_track": "On track",
     "at_risk": "At risk",
     "off_track": "Off track",
+    "unavailable": "Unavailable — insufficient plan data",
 }
+
+_EMPTY_AI = "No items identified from the plan"
 
 
 def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, bytes]:
@@ -68,11 +74,7 @@ def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, by
         filename = f"sow-analysis-{handle}.md"
     elif module == "wsr":
         payload = StatusReport.model_validate(job.result)
-        extra = []
-        if payload.as_of_date:
-            extra.append(f"As of: {payload.as_of_date}")
-        extra.append(f"Planned only: {'yes' if payload.planned_only else 'no'}")
-        body = _render("Weekly status report", handle, WSR_SECTIONS, payload, extra)
+        body = _render_wsr(handle, payload)
         filename = f"wsr-report-{handle}.md"
     elif module == "retrospective":
         payload = RetrospectiveReport.model_validate(job.result)
@@ -111,6 +113,87 @@ def _render(
             lines.append(_one_line(value))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_wsr(handle: str, payload: StatusReport) -> str:
+    facts = payload.facts
+    health = (facts.project_health if facts else payload.project_health) or "unavailable"
+    lines = [
+        "# WSR & Insights",
+        "",
+        f"Request: `{handle}`",
+        "",
+        f"Project: {_unavailable(facts.project_name if facts else None)}",
+        f"Owner: {_unavailable(facts.project_owner if facts else None)}",
+        f"As of: {payload.as_of_date or _unavailable(None)}",
+        f"Generated: {_unavailable(payload.generated_at)}",
+        f"Project health: {_HEALTH_LABELS.get(str(health), str(health))}",
+        "",
+    ]
+    data = facts.model_dump() if facts else {}
+    for key, heading in WSR_SECTIONS:
+        lines.append(f"## {heading}")
+        if key in (
+            "client_needs",
+            "risks",
+            "issues",
+            "dependencies",
+            "management_attention",
+            "decisions_required",
+            "next_7_day_priorities",
+        ):
+            items = getattr(payload, key)
+            if not items:
+                lines.append(_EMPTY_AI)
+            else:
+                for item in items:
+                    if item.review_status == "removed":
+                        continue
+                    lines.append(f"- {item.content}")
+                    source = item.evidence_references[0]
+                    lines.append(f"  Source / Evidence: {source.task_or_milestone_name}")
+        elif key == "executive_overview":
+            lines.append(_unavailable(data.get("executive_overview")))
+        elif key == "timeline":
+            timeline = data.get("timeline")
+            if not timeline:
+                lines.append("A timeline cannot be generated")
+            else:
+                for phase in timeline:
+                    start = phase.get("planned_start") or "Unavailable"
+                    finish = phase.get("planned_finish") or "Unavailable"
+                    lines.append(f"- {phase.get('name')}: {start} – {finish}")
+        elif key == "phase_statuses":
+            phases = data.get("phase_statuses") or []
+            if not phases:
+                lines.append(_unavailable(None))
+            else:
+                for phase in phases:
+                    state = str(phase.get("state") or "").replace("_", " ")
+                    lines.append(f"- {phase.get('name')}: {state}")
+        elif key == "progress_to_date":
+            items = data.get("progress_to_date") or []
+            if not items:
+                lines.append(_unavailable(None))
+            else:
+                lines.extend(f"- {item.get('name')}" for item in items)
+        elif key == "upcoming_milestones":
+            items = data.get("upcoming_milestones") or []
+            if not items:
+                lines.append("No upcoming milestone was identified")
+            else:
+                lines.extend(
+                    f"- {item.get('name')}: {item.get('date') or 'Unavailable'}"
+                    for item in items
+                )
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _unavailable(value: object) -> str:
+    if value in (None, "", []):
+        return "Unavailable"
+    return _one_line(value)
 
 
 def _one_line(value: object) -> str:

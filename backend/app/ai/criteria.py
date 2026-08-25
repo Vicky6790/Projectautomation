@@ -12,17 +12,17 @@ SOW_CRITERIA = (
 )
 
 WSR_CRITERIA = (
-    "Use only supplied plan metrics. Do not invent actuals.\n"
-    "Health: on_track if no missed milestones and no open issues; "
-    "at_risk if recoverably late or risks exist; "
-    "off_track if missed milestones or actuals are substantially behind plan.\n"
-    "- risks: potential future problems.\n"
+    "Use only the supplied facts and evidence catalog. Do not invent actuals, "
+    "tasks, or project health. Health is computed outside this prompt.\n"
+    "- client_needs: client actions, prerequisites, or reviews required to progress.\n"
+    "- risks: potential future problems or focus areas.\n"
     "- issues: current problems already occurring.\n"
     "- dependencies: internal or external predecessors.\n"
     "- management_attention: items needing executive awareness.\n"
     "- decisions_required: choices that must be made.\n"
     "- next_7_day_priorities: work due in the next 7 days from the as-of date.\n"
-    "If MPP data is incomplete, say so in progress and do not fabricate dates.\n"
+    "Every item must include evidence_names that exist in the catalog. "
+    "If evidence is insufficient, leave that category as an empty list.\n"
 )
 
 RETRO_CRITERIA = (
