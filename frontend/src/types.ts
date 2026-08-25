@@ -90,6 +90,54 @@ export type WsrEvidenceResponse = {
   evidence_references: EvidenceReference[];
 };
 
+export type NamedDateValue = {
+  name: string;
+  date?: string | null;
+};
+
+export type PhaseStatus = {
+  name: string;
+  planned_start?: string | null;
+  planned_finish?: string | null;
+  progress?: number | null;
+  state: "not_started" | "in_progress" | "complete";
+};
+
+export type ProgressItem = {
+  name: string;
+  date?: string | null;
+  progress?: number | null;
+};
+
+export type MilestoneItem = {
+  name: string;
+  date?: string | null;
+};
+
+export type WsrPlanFacts = {
+  project_name?: string | null;
+  project_owner?: string | null;
+  as_of_date?: string;
+  generated_at?: string | null;
+  project_health?: string | null;
+  countdown_days?: number | null;
+  overall_progress?: number | null;
+  planned_work_items?: number | null;
+  completed_work_items?: number | null;
+  capacity_utilization?: number | null;
+  people_planned?: number | null;
+  resources_deployed?: number | null;
+  phase_count?: number | null;
+  last_signed_off_milestone?: NamedDateValue | null;
+  next_gate?: NamedDateValue | null;
+  planned_go_live_date?: string | null;
+  executive_overview?: string | null;
+  timeline?: PhaseStatus[] | null;
+  phase_statuses?: PhaseStatus[];
+  progress_to_date?: ProgressItem[];
+  upcoming_milestones?: MilestoneItem[];
+};
+
 export type StatusReport = {
   request_handle?: string | null;
   as_of_date?: string | null;
@@ -97,14 +145,7 @@ export type StatusReport = {
   planned_only?: boolean;
   exportable?: boolean;
   project_health?: string | null;
-  facts?: {
-    project_name?: string | null;
-    project_owner?: string | null;
-    project_health?: string | null;
-    generated_at?: string | null;
-    planned_go_live_date?: string | null;
-    executive_overview?: string | null;
-  } | null;
+  facts?: WsrPlanFacts | null;
   progress: string[];
   milestones: string[];
   client_needs: AiDerivedItem[];

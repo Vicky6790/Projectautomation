@@ -148,3 +148,106 @@ label select {
   margin: 4px 0 12px;
 }
 
+.wsr-identity {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin: 16px 0;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+
+.metric {
+  background: #f4f7fb;
+  border: 1px solid #d5e0ec;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.metric-label {
+  margin: 0;
+  color: #4a6278;
+  font-size: 12px;
+}
+
+.metric-value {
+  margin: 4px 0 0;
+  font-weight: 700;
+}
+
+.dashboard section {
+  margin: 20px 0;
+}
+
+.insight-list {
+  list-style: none;
+  padding: 0;
+}
+
+.insight {
+  border: 1px solid #d5e0ec;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 8px 0;
+}
+
+.ai-tag {
+  display: inline-block;
+  background: #e8f1fb;
+  color: #0b5cad;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 8px;
+}
+
+.insight-edit textarea {
+  width: 100%;
+  margin: 8px 0;
+}
+
+.evidence-panel {
+  position: fixed;
+  right: 16px;
+  top: 16px;
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #d5e0ec;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(16, 32, 51, 0.12);
+  z-index: 4;
+}
+
+.evidence-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.evidence-facts {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 4px 8px;
+  margin: 12px 0;
+}
+
+.evidence-facts dt {
+  color: #4a6278;
+  margin: 0;
+}
+
+.evidence-facts dd {
+  margin: 0;
+}
+
