@@ -1,4 +1,4 @@
-"""Verify WSR upload → generate → report through the Client App proxy."""
+"""Verify WSR upload → generate → review → report through the Client App proxy."""
 
 from __future__ import annotations
 
@@ -105,6 +105,47 @@ def main() -> int:
             return 1
     if not result.get("as_of_date"):
         print("as_of_date missing")
+        return 1
+
+    pending = [
+        item
+        for key in (
+            "client_needs",
+            "risks",
+            "issues",
+            "dependencies",
+            "management_attention",
+            "decisions_required",
+            "next_7_day_priorities",
+        )
+        for item in (result.get(key) or [])
+        if isinstance(item, dict) and item.get("review_status") == "pending"
+    ]
+    if pending:
+        blocked = client.get(f"/api/v1/wsr/requests/{handle}/report")
+        print("pending report", blocked.status_code, blocked.json().get("error", {}).get("code"))
+        if blocked.status_code != 409 or blocked.json().get("error", {}).get("code") != "REVIEW_REQUIRED":
+            print(blocked.text)
+            return 1
+        evidence = client.get(
+            f"/api/v1/wsr/requests/{handle}/items/{pending[0]['id']}/evidence"
+        )
+        print("evidence", evidence.status_code)
+        if evidence.status_code != 200:
+            print(evidence.text)
+            return 1
+        for item in pending:
+            reviewed = client.patch(
+                f"/api/v1/wsr/requests/{handle}/items/{item['id']}",
+                json={"decision": "kept"},
+            )
+            if reviewed.status_code != 200:
+                print("review failed", item.get("id"), reviewed.status_code, reviewed.text)
+                return 1
+            result = reviewed.json()["result"] or result
+        print("reviewed", len(pending), "items")
+    if not result.get("exportable"):
+        print("report still not exportable after review")
         return 1
 
     report = client.get(f"/api/v1/wsr/requests/{handle}/report")
