@@ -5,17 +5,18 @@ import type { AiDerivedItem } from "../types";
 type Props = {
   item: AiDerivedItem;
   disabled?: boolean;
+  tone?: "risk" | "need";
   onReview: (item: AiDerivedItem, decision: "kept" | "edited" | "removed", content?: string) => void;
   onViewSource: (item: AiDerivedItem) => void;
 };
 
-export function WsrInsightItem({ item, disabled, onReview, onViewSource }: Props) {
+export function WsrInsightItem({ item, disabled, tone, onReview, onViewSource }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.content);
   const source = item.evidence_references[0];
 
   return (
-    <li className={`insight insight-${item.review_status}`}>
+    <li className={`insight insight-${item.review_status}${tone ? ` insight-${tone}` : ""}`}>
       <p>
         <span className="ai-tag">AI-derived</span> {item.content}
       </p>

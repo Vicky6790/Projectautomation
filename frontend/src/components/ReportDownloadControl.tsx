@@ -10,7 +10,7 @@ export function ReportDownloadControl({
   label = "Download report",
 }: Props) {
   return (
-    <button type="button" onClick={onDownload} disabled={!enabled}>
+    <button type="button" className="btn btn-outline" onClick={onDownload} disabled={!enabled}>
       {label}
     </button>
   );

@@ -50,6 +50,28 @@ export function phaseState(value: string | null | undefined): string {
   return unavailable(value);
 }
 
+export function shortDate(value: string | null | undefined): string {
+  if (!value) {
+    return "Unavailable";
+  }
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+export function compactDate(value: string | null | undefined): string {
+  if (!value) {
+    return "Unavailable";
+  }
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 export function reviewLabel(value: string | null | undefined): string {
   if (value === "kept") {
     return "Kept";

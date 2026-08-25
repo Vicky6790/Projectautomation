@@ -116,7 +116,8 @@ def main() -> int:
         client,
         (
             "View Source",
-            "Download PDF",
+            "Download last WSR",
+            "Generate WSR & Insights",
             "Overall Progress",
             "Last Signed-Off Milestone",
             "No items identified from the plan",
