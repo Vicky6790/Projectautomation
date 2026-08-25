@@ -34,8 +34,9 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-17 | Plan Generator E2E via Compose | `in_review` | Proxy path: library → preview → approve → MSPDI download |
 | WO-9 | WSR Generator API | `in_review` | Deterministic WsrPlanFacts; evidence-backed AI items; pending review state |
 | WO-41 | WSR insight review API | `in_review` | Keep/Edit/Remove + evidence GET; exportable only when no item is pending |
-| WO-13 | WSR Generator view | `blocked` | Waits on WO-5 PDF, WO-39 review panel, and WO-6 |
-| WO-18 | WSR E2E via Compose | `blocked` | Waits on WO-5 PDF and WO-13 dashboard; WSR path only |
+| WO-39 | WSR insight review panel | `in_review` | Keep/Edit/Remove, View Source, evidence panel; PDF stays gated |
+| WO-13 | WSR Generator view | `in_review` | Approved dashboard sections, metric cards, timeline, PDF download |
+| WO-18 | WSR E2E via Compose | `in_review` | Proxy path: upload → generate → review → PDF at localhost:8080 |
 | WO-10 | Retrospective API | `in_review` | MPP upload, planned-vs-actual, seven-section report, planned-only flag, retry |
 | WO-14 | Retrospective view | `in_review` | MPP upload, seven-section retrospective, planned-only banner, retry, report download |
 | WO-19 | Retrospective E2E via Compose | `in_review` | Proxy path: MPP upload → generate → seven-section report |
