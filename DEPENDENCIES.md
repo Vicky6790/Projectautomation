@@ -15,7 +15,7 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-30 | Request retention policy | `completed` | 24h idle TTL on DATA_DIR; survives host restart |
 | WO-32 | Request-handle lifecycle | `in_review` | Idempotent handle, retry, isolation, TTL cleanup |
 | WO-28 | OpenAI residency policy | `completed` | Public OpenAI by default; Azure/on-prem via OPENAI_BASE_URL |
-| WO-5 | Report export | `blocked` | Markdown still serves SOW/retro; WSR download is gated `REVIEW_REQUIRED` until PDF (this WO) |
+| WO-5 | Report export | `in_review` | WSR approved PDF; SOW/retro stay Markdown; review gate unchanged |
 | WO-29 | SOW classification criteria | `completed` | Six finding categories with empty-list rule |
 | WO-27 | WSR/retro classification criteria | `completed` | Health thresholds and evidence rules |
 | WO-3 | AI analysis service | `in_review` | WO-28 summary-only outbound; Azure api-key; schema parse retryable |

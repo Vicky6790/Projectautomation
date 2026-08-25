@@ -60,8 +60,7 @@ def _pdf_with_text(text: str) -> bytes:
     for offset in offsets[1:]:
         xref.extend(f"{offset:010d} 00000 n \n".encode())
     trailer = (
-        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
-        f"startxref\n{xref_start}\n%%EOF\n"
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF\n"
     ).encode()
     return bytes(header + body + xref + trailer)
 
@@ -69,3 +68,10 @@ def _pdf_with_text(text: str) -> bytes:
 def mpp_stub_bytes(payload: bytes = b"stub-project") -> bytes:
     """OLE compound header so FileValidator accepts the upload as an MPP type."""
     return b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + payload
+
+
+def pdf_text(content: bytes) -> str:
+    from pypdf import PdfReader
+
+    reader = PdfReader(BytesIO(content))
+    return "\n".join((page.extract_text() or "") for page in reader.pages)

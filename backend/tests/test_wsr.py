@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 from fastapi.testclient import TestClient
 
 from app.models import PlanTaskData, ProjectPlanData
-from tests.helpers import mpp_stub_bytes
+from tests.helpers import mpp_stub_bytes, pdf_text
 
 
 def _plan(*, status_date: str | None, planned_only: bool = True) -> ProjectPlanData:
@@ -128,9 +128,13 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     client.post(f"/api/v1/wsr/requests/{handle}/generate")
     report = client.get(f"/api/v1/wsr/requests/{handle}/report")
     assert report.status_code == 200
-    assert "WSR & Insights" in report.text
-    assert "As of: 2026-08-22" in report.text
-    assert "On track" in report.text
+    assert report.headers["content-type"].startswith("application/pdf")
+    assert handle in report.headers["content-disposition"]
+    assert ".pdf" in report.headers["content-disposition"]
+    text = pdf_text(report.content)
+    assert "WSR & Insights" in text
+    assert "As of: 2026-08-22" in text
+    assert "On track" in text
     for heading in (
         "Executive Overview",
         "Project Timeline",
@@ -145,8 +149,8 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
         "Decisions Required",
         "Next Seven-Day Priorities",
     ):
-        assert heading in report.text
-    assert "No items identified from the plan" in report.text
+        assert heading in text
+    assert "No items identified from the plan" in text
 
 
 def _pending_ai(_data: dict) -> dict:
@@ -242,9 +246,10 @@ def test_review_keep_edit_remove_and_download(client: TestClient, monkeypatch) -
 
     report = client.get(f"/api/v1/wsr/requests/{handle}/report")
     assert report.status_code == 200
-    assert "Build is at risk against Go Live" in report.text
-    assert "Source / Evidence: Build" in report.text
-    assert "Kickoff evidence is incomplete" in report.text
+    text = pdf_text(report.content)
+    assert "Build is at risk against Go Live" in text
+    assert "Source / Evidence: Build" in text
+    assert "Kickoff evidence is incomplete" in text
 
     removed = client.patch(
         f"/api/v1/wsr/requests/{handle}/items/issue-1",
@@ -256,8 +261,9 @@ def test_review_keep_edit_remove_and_download(client: TestClient, monkeypatch) -
 
     after_remove = client.get(f"/api/v1/wsr/requests/{handle}/report")
     assert after_remove.status_code == 200
-    assert "Kickoff evidence is incomplete" not in after_remove.text
-    assert "Build is at risk against Go Live" in after_remove.text
+    text = pdf_text(after_remove.content)
+    assert "Kickoff evidence is incomplete" not in text
+    assert "Build is at risk against Go Live" in text
 
 
 def test_review_not_allowed_until_generation_succeeds(client: TestClient, monkeypatch) -> None:

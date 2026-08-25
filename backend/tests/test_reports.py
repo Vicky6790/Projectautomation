@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.errors import AppError
 from app.models import ProcessingResponse
 from app.reports import RETRO_SECTIONS, SOW_SECTIONS, WSR_SECTIONS, export_report
-from tests.helpers import docx_bytes
+from tests.helpers import docx_bytes, pdf_text
 
 
 def _job(module: str, status: str, result: dict | None) -> ProcessingResponse:
@@ -97,7 +97,7 @@ def test_sow_report_lists_every_category() -> None:
 
 
 def test_wsr_report_matches_dashboard_sections() -> None:
-    filename, _media, body = export_report(
+    filename, media, body = export_report(
         "wsr",
         _job(
             "wsr",
@@ -115,6 +115,14 @@ def test_wsr_report_matches_dashboard_sections() -> None:
                     "generated_at": "2026-08-22T10:00:00Z",
                     "project_health": "on_track",
                     "executive_overview": "Demo is On track as of 2026-08-22.",
+                    "overall_progress": 40,
+                    "completed_work_items": 1,
+                    "phase_count": 3,
+                    "people_planned": 2,
+                    "countdown_days": 20,
+                    "planned_go_live_date": "2026-09-11",
+                    "last_signed_off_milestone": {"name": "Kickoff", "date": "2026-08-10"},
+                    "next_gate": {"name": "Go Live", "date": "2026-09-11"},
                     "timeline": None,
                     "phase_statuses": [],
                     "progress_to_date": [
@@ -132,15 +140,32 @@ def test_wsr_report_matches_dashboard_sections() -> None:
             },
         ),
     )
-    text = body.decode()
-    assert filename.startswith("wsr-report-")
+    assert filename.endswith(".pdf")
+    assert media == "application/pdf"
+    assert body.startswith(b"%PDF")
+    text = pdf_text(body)
     assert "WSR & Insights" in text
     assert "As of: 2026-08-22" in text
+    assert "Generated: 2026-08-22T10:00:00Z" in text
     assert "On track" in text
+    for label in (
+        "Overall Progress",
+        "Last Signed-Off Milestone",
+        "Work Items Completed",
+        "Team Capacity",
+        "Next Gate",
+        "Go-Live",
+        "Phases to Go-Live",
+        "People Planned",
+        "Resources Deployed",
+        "Days to Go-Live",
+    ):
+        assert label in text
     for _key, heading in WSR_SECTIONS:
-        assert f"## {heading}" in text
+        assert heading in text
     assert "No items identified from the plan" in text
     assert "A timeline cannot be generated" in text
+    assert "Unavailable" in text
 
 
 def test_wsr_pending_report_cannot_export() -> None:
@@ -224,7 +249,7 @@ def test_wsr_report_omits_removed_items() -> None:
             },
         ),
     )
-    text = body.decode()
+    text = pdf_text(body)
     assert "Kept risk" in text
     assert "Source / Evidence: Build" in text
     assert "Removed risk" not in text

@@ -132,11 +132,11 @@ export function WsrDashboardView() {
       return;
     }
     try {
-      const blob = await downloadWsrReport(uploaded.id);
+      const { blob, filename } = await downloadWsrReport(uploaded.id);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "wsr-report.md";
+      link.download = filename;
       link.click();
       URL.revokeObjectURL(url);
     } catch (error: unknown) {
@@ -171,6 +171,7 @@ export function WsrDashboardView() {
       ) : null}
       <ReportDownloadControl
         enabled={Boolean(report?.exportable) && job?.status === "succeeded" && !busy}
+        label="Download PDF"
         onDownload={() => void download()}
       />
       {report && !report.exportable && job?.status === "succeeded" ? (

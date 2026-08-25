@@ -206,7 +206,9 @@ export function getWsrRequest(handle: string): Promise<ProcessingResponse> {
   return request<ProcessingResponse>(`/api/v1/wsr/requests/${handle}`);
 }
 
-export async function downloadWsrReport(handle: string): Promise<Blob> {
+export async function downloadWsrReport(
+  handle: string,
+): Promise<{ blob: Blob; filename: string }> {
   const response = await fetch(`/api/v1/wsr/requests/${handle}/report`, SESSION);
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as
@@ -227,7 +229,12 @@ export async function downloadWsrReport(handle: string): Promise<Blob> {
       payload?.error?.details,
     );
   }
-  return response.blob();
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="([^"]+)"/);
+  return {
+    blob: await response.blob(),
+    filename: match?.[1] ?? "wsr-report.pdf",
+  };
 }
 
 export function reviewWsrItem(

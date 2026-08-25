@@ -5,7 +5,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from io import BytesIO
+
 import httpx
+from pypdf import PdfReader
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from client_session import ensure_session
@@ -153,7 +156,18 @@ def main() -> int:
     if report.status_code != 200:
         print(report.text)
         return 1
-    text = report.text
+    if not report.content.startswith(b"%PDF"):
+        print("report is not a PDF")
+        return 1
+    if "application/pdf" not in (report.headers.get("content-type") or ""):
+        print("unexpected media type")
+        return 1
+    if ".pdf" not in (report.headers.get("content-disposition") or ""):
+        print("missing pdf filename")
+        return 1
+    text = "\n".join(
+        (page.extract_text() or "") for page in PdfReader(BytesIO(report.content)).pages
+    )
     for heading in (
         "WSR & Insights",
         "Executive Overview",
