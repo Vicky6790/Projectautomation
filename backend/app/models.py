@@ -43,6 +43,32 @@ class StartJobRequest(BaseModel):
     file_id: str | None = None
 
 
+class PlanAssignmentData(BaseModel):
+    resource_id: int | None = None
+    resource_name: str
+    planned_work_hours: float | None = None
+    actual_work_hours: float | None = None
+
+
+class PlanResourceData(BaseModel):
+    id: int
+    name: str
+    max_units: float | None = None
+
+
+class PlanPhaseData(BaseModel):
+    """Outline-level-1 summary task. Dates stay source values; WSR does not estimate."""
+
+    id: int
+    name: str
+    scheduled_start: str | None = None
+    scheduled_finish: str | None = None
+    baseline_start: str | None = None
+    baseline_finish: str | None = None
+    actual_start: str | None = None
+    percent_complete: float = 0
+
+
 class PlanTaskData(BaseModel):
     id: int
     name: str
@@ -50,23 +76,33 @@ class PlanTaskData(BaseModel):
     is_summary: bool = False
     is_milestone: bool = False
     set_name: str | None = None
+    gate: str | None = None
     baseline_start: str | None = None
     baseline_finish: str | None = None
+    scheduled_start: str | None = None
+    scheduled_finish: str | None = None
     actual_start: str | None = None
     actual_finish: str | None = None
     percent_complete: float = 0
     predecessor_ids: list[int] = Field(default_factory=list)
+    predecessor_names: list[str] = Field(default_factory=list)
     comparison_available: bool = False
+    planned_work_hours: float | None = None
+    actual_work_hours: float | None = None
+    assignments: list[PlanAssignmentData] = Field(default_factory=list)
 
 
 class ProjectPlanData(BaseModel):
     """WSR/retrospective plan snapshot. Baseline values stay distinct from scheduled dates."""
 
     name: str
+    owner: str | None = None
     status_date: str | None = None
     has_actuals: bool = False
     planned_only: bool = True
     tasks: list[PlanTaskData] = Field(default_factory=list)
+    resources: list[PlanResourceData] = Field(default_factory=list)
+    phases: list[PlanPhaseData] = Field(default_factory=list)
     metrics: dict[str, Any] = Field(default_factory=dict)
 
 

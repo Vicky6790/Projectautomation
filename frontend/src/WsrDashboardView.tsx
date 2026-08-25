@@ -116,7 +116,7 @@ export function WsrDashboardView() {
 
   return (
     <section className="panel">
-      <h2>Weekly Status Report</h2>
+      <h2>WSR & Insights</h2>
       <p>{message}</p>
       <FileUploader
         disabled={busy}

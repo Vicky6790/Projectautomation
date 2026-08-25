@@ -19,7 +19,8 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-29 | SOW classification criteria | `completed` | Six finding categories with empty-list rule |
 | WO-27 | WSR/retro classification criteria | `completed` | Health thresholds and evidence rules |
 | WO-3 | AI analysis service | `in_review` | WO-28 summary-only outbound; Azure api-key; schema parse retryable |
-| WO-4 | MPP processing | `in_review` | MPXJ reader/writer; generated file is MSPDI XML |
+| WO-4 | MPP processing | `blocked` | Native write waits on WO-38; WSR reader is WO-40 |
+| WO-40 | WSR MPP reader projection | `in_review` | Identity, dates, Gate alias, assignments; absent values stay unavailable |
 | WO-7 | SOW Analyzer API | `in_review` | Upload, analyze, retry, report; six categories always present |
 | WO-11 | SOW Analyzer UI | `in_review` | Upload, category findings, retry, report download |
 | WO-26 | Compose deployment | `in_review` | Local Compose + on-prem overlay; API not published on host |
@@ -42,6 +43,22 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-31 | On-premise access-control requirements | `in_review` | Feature On-Premise Access Control; mapping in docs/ONPREM_AUTH.md |
 | WO-35 | Implement on-prem authentication | `in_review` | Sessions, isolation, audit, on-prem AUTH_MODE=required |
 | WO-34 | On-prem Compose verification | `in_review` | Overlay AUTH_MODE=required, persistent data dir, `scripts/verify_onprem.py` |
+
+## First deploy: WSR only
+
+Factory clarification 2026-08-25: ship **WSR & Insights** end-to-end before SOW, Plan Generator, or Retrospective. Shared foundations stay in play; those other modules stay in the repo but are not this increment.
+
+| Order | WO | Role |
+|-------|----|------|
+| 1 | WO-40 | MPP reader projection for WSR facts and evidence identities |
+| 2 | WO-9 | WSR generation API and deterministic `WsrPlanFacts` |
+| 3 | WO-41 | Insight review / evidence API |
+| 4 | WO-5 | Approved WSR PDF export |
+| 5 | WO-39 then WO-13 | Review panel and dashboard |
+| 6 | WO-18 | Compose E2E (WSR path only) |
+| Shared | WO-1, WO-2, WO-3, WO-6, WO-26, WO-32 | Already implemented enough to start WO-40 |
+
+WO-38 native MPP write does **not** block this slice. SOW/Plan/Retro E2E (WO-16, WO-17, WO-19) wait until WO-18 passes.
 
 ## Remaining environment check
 

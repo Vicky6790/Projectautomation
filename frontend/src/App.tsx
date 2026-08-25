@@ -10,9 +10,9 @@ import { RetrospectiveView } from "./RetrospectiveView";
 import { WsrDashboardView } from "./WsrDashboardView";
 
 const MODULES: { id: Module; label: string }[] = [
+  { id: "wsr", label: "WSR & Insights" },
   { id: "sow", label: "SOW Analyzer" },
   { id: "plan", label: "Plan Generator" },
-  { id: "wsr", label: "Weekly Status" },
   { id: "retrospective", label: "Retrospective" },
 ];
 
@@ -89,14 +89,14 @@ export default function App() {
           <LoginView onSignedIn={setOperator} />
         ) : (
           <Routes>
-            <Route path="/" element={<Navigate to="/sow" replace />} />
+            <Route path="/" element={<Navigate to="/wsr" replace />} />
             <Route path="/sow" element={<SowAnalyzerView />} />
             <Route path="/plan" element={<PlanGeneratorView />} />
             <Route path="/wsr" element={<WsrDashboardView />} />
             <Route path="/retrospective" element={<RetrospectiveView />} />
             <Route
               path="/operators"
-              element={operator?.role === "admin" ? <OperatorsView /> : <Navigate to="/sow" replace />}
+              element={operator?.role === "admin" ? <OperatorsView /> : <Navigate to="/wsr" replace />}
             />
           </Routes>
         )}
