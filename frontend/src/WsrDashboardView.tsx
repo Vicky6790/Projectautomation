@@ -205,11 +205,22 @@ export function WsrDashboardView() {
     }
   }
 
+  function printForMeeting() {
+    document.documentElement.classList.add("wsr-printing");
+    const cleanup = () => document.documentElement.classList.remove("wsr-printing");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.setTimeout(() => window.print(), 50);
+  }
+
   return (
     <section className="wsr-page">
       <header className="wsr-page-head">
         <h2>WSR & Insights</h2>
         <p>Generate comprehensive status reports from your project plan.</p>
+        <p className="muted">
+          For an executive meeting, present this dashboard full screen. Use Print for meeting, then
+          Save as PDF, for a leave-behind that matches the screen.
+        </p>
       </header>
 
       <div className="wsr-action-bar">
@@ -269,6 +280,14 @@ export function WsrDashboardView() {
             label="Download last WSR"
             onDownload={() => void download()}
           />
+          <button
+            type="button"
+            className="btn btn-outline"
+            disabled={!report || busy}
+            onClick={printForMeeting}
+          >
+            Print for meeting
+          </button>
           <button
             type="button"
             className="btn btn-primary"

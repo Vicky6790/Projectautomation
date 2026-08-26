@@ -118,6 +118,7 @@ def main() -> int:
     page_js_ok = _client_bundle_has(
         client,
         (
+            "Print for meeting",
             "Download last WSR",
             "Generate WSR & Insights",
             "Overall Progress",

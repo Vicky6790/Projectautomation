@@ -1019,6 +1019,62 @@ label select {
   }
 }
 
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  html.wsr-printing {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  html.wsr-printing .sidebar,
+  html.wsr-printing .shell-top,
+  html.wsr-printing .wsr-page-head,
+  html.wsr-printing .wsr-action-bar,
+  html.wsr-printing .wsr-status-msg,
+  html.wsr-printing .wsr-stages {
+    display: none !important;
+  }
+
+  html.wsr-printing .shell,
+  html.wsr-printing .shell-main,
+  html.wsr-printing .shell-content,
+  html.wsr-printing .wsr-page {
+    display: block;
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  html.wsr-printing .wsr-hero {
+    grid-template-columns: 1.4fr 0.8fr auto !important;
+    break-inside: avoid;
+    box-shadow: none;
+  }
+
+  html.wsr-printing .kpi-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    break-inside: avoid;
+  }
+
+  html.wsr-printing .overview-stats {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    break-inside: avoid;
+  }
+
+  html.wsr-printing .wsr-section,
+  html.wsr-printing .kpi-card {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}
+
 @media (max-width: 800px) {
   .sow-category-grid,
   .sow-summary {
