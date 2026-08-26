@@ -4,7 +4,7 @@ from app import storage as storage_mod
 from app.ai.engine import analyze_wsr
 from app.errors import AppError
 from app.models import AiDerivedItem, ProcessingResponse, StatusReport
-from app.wsr.evidence import AI_SECTIONS, items_exportable
+from app.wsr.evidence import AI_SECTIONS
 from app.wsr.facts import derive_wsr_facts, resolve_as_of
 
 
@@ -33,7 +33,7 @@ def run_wsr_generation(handle: str, *, force: bool = False) -> ProcessingRespons
             as_of_date=as_of,
             generated_at=facts.generated_at,
             planned_only=plan.planned_only,
-            exportable=items_exportable(*ai_fields.values()),
+            exportable=True,
             project_health=facts.project_health,
             facts=facts,
             progress=[item.name for item in facts.progress_to_date],

@@ -71,16 +71,3 @@ export function compactDate(value: string | null | undefined): string {
   }
   return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
-
-export function reviewLabel(value: string | null | undefined): string {
-  if (value === "kept") {
-    return "Kept";
-  }
-  if (value === "edited") {
-    return "Edited";
-  }
-  if (value === "removed") {
-    return "Removed";
-  }
-  return "Pending";
-}

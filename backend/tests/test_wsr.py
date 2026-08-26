@@ -190,18 +190,20 @@ def _generate_pending(client: TestClient, monkeypatch) -> str:
     monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _pending_ai)
     response = client.post(f"/api/v1/wsr/requests/{handle}/generate")
     assert response.status_code == 200, response.text
-    assert response.json()["result"]["exportable"] is False
+    assert response.json()["result"]["exportable"] is True
     return handle
 
 
-def test_pending_report_cannot_download(client: TestClient, monkeypatch) -> None:
+def test_pending_insights_do_not_block_pdf(client: TestClient, monkeypatch) -> None:
     handle = _generate_pending(client, monkeypatch)
     report = client.get(f"/api/v1/wsr/requests/{handle}/report")
-    assert report.status_code == 409
-    assert report.json()["error"]["code"] == "REVIEW_REQUIRED"
+    assert report.status_code == 200
+    assert report.headers["content-type"].startswith("application/pdf")
+    text = pdf_text(report.content)
+    assert "Build may slip before Go Live" in text
     jobs = client.get(f"/api/v1/wsr/jobs/{handle}/report")
-    assert jobs.status_code == 409
-    assert jobs.json()["error"]["code"] == "REVIEW_REQUIRED"
+    assert jobs.status_code == 200
+    assert jobs.headers["content-type"].startswith("application/pdf")
 
 
 def test_review_keep_edit_remove_and_download(client: TestClient, monkeypatch) -> None:

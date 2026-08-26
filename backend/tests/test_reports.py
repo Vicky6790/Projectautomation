@@ -168,40 +168,39 @@ def test_wsr_report_matches_dashboard_sections() -> None:
     assert "Unavailable" in text
 
 
-def test_wsr_pending_report_cannot_export() -> None:
-    try:
-        export_report(
+def test_wsr_pending_insights_still_export() -> None:
+    filename, media, body = export_report(
+        "wsr",
+        _job(
             "wsr",
-            _job(
-                "wsr",
-                "succeeded",
-                {
+            "succeeded",
+            {
+                "as_of_date": "2026-08-22",
+                "generated_at": "2026-08-22T10:00:00Z",
+                "exportable": False,
+                "project_health": "on_track",
+                "facts": {
+                    "project_name": "Demo",
                     "as_of_date": "2026-08-22",
                     "generated_at": "2026-08-22T10:00:00Z",
-                    "exportable": False,
                     "project_health": "on_track",
-                    "facts": {
-                        "project_name": "Demo",
-                        "as_of_date": "2026-08-22",
-                        "generated_at": "2026-08-22T10:00:00Z",
-                        "project_health": "on_track",
-                    },
-                    "risks": [
-                        {
-                            "id": "risk-1",
-                            "section": "risk_or_focus_area",
-                            "content": "Build may slip",
-                            "review_status": "pending",
-                            "evidence_references": [{"task_or_milestone_name": "Build"}],
-                        }
-                    ],
                 },
-            ),
-        )
-    except AppError as exc:
-        assert exc.code == "REVIEW_REQUIRED"
-    else:
-        raise AssertionError("expected REVIEW_REQUIRED")
+                "risks": [
+                    {
+                        "id": "risk-1",
+                        "section": "risk_or_focus_area",
+                        "content": "Build may slip",
+                        "review_status": "pending",
+                        "evidence_references": [{"task_or_milestone_name": "Build"}],
+                    }
+                ],
+            },
+        ),
+    )
+    assert filename.endswith(".pdf")
+    assert media == "application/pdf"
+    text = pdf_text(body)
+    assert "Build may slip" in text
 
 
 def test_wsr_report_omits_removed_items() -> None:

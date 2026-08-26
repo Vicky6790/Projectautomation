@@ -74,12 +74,6 @@ def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, by
         from app.wsr.pdf import render_wsr_pdf
 
         payload = StatusReport.model_validate(job.result)
-        if not payload.exportable:
-            raise AppError(
-                409,
-                "REVIEW_REQUIRED",
-                "Review is required before a report can be downloaded",
-            )
         return f"wsr-report-{handle}.pdf", "application/pdf", render_wsr_pdf(handle, payload)
     if module == "retrospective":
         payload = RetrospectiveReport.model_validate(job.result)

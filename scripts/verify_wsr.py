@@ -1,4 +1,4 @@
-"""Verify WSR upload → generate → review → report through the Client App proxy."""
+"""Verify WSR upload → generate → dashboard → PDF through the Client App proxy."""
 
 from __future__ import annotations
 
@@ -111,90 +111,32 @@ def main() -> int:
         return 1
     as_of = result["as_of_date"]
     generated_at = result.get("generated_at")
+    if result.get("exportable") is not True:
+        print("generated report is not exportable")
+        return 1
 
     page_js_ok = _client_bundle_has(
         client,
         (
-            "View Source",
             "Download last WSR",
             "Generate WSR & Insights",
             "Overall Progress",
             "Last Signed-Off Milestone",
             "No items identified from the plan",
+            "Reading the file",
+            "Creating narrative",
         ),
     )
     if not page_js_ok:
         return 1
-
-    pending = [
-        item
-        for key in (
-            "client_needs",
-            "risks",
-            "issues",
-            "dependencies",
-            "management_attention",
-            "decisions_required",
-            "next_7_day_priorities",
-        )
-        for item in (result.get(key) or [])
-        if isinstance(item, dict) and item.get("review_status") == "pending"
-    ]
-    removed_text = None
-    edited_text = "Edited insight for WSR E2E"
-    if pending:
-        blocked = client.get(f"/api/v1/wsr/requests/{handle}/report")
-        print("pending report", blocked.status_code, blocked.json().get("error", {}).get("code"))
-        if blocked.status_code != 409 or blocked.json().get("error", {}).get("code") != "REVIEW_REQUIRED":
-            print(blocked.text)
-            return 1
-        evidence = client.get(f"/api/v1/wsr/requests/{handle}/items/{pending[0]['id']}/evidence")
-        print("evidence", evidence.status_code)
-        if evidence.status_code != 200:
-            print(evidence.text)
-            return 1
-        body = evidence.json()
-        if "task_or_milestone_name" not in (body.get("evidence_references") or [{}])[0]:
-            print("evidence missing source name")
-            return 1
-        first, *rest = pending
-        edited = client.patch(
-            f"/api/v1/wsr/requests/{handle}/items/{first['id']}",
-            json={"decision": "edited", "content": edited_text},
-        )
-        if edited.status_code != 200:
-            print("edit failed", edited.text)
-            return 1
-        result = edited.json()["result"] or result
-        if rest:
-            removed_text = rest[-1].get("content")
-            removed = client.patch(
-                f"/api/v1/wsr/requests/{handle}/items/{rest[-1]['id']}",
-                json={"decision": "removed"},
-            )
-            if removed.status_code != 200:
-                print("remove failed", removed.text)
-                return 1
-            result = removed.json()["result"] or result
-            rest = rest[:-1]
-        for item in rest:
-            reviewed = client.patch(
-                f"/api/v1/wsr/requests/{handle}/items/{item['id']}",
-                json={"decision": "kept"},
-            )
-            if reviewed.status_code != 200:
-                print("review failed", item.get("id"), reviewed.status_code, reviewed.text)
-                return 1
-            result = reviewed.json()["result"] or result
-        print("reviewed", len(pending), "items")
-    if not result.get("exportable"):
-        print("report still not exportable after review")
+    if _client_bundle_has_any(client, ("View Source", "Review is required")):
+        print("client bundle still includes cancelled review UI")
         return 1
 
     reopened = client.get(f"/api/v1/wsr/requests/{handle}")
     reopened_result = reopened.json().get("result") or {}
     if reopened_result.get("as_of_date") != as_of or reopened_result.get("generated_at") != generated_at:
-        print("as_of or generated_at changed after review")
+        print("as_of or generated_at changed after reopen")
         return 1
 
     report = client.get(f"/api/v1/wsr/requests/{handle}/report")
@@ -248,34 +190,41 @@ def main() -> int:
         if label not in text:
             print("report missing label", label)
             return 1
-    if pending and edited_text not in text:
-        print("edited insight missing from PDF")
-        return 1
-    if removed_text and removed_text in text:
-        print("removed insight still in PDF")
-        return 1
     print("WSR E2E via client proxy: OK", handle)
     return 0
 
 
-def _client_bundle_has(client: httpx.Client, needles: tuple[str, ...]) -> bool:
+def _client_bundle(client: httpx.Client) -> str | None:
     page = client.get("/wsr")
     html = page.text
     marker = 'src="/assets/'
     start = html.find(marker)
     if start < 0:
         print("client bundle script missing")
-        return False
+        return None
     src_start = start + len('src="')
     src_end = html.find('"', src_start)
     script = client.get(html[src_start:src_end])
-    bundle = script.text
+    return script.text
+
+
+def _client_bundle_has(client: httpx.Client, needles: tuple[str, ...]) -> bool:
+    bundle = _client_bundle(client)
+    if bundle is None:
+        return False
     for needle in needles:
         if needle not in bundle:
             print("client bundle missing", needle)
             return False
-    print("client bundle review/dashboard strings: OK")
+    print("client bundle dashboard strings: OK")
     return True
+
+
+def _client_bundle_has_any(client: httpx.Client, needles: tuple[str, ...]) -> bool:
+    bundle = _client_bundle(client)
+    if bundle is None:
+        return False
+    return any(needle in bundle for needle in needles)
 
 
 if __name__ == "__main__":

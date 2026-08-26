@@ -187,6 +187,12 @@ textarea {
   margin-right: 8px;
 }
 
+.wsr-stages {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+
 .processing {
   font-weight: 600;
 }

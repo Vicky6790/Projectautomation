@@ -1,8 +1,7 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
-import { downloadWsrReport, generateWsr, getWsrEvidence, reviewWsrItem, retryJob } from "./api";
+import { downloadWsrReport, generateWsr, retryJob } from "./api";
 import { FileUploader } from "./components/FileUploader";
 import { ReportDownloadControl } from "./components/ReportDownloadControl";
-import { WsrEvidencePanel } from "./components/WsrEvidencePanel";
 import { WsrGantt } from "./components/WsrGantt";
 import { WsrInsightItem } from "./components/WsrInsightItem";
 import { WsrProgressRing } from "./components/WsrProgressRing";
@@ -15,7 +14,6 @@ import type {
   ProcessingResponse,
   ProgressItem,
   StatusReport,
-  WsrEvidenceResponse,
   WsrPlanFacts,
 } from "./types";
 import {
@@ -133,11 +131,9 @@ export function WsrDashboardView() {
   const [message, setMessage] = useState(
     "Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.",
   );
-  const [evidence, setEvidence] = useState<WsrEvidenceResponse | null>(null);
 
   const report = asReport(job?.result ?? null);
   const facts: WsrPlanFacts = report?.facts ?? {};
-  const pendingReview = Boolean(report && !report.exportable && job?.status === "succeeded");
   const tone = healthTone(report?.project_health);
 
   useEffect(() => {
@@ -148,18 +144,11 @@ export function WsrDashboardView() {
 
   async function runGenerate(handle: string) {
     setBusy(true);
-    setEvidence(null);
-    setMessage("Generating the status report…");
+    setMessage("Reading the file, extracting plan values, creating narrative, and rendering the report…");
     try {
       const result = await generateWsr(handle);
       setJob(result);
-      setMessage(
-        result.status === "succeeded"
-          ? result.result && (result.result as StatusReport).exportable
-            ? "Status report ready."
-            : "Status report ready. Review each AI-derived item before downloading the PDF."
-          : "Generation failed.",
-      );
+      setMessage(result.status === "succeeded" ? "Status report ready." : "Generation failed.");
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : "Generation failed");
     } finally {
@@ -197,45 +186,6 @@ export function WsrDashboardView() {
     }
   }
 
-  async function review(
-    item: AiDerivedItem,
-    decision: "kept" | "edited" | "removed",
-    content?: string,
-  ) {
-    if (!uploaded) {
-      return;
-    }
-    setBusy(true);
-    try {
-      const updated = await reviewWsrItem(uploaded.id, item.id, { decision, content });
-      setJob(updated);
-      const ready = Boolean((updated.result as StatusReport | null)?.exportable);
-      setMessage(
-        ready
-          ? "All insights reviewed. The PDF can be downloaded."
-          : "Insight updated. Continue reviewing remaining items.",
-      );
-      if (evidence?.item_id === item.id) {
-        setEvidence(null);
-      }
-    } catch (error: unknown) {
-      setMessage(error instanceof Error ? error.message : "Review failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function viewSource(item: AiDerivedItem) {
-    if (!uploaded) {
-      return;
-    }
-    try {
-      setEvidence(await getWsrEvidence(uploaded.id, item.id));
-    } catch (error: unknown) {
-      setMessage(error instanceof Error ? error.message : "Source details failed");
-    }
-  }
-
   return (
     <section className="wsr-page">
       <header className="wsr-page-head">
@@ -258,7 +208,6 @@ export function WsrDashboardView() {
               onClick={() => {
                 setUploaded(null);
                 setJob(null);
-                setEvidence(null);
                 setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
               }}
             >
@@ -281,7 +230,7 @@ export function WsrDashboardView() {
         )}
         <div className="wsr-action-buttons">
           <ReportDownloadControl
-            enabled={Boolean(report?.exportable) && job?.status === "succeeded" && !busy}
+            enabled={job?.status === "succeeded" && !busy}
             label="Download last WSR"
             onDownload={() => void download()}
           />
@@ -297,14 +246,18 @@ export function WsrDashboardView() {
       </div>
 
       <p className="wsr-status-msg">{message}</p>
-      {busy ? <p className="processing">Processing…</p> : null}
+      {busy ? (
+        <ol className="wsr-stages">
+          <li>Reading the file</li>
+          <li>Extracting plan values</li>
+          <li>Creating narrative</li>
+          <li>Rendering the report</li>
+        </ol>
+      ) : null}
       {job?.status === "failed" ? (
         <button type="button" className="btn btn-outline" onClick={() => void retry()} disabled={busy}>
           Retry generation
         </button>
-      ) : null}
-      {pendingReview ? (
-        <p className="review-banner">Review is required before the report can be downloaded.</p>
       ) : null}
 
       {report ? (
@@ -507,14 +460,7 @@ export function WsrDashboardView() {
                 ) : (
                   <ul className={section.tone === "need" ? "insight-list insight-grid" : "insight-list"}>
                     {items.map((item) => (
-                      <WsrInsightItem
-                        key={item.id}
-                        item={item}
-                        tone={section.tone}
-                        disabled={busy}
-                        onReview={review}
-                        onViewSource={(selected) => void viewSource(selected)}
-                      />
+                      <WsrInsightItem key={item.id} item={item} tone={section.tone} />
                     ))}
                   </ul>
                 )}
@@ -523,8 +469,6 @@ export function WsrDashboardView() {
           })}
         </div>
       ) : null}
-
-      {evidence ? <WsrEvidencePanel evidence={evidence} onClose={() => setEvidence(null)} /> : null}
     </section>
   );
 }

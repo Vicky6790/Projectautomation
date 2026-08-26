@@ -6,8 +6,6 @@ import type {
   PlanConfiguration,
   PlanLibrary,
   ProcessingResponse,
-  WsrEvidenceResponse,
-  WsrItemDecision,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -235,24 +233,6 @@ export async function downloadWsrReport(
     blob: await response.blob(),
     filename: match?.[1] ?? "wsr-report.pdf",
   };
-}
-
-export function reviewWsrItem(
-  handle: string,
-  itemId: string,
-  body: WsrItemDecision,
-): Promise<ProcessingResponse> {
-  return request<ProcessingResponse>(`/api/v1/wsr/requests/${handle}/items/${itemId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-export function getWsrEvidence(handle: string, itemId: string): Promise<WsrEvidenceResponse> {
-  return request<WsrEvidenceResponse>(
-    `/api/v1/wsr/requests/${handle}/items/${itemId}/evidence`,
-  );
 }
 
 export function signIn(username: string, password: string): Promise<Operator> {
