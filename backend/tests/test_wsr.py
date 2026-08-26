@@ -250,7 +250,6 @@ def test_review_keep_edit_remove_and_download(client: TestClient, monkeypatch) -
     assert report.status_code == 200
     text = pdf_text(report.content)
     assert "Build is at risk against Go Live" in text
-    assert "Source / Evidence: Build" in text
     assert "Kickoff evidence is incomplete" in text
 
     removed = client.patch(

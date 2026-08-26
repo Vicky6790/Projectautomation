@@ -250,7 +250,6 @@ def test_wsr_report_omits_removed_items() -> None:
     )
     text = pdf_text(body)
     assert "Kept risk" in text
-    assert "Source / Evidence: Build" in text
     assert "Removed risk" not in text
     assert "Removed issue" not in text
     assert "No items identified from the plan" in text

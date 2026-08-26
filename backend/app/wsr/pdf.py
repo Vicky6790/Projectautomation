@@ -16,7 +16,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.models import AiDerivedItem, NamedDateValue, StatusReport, WsrPlanFacts
+from app.models import NamedDateValue, StatusReport, WsrPlanFacts
 
 _SECTIONS = (
     ("executive_overview", "Executive Overview"),
@@ -309,7 +309,6 @@ def _section_flowables(
         flow: list = []
         for item in items:
             flow.append(Paragraph(_xml(f"- {item.content}"), body))
-            flow.append(Paragraph(_xml(_source_row(item)), muted))
         return flow
     if key == "executive_overview":
         blocks = [_metrics_table(_overview_metrics(facts), styles), Spacer(1, 3 * mm)]
@@ -361,12 +360,6 @@ def _section_flowables(
             return [Paragraph(_xml("No upcoming milestone was identified"), muted)]
         return [Paragraph(_xml(f"- {item.name}: {_display(item.date)}"), body) for item in items]
     return [Paragraph(_xml("Unavailable"), muted)]
-
-
-def _source_row(item: AiDerivedItem) -> str:
-    source = item.evidence_references[0]
-    date = f" ({source.date})" if source.date else ""
-    return f"Source / Evidence: {source.task_or_milestone_name}{date}"
 
 
 def _named(value: NamedDateValue | None) -> str:
