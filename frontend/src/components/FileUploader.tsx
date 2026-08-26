@@ -7,6 +7,7 @@ type Props = {
   accept?: string;
   label?: string;
   endpoint?: string;
+  variant?: "default" | "button";
   onUploaded: (file: FileRecord) => void;
   onError: (message: string) => void;
 };
@@ -16,6 +17,7 @@ export function FileUploader({
   accept = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   label = "Choose SOW (PDF or Word)",
   endpoint = "/api/v1/sow/uploads",
+  variant = "default",
   onUploaded,
   onError,
 }: Props) {
@@ -45,18 +47,36 @@ export function FileUploader({
       });
   }
 
+  const busy = disabled || progress !== null;
+  const input = (
+    <input
+      ref={inputRef}
+      className={variant === "button" ? "sr-only" : undefined}
+      type="file"
+      accept={accept}
+      onChange={chooseFile}
+      disabled={busy}
+    />
+  );
+
   return (
-    <div className="uploader">
-      <label className="upload">
-        {label}
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          onChange={chooseFile}
-          disabled={disabled || progress !== null}
-        />
-      </label>
+    <div className={`uploader${variant === "button" ? " uploader-button" : ""}`}>
+      {variant === "button" ? (
+        <button
+          type="button"
+          className="btn btn-outline"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          {label}
+        </button>
+      ) : (
+        <label className="upload">
+          {label}
+          {input}
+        </label>
+      )}
+      {variant === "button" ? input : null}
       {progress !== null ? (
         <div className="progress">
           <p>Uploading {progress}%</p>

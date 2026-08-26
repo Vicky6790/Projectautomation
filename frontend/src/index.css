@@ -187,9 +187,61 @@ textarea {
   margin-right: 8px;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.uploader-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .wsr-stages {
-  margin: 8px 0 0;
-  padding-left: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wsr-stages li {
+  background: #eef1f7;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.wsr-stages li.active {
+  background: var(--indigo-soft);
+  color: var(--indigo-dark);
+  font-weight: 600;
+}
+
+.wsr-empty {
+  margin-top: 24px;
+  background: var(--card);
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.wsr-empty h3 {
+  margin: 0 0 8px;
+}
+
+.wsr-empty p {
+  margin: 0;
   color: var(--muted);
 }
 
@@ -359,6 +411,12 @@ label select {
 
 .file-icon {
   color: var(--indigo);
+  display: inline-flex;
+}
+
+.file-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .chip-clear {

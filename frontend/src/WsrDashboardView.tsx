@@ -26,6 +26,13 @@ import {
   unavailable,
 } from "./wsrFormat";
 
+const GENERATE_STAGES = [
+  "Reading the file",
+  "Extracting plan values",
+  "Creating narrative",
+  "Rendering the report",
+];
+
 const AI_SECTIONS: { key: keyof StatusReport; label: string; tone?: "risk" | "need" }[] = [
   { key: "client_needs", label: "What We Need From the Bank Team", tone: "need" },
   { key: "issues", label: "Issues" },
@@ -128,6 +135,7 @@ export function WsrDashboardView() {
   const [uploaded, setUploaded] = useState<FileRecord | null>(null);
   const [job, setJob] = useState<ProcessingResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState(0);
   const [message, setMessage] = useState(
     "Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.",
   );
@@ -141,6 +149,17 @@ export function WsrDashboardView() {
     setPageMeta(identity);
     return () => setPageMeta("");
   }, [facts.project_name, facts.project_owner, setPageMeta]);
+
+  useEffect(() => {
+    if (!busy) {
+      setStage(0);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setStage((current) => Math.min(current + 1, GENERATE_STAGES.length - 1));
+    }, 900);
+    return () => window.clearInterval(timer);
+  }, [busy]);
 
   async function runGenerate(handle: string) {
     setBusy(true);
@@ -197,7 +216,22 @@ export function WsrDashboardView() {
         {uploaded ? (
           <div className="file-chip">
             <span className="file-icon" aria-hidden="true">
-              ▣
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M14 3v6h6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </span>
             <span>{uploaded.filename}</span>
             <button
@@ -216,6 +250,7 @@ export function WsrDashboardView() {
           </div>
         ) : (
           <FileUploader
+            variant="button"
             disabled={busy}
             accept=".mpp,application/vnd.ms-project"
             label="Choose Microsoft Project file (.mpp)"
@@ -248,10 +283,11 @@ export function WsrDashboardView() {
       <p className="wsr-status-msg">{message}</p>
       {busy ? (
         <ol className="wsr-stages">
-          <li>Reading the file</li>
-          <li>Extracting plan values</li>
-          <li>Creating narrative</li>
-          <li>Rendering the report</li>
+          {GENERATE_STAGES.map((label, index) => (
+            <li key={label} className={index <= stage ? "active" : ""}>
+              {label}
+            </li>
+          ))}
         </ol>
       ) : null}
       {job?.status === "failed" ? (
@@ -375,7 +411,7 @@ export function WsrDashboardView() {
               <table className="phase-table">
                 <thead>
                   <tr>
-                    <th>#</th>
+                    <th>WBS</th>
                     <th>Phase</th>
                     <th>Planned timing</th>
                     <th>Progress</th>
@@ -468,7 +504,12 @@ export function WsrDashboardView() {
             );
           })}
         </div>
-      ) : null}
+      ) : busy ? null : (
+        <div className="wsr-empty">
+          <h3>No report yet</h3>
+          <p>Upload a Microsoft Project (.mpp) file, then generate WSR & Insights to open the dashboard.</p>
+        </div>
+      )}
     </section>
   );
 }
