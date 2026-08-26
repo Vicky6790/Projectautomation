@@ -186,8 +186,31 @@ def _overall_progress(tasks: list[PlanTaskData]) -> float | None:
     return round(sum(pct * days for pct, days in durations) / total, 1)
 
 
-def _capacity(_plan: ProjectPlanData) -> float | None:
-    return None
+def _capacity(plan: ProjectPlanData) -> float | None:
+    planned = 0.0
+    actual = 0.0
+    has_planned = False
+    for task in plan.tasks:
+        if task.is_summary:
+            continue
+        assignment_planned = False
+        for item in task.assignments:
+            if item.planned_work_hours:
+                planned += item.planned_work_hours
+                has_planned = True
+                assignment_planned = True
+            if item.actual_work_hours:
+                actual += item.actual_work_hours
+        if assignment_planned:
+            continue
+        if task.planned_work_hours:
+            planned += task.planned_work_hours
+            has_planned = True
+        if task.actual_work_hours:
+            actual += task.actual_work_hours
+    if not has_planned or planned <= 0:
+        return None
+    return round(min(100.0, max(0.0, actual / planned * 100)), 1)
 
 
 def _people_planned(plan: ProjectPlanData) -> int | None:

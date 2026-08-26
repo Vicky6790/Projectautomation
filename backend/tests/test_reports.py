@@ -143,7 +143,7 @@ def test_wsr_report_matches_dashboard_sections() -> None:
     assert filename.endswith(".pdf")
     assert media == "application/pdf"
     assert body.startswith(b"%PDF")
-    text = pdf_text(body)
+    text = " ".join(pdf_text(body).split())
     assert "WSR & Insights" in text
     assert "As of: 2026-08-22" in text
     assert "Generated: 2026-08-22T10:00:00Z" in text

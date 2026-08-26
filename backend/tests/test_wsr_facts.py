@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.models import PlanPhaseData, PlanTaskData, ProjectPlanData
+from app.models import PlanAssignmentData, PlanPhaseData, PlanTaskData, ProjectPlanData
 from app.wsr.facts import derive_wsr_facts
 
 
@@ -154,3 +154,53 @@ def test_go_live_prefers_gate_field() -> None:
     )
     assert facts.planned_go_live_date == "2026-10-15"
     assert date.fromisoformat(facts.planned_go_live_date) == date(2026, 10, 15)
+
+
+def test_team_capacity_uses_actual_versus_planned_work() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Build",
+                    scheduled_start="2026-08-01",
+                    scheduled_finish="2026-08-20",
+                    assignments=[
+                        PlanAssignmentData(
+                            resource_name="Asha",
+                            planned_work_hours=40,
+                            actual_work_hours=10,
+                        )
+                    ],
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Go Live",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-01",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    assert facts.capacity_utilization == 25.0
+    assert facts.people_planned == 1
+
+
+def test_team_capacity_unavailable_without_planned_work() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Go Live",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-01",
+                )
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    assert facts.capacity_utilization is None

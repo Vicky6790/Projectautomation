@@ -153,9 +153,10 @@ def main() -> int:
     if ".pdf" not in (report.headers.get("content-disposition") or ""):
         print("missing pdf filename")
         return 1
-    text = "\n".join(
+    text = " ".join(
         (page.extract_text() or "") for page in PdfReader(BytesIO(report.content)).pages
     )
+    text = " ".join(text.split())
     for heading in (
         "WSR & Insights",
         "Executive Overview",

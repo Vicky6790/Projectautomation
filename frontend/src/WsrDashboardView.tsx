@@ -352,7 +352,11 @@ export function WsrDashboardView() {
               label="Team Capacity"
               value={percent(facts.capacity_utilization)}
               hint={
-                facts.people_planned != null ? `${facts.people_planned} resources planned` : undefined
+                facts.capacity_utilization != null
+                  ? "Actual vs planned work"
+                  : facts.people_planned != null
+                    ? `${facts.people_planned} resources planned`
+                    : undefined
               }
             />
             <KpiCard
