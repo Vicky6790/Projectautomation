@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 Module = Literal["sow", "wsr", "retrospective", "plan"]
 JobStatus = Literal["queued", "running", "succeeded", "failed"]
@@ -135,14 +135,67 @@ class RetrospectiveReport(BaseModel):
     plan: ProjectPlanData | None = None
 
 
+class SowFinding(BaseModel):
+    category: str = ""
+    priority: Literal["high", "medium", "low"] | None = None
+    title: str
+    description: str
+    recommendation: str = ""
+
+
+def _coerce_sow_findings(value: object, category: str) -> list[dict[str, object]]:
+    if not value:
+        return []
+    if not isinstance(value, list):
+        return value  # type: ignore[return-value]
+    findings: list[dict[str, object]] = []
+    for item in value:
+        if isinstance(item, str):
+            findings.append(
+                {
+                    "category": category,
+                    "title": item[:120],
+                    "description": item,
+                    "recommendation": "",
+                }
+            )
+            continue
+        if isinstance(item, dict):
+            data = dict(item)
+            data.setdefault("category", category)
+            description = str(data.get("description") or data.get("title") or "")
+            data.setdefault("title", description[:120] or "Finding")
+            data.setdefault("description", description or str(data.get("title") or ""))
+            data.setdefault("recommendation", "")
+            findings.append(data)
+            continue
+        findings.append(item)  # type: ignore[arg-type]
+    return findings
+
+
 class AnalysisReport(BaseModel):
     request_handle: str | None = None
-    gray_areas: list[str] = Field(default_factory=list)
-    risks: list[str] = Field(default_factory=list)
-    missing_requirements: list[str] = Field(default_factory=list)
-    assumptions: list[str] = Field(default_factory=list)
-    dependencies: list[str] = Field(default_factory=list)
-    clarification_questions: list[str] = Field(default_factory=list)
+    processed_pages: int | None = None
+    summary: str = ""
+    gray_areas: list[SowFinding] = Field(default_factory=list)
+    risks: list[SowFinding] = Field(default_factory=list)
+    missing_requirements: list[SowFinding] = Field(default_factory=list)
+    assumptions: list[SowFinding] = Field(default_factory=list)
+    dependencies: list[SowFinding] = Field(default_factory=list)
+    clarification_questions: list[SowFinding] = Field(default_factory=list)
+
+    @field_validator(
+        "gray_areas",
+        "risks",
+        "missing_requirements",
+        "assumptions",
+        "dependencies",
+        "clarification_questions",
+        mode="before",
+    )
+    @classmethod
+    def coerce_findings(cls, value: object, info) -> object:
+        return _coerce_sow_findings(value, info.field_name)
 
 
 class EvidenceReference(BaseModel):

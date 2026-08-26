@@ -876,7 +876,134 @@ label select {
   margin: 0;
 }
 
+.sow-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-top: 20px;
+}
+
+.sow-summary h3 {
+  margin: 0 0 6px;
+}
+
+.sow-total {
+  margin: 0;
+  text-align: right;
+}
+
+.sow-total strong {
+  display: block;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.sow-total span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sow-category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+
+.sow-category-grid button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.sow-category-grid button.active {
+  border-color: var(--indigo);
+  background: var(--indigo-soft);
+  font-weight: 700;
+}
+
+.sow-detail {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-top: 16px;
+}
+
+.sow-detail h3 {
+  margin: 0 0 12px;
+}
+
+.sow-findings {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.sow-finding {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.sow-finding h4 {
+  margin: 8px 0 6px;
+}
+
+.sow-finding p {
+  margin: 0;
+}
+
+.sow-finding-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sow-priority {
+  text-transform: capitalize;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sow-priority-high {
+  color: var(--danger);
+}
+
+.sow-priority-medium {
+  color: var(--warn);
+}
+
+.sow-priority-low {
+  color: var(--muted);
+}
+
+.sow-recommendation {
+  margin-top: 8px;
+  color: var(--indigo-dark);
+}
+
 @media (max-width: 1100px) {
+  .sow-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .kpi-grid,
   .overview-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -893,6 +1020,12 @@ label select {
 }
 
 @media (max-width: 800px) {
+  .sow-category-grid,
+  .sow-summary {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
   .shell {
     flex-direction: column;
   }

@@ -170,14 +170,24 @@ export type RetrospectiveReport = {
   recommendations: string[];
 };
 
+export type SowFinding = {
+  category: string;
+  priority?: "high" | "medium" | "low" | null;
+  title: string;
+  description: string;
+  recommendation?: string;
+};
+
 export type AnalysisReport = {
   request_handle?: string | null;
-  gray_areas: string[];
-  risks: string[];
-  missing_requirements: string[];
-  assumptions: string[];
-  dependencies: string[];
-  clarification_questions: string[];
+  processed_pages?: number | null;
+  summary?: string;
+  gray_areas: SowFinding[];
+  risks: SowFinding[];
+  missing_requirements: SowFinding[];
+  assumptions: SowFinding[];
+  dependencies: SowFinding[];
+  clarification_questions: SowFinding[];
 };
 
 export type ProcessingResponse = {

@@ -32,6 +32,16 @@ def extract_sow_text(filename: str, content: bytes) -> str:
     return cleaned
 
 
+def count_sow_pages(filename: str, content: bytes) -> int:
+    ext = Path(filename).suffix.lower()
+    if ext == ".pdf":
+        try:
+            return max(1, len(PdfReader(BytesIO(content)).pages))
+        except Exception:  # noqa: BLE001 - page count is informational
+            return 1
+    return 1
+
+
 def _pdf_text(content: bytes) -> str:
     try:
         reader = PdfReader(BytesIO(content))

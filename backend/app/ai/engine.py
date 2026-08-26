@@ -36,7 +36,15 @@ def analyze_sow(sow_text: str) -> AnalysisReport:
     if settings.ai_stub:
         snippet = sow_text.strip()[:80] or "uploaded SOW"
         return AnalysisReport(
-            gray_areas=[f"[stub] Review undefined terms in: {snippet}"],
+            gray_areas=[
+                {
+                    "category": "gray_areas",
+                    "priority": "medium",
+                    "title": "Undefined delivery language",
+                    "description": f"Review undefined terms in: {snippet}",
+                    "recommendation": "Replace vague wording with measurable acceptance criteria.",
+                }
+            ],
             risks=[],
             missing_requirements=[],
             assumptions=[],
@@ -47,7 +55,8 @@ def analyze_sow(sow_text: str) -> AnalysisReport:
         system_prompt=(
             "You are a PMO analyst. Return JSON only with keys gray_areas, risks, "
             "missing_requirements, assumptions, dependencies, clarification_questions. "
-            "Each value is an array of strings. " + SOW_CRITERIA
+            "Each value is an array of objects with priority (high, medium, or low), "
+            "title, description, and recommendation. Do not invent facts. " + SOW_CRITERIA
         ),
         user_prompt=sow_text,
     )

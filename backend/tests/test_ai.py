@@ -62,12 +62,33 @@ def _sow_payload() -> dict:
                 "message": {
                     "content": json.dumps(
                         {
-                            "gray_areas": ["Term 'reasonable' is undefined"],
+                            "gray_areas": [
+                                {
+                                    "priority": "high",
+                                    "title": "Undefined reasonable time",
+                                    "description": "Term 'reasonable' is undefined",
+                                    "recommendation": "Replace with a dated milestone.",
+                                }
+                            ],
                             "risks": [],
-                            "missing_requirements": ["No acceptance criteria"],
+                            "missing_requirements": [
+                                {
+                                    "priority": "medium",
+                                    "title": "Acceptance criteria missing",
+                                    "description": "No acceptance criteria",
+                                    "recommendation": "Add measurable acceptance criteria.",
+                                }
+                            ],
                             "assumptions": [],
                             "dependencies": [],
-                            "clarification_questions": ["What is the go-live date?"],
+                            "clarification_questions": [
+                                {
+                                    "priority": "medium",
+                                    "title": "Go-live date",
+                                    "description": "What is the go-live date?",
+                                    "recommendation": "Ask the client to confirm the target date.",
+                                }
+                            ],
                         }
                     )
                 }
@@ -105,9 +126,9 @@ def test_analyze_sow_parses_structured_result(monkeypatch: pytest.MonkeyPatch) -
     fake = _FakeClient(_FakeResponse(200, _sow_payload()))
     monkeypatch.setattr("app.ai.client.httpx.Client", lambda **_kwargs: fake)
     result = engine.analyze_sow("The vendor shall deliver a portal in a reasonable time.")
-    assert result.gray_areas == ["Term 'reasonable' is undefined"]
+    assert result.gray_areas[0].description == "Term 'reasonable' is undefined"
     assert result.risks == []
-    assert result.missing_requirements == ["No acceptance criteria"]
+    assert result.missing_requirements[0].description == "No acceptance criteria"
     assert result.clarification_questions
 
 

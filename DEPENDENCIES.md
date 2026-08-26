@@ -21,8 +21,8 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-3 | AI analysis service | `in_review` | WO-28 summary-only outbound; Azure api-key; schema parse retryable |
 | WO-4 | MPP processing | `blocked` | Native write waits on WO-38; WSR reader is WO-40 |
 | WO-40 | WSR MPP reader projection | `in_review` | Identity, dates, Gate alias, assignments; absent values stay unavailable |
-| WO-7 | SOW Analyzer API | `in_review` | Upload, analyze, retry, report; six categories always present |
-| WO-11 | SOW Analyzer UI | `in_review` | Upload, category findings, retry, report download |
+| WO-7 | SOW Analyzer API | `in_review` | Structured findings (priority, title, description, recommendation); six categories always present |
+| WO-11 | SOW Analyzer UI | `in_review` | Upload, start analysis, summary counts, finding cards, report download |
 | WO-26 | Compose deployment | `in_review` | Local Compose + on-prem overlay; API not published on host |
 | WO-16 | SOW E2E via Compose | `in_review` | Waits on WO-18; proxy path: upload → analyze → report |
 | WO-23 | Template library content | `completed` | Digital delivery phases, sets, CMS prereq, FS rules |

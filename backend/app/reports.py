@@ -68,7 +68,11 @@ def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, by
     handle = job.request_handle or job.id
     if module == "sow":
         payload = AnalysisReport.model_validate(job.result)
-        body = _render("SOW analysis report", handle, SOW_SECTIONS, payload)
+        extra = []
+        extra.append(f"Summary: {payload.summary}" if payload.summary else "Summary: Analysis complete.")
+        if payload.processed_pages is not None:
+            extra.append(f"Processed pages: {payload.processed_pages}")
+        body = _render("SOW analysis report", handle, SOW_SECTIONS, payload, extra)
         return f"sow-analysis-{handle}.md", "text/markdown; charset=utf-8", body.encode("utf-8")
     if module == "wsr":
         from app.wsr.pdf import render_wsr_pdf
@@ -113,4 +117,14 @@ def _render(
 
 
 def _one_line(value: object) -> str:
+    if isinstance(value, dict):
+        title = str(value.get("title") or "").strip()
+        description = str(value.get("description") or "").strip()
+        recommendation = str(value.get("recommendation") or "").strip()
+        priority = str(value.get("priority") or "").strip()
+        parts = [part for part in (priority.title() if priority else "", title, description) if part]
+        line = " — ".join(dict.fromkeys(parts))
+        if recommendation:
+            line = f"{line} Recommendation: {recommendation}" if line else f"Recommendation: {recommendation}"
+        return " ".join(line.split())
     return " ".join(str(value).split())

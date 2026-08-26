@@ -3,7 +3,8 @@ from __future__ import annotations
 from app import storage as storage_mod
 from app.ai.engine import analyze_sow
 from app.errors import AppError
-from app.models import AnalysisReport, ProcessingResponse
+from app.ingestion import count_sow_pages
+from app.models import AnalysisReport, FileRecord, ProcessingResponse
 
 _CATEGORIES = (
     "gray_areas",
@@ -24,7 +25,7 @@ def run_sow_analysis(handle: str, *, force: bool = False) -> ProcessingResponse:
         return job
     store.set_status(handle, "running")
     try:
-        record, _ = store.get_file(handle)
+        record, blob = store.get_file(handle)
         text_path = store.extracted_text_path(handle)
         if not record.extracted_text_available or not text_path.exists():
             raise AppError(
@@ -38,6 +39,12 @@ def run_sow_analysis(handle: str, *, force: bool = False) -> ProcessingResponse:
         payload["request_handle"] = handle
         for key in _CATEGORIES:
             payload.setdefault(key, [])
+            for item in payload[key]:
+                if isinstance(item, dict):
+                    item["category"] = key
+        total = sum(len(payload[key]) for key in _CATEGORIES)
+        payload["processed_pages"] = _processed_pages(record, blob)
+        payload["summary"] = f"{total} findings across six categories."
         AnalysisReport.model_validate(payload)
         return store.set_status(handle, "succeeded", result=payload)
     except AppError as exc:
@@ -58,3 +65,9 @@ def run_sow_analysis(handle: str, *, force: bool = False) -> ProcessingResponse:
             },
         )
         return store.get_job(handle)
+
+
+def _processed_pages(record: FileRecord, blob) -> int:
+    if not getattr(blob, "is_file", lambda: False)():
+        return 1
+    return count_sow_pages(record.filename, blob.read_bytes())

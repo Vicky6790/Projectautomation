@@ -106,12 +106,35 @@ export function getSowRequest(handle: string): Promise<ProcessingResponse> {
   return request<ProcessingResponse>(`/api/v1/sow/requests/${handle}`);
 }
 
-export async function downloadSowReport(handle: string): Promise<Blob> {
+export async function downloadSowReport(
+  handle: string,
+): Promise<{ blob: Blob; filename: string }> {
   const response = await fetch(`/api/v1/sow/requests/${handle}/report`, SESSION);
   if (!response.ok) {
-    throw new ApiRequestError("Report download failed");
+    const payload = (await response.json().catch(() => null)) as
+      | {
+          error?: {
+            message?: string;
+            code?: string;
+            retryable?: boolean;
+            details?: Record<string, unknown>;
+          };
+        }
+      | null;
+    notifyAuthLost(payload?.error?.code);
+    throw new ApiRequestError(
+      payload?.error?.message ?? "SOW download failed",
+      payload?.error?.code ?? "REQUEST_FAILED",
+      Boolean(payload?.error?.retryable),
+      payload?.error?.details,
+    );
   }
-  return response.blob();
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="([^"]+)"/);
+  return {
+    blob: await response.blob(),
+    filename: match?.[1] ?? "sow-analysis.md",
+  };
 }
 
 export function uploadFileWithProgress(
