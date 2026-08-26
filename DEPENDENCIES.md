@@ -15,7 +15,7 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-30 | Request retention policy | `completed` | 24h idle TTL on DATA_DIR; survives host restart |
 | WO-32 | Request-handle lifecycle | `in_review` | Idempotent handle, retry, isolation, TTL cleanup |
 | WO-28 | OpenAI residency policy | `completed` | Public OpenAI by default; Azure/on-prem via OPENAI_BASE_URL |
-| WO-5 | Report export | `in_review` | WSR approved PDF; SOW/retro stay Markdown; review gate unchanged |
+| WO-5 | Report export | `in_review` | WSR PDF after generate; SOW/retro stay Markdown; no review gate |
 | WO-29 | SOW classification criteria | `completed` | Six finding categories with empty-list rule |
 | WO-27 | WSR/retro classification criteria | `completed` | Health thresholds and evidence rules |
 | WO-3 | AI analysis service | `in_review` | WO-28 summary-only outbound; Azure api-key; schema parse retryable |
@@ -24,22 +24,22 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-7 | SOW Analyzer API | `in_review` | Upload, analyze, retry, report; six categories always present |
 | WO-11 | SOW Analyzer UI | `in_review` | Upload, category findings, retry, report download |
 | WO-26 | Compose deployment | `in_review` | Local Compose + on-prem overlay; API not published on host |
-| WO-16 | SOW E2E via Compose | `in_review` | Proxy path verified: upload → analyze → report |
+| WO-16 | SOW E2E via Compose | `in_review` | Waits on WO-18; proxy path: upload → analyze → report |
 | WO-23 | Template library content | `completed` | Digital delivery phases, sets, CMS prereq, FS rules |
 | WO-20 | Template library expansion | `in_review` | Deterministic WBS expand; GET /api/v1/plan/library |
 | WO-22 | Phase sequence validation | `in_review` | Empty config, set counts, sequence conflicts |
 | WO-8 | Plan Generator API | `in_review` | Preview, retry, approve, MSPDI download |
 | WO-21 | Configurable phase order in UI | `in_review` | Add/remove/reorder phases; empty and sequence errors |
 | WO-12 | Plan Generator view | `in_review` | Deliverables, set counts, WBS review, approve, MPP download |
-| WO-17 | Plan Generator E2E via Compose | `in_review` | Proxy path: library → preview → approve → MSPDI download |
-| WO-9 | WSR Generator API | `in_review` | Deterministic WsrPlanFacts; evidence-backed AI items; pending review state |
-| WO-41 | WSR insight review API | `in_review` | Keep/Edit/Remove + evidence GET; exportable only when no item is pending |
-| WO-39 | WSR insight review panel | `in_review` | Keep/Edit/Remove, View Source, evidence panel; PDF stays gated |
-| WO-13 | WSR Generator view | `in_review` | Approved dashboard sections, metric cards, timeline, PDF download |
-| WO-18 | WSR E2E via Compose | `in_review` | Proxy path: upload → generate → review → PDF at localhost:8080 |
+| WO-17 | Plan Generator E2E via Compose | `blocked` | Waits on WO-18 and native MPP (WO-4/WO-8/WO-12) |
+| WO-9 | WSR Generator API | `in_review` | Direct MPP values plus plan-based narrative; exportable on generate |
+| WO-41 | WSR insight review API | `cancelled` | Out of V1; unused review/evidence routes remain in OpenAPI freeze only |
+| WO-39 | WSR insight review panel | `cancelled` | Out of V1; dashboard has no Keep/Edit/Remove or View Source |
+| WO-13 | WSR Generator view | `in_review` | Approved dashboard, generation stages, PDF download after generate |
+| WO-18 | WSR E2E via Compose | `in_review` | Proxy path: upload → generate → dashboard → PDF at localhost:8080 |
 | WO-10 | Retrospective API | `in_review` | MPP upload, planned-vs-actual, seven-section report, planned-only flag, retry |
 | WO-14 | Retrospective view | `in_review` | MPP upload, seven-section retrospective, planned-only banner, retry, report download |
-| WO-19 | Retrospective E2E via Compose | `in_review` | Proxy path: MPP upload → generate → seven-section report |
+| WO-19 | Retrospective E2E via Compose | `in_review` | Waits on WO-18; proxy path: MPP upload → generate → seven-section report |
 | WO-33 | Foundation validation vs blueprints | `in_review` | Health/ready, SPA shells, internal API; notes in docs/FOUNDATION_VALIDATION.md |
 | WO-36 | OpenAPI freeze | `in_review` | docs/openapi.json plus pytest drift check; mapping in docs/OPENAPI_FREEZE.md |
 | WO-31 | On-premise access-control requirements | `in_review` | Feature On-Premise Access Control; mapping in docs/ONPREM_AUTH.md |
@@ -52,15 +52,14 @@ Factory clarification 2026-08-25: ship **WSR & Insights** end-to-end before SOW,
 
 | Order | WO | Role |
 |-------|----|------|
-| 1 | WO-40 | MPP reader projection for WSR facts and evidence identities |
-| 2 | WO-9 | WSR generation API and deterministic `WsrPlanFacts` |
-| 3 | WO-41 | Insight review / evidence API |
-| 4 | WO-5 | Approved WSR PDF export |
-| 5 | WO-39 then WO-13 | Review panel and dashboard |
-| 6 | WO-18 | Compose E2E (WSR path only) |
-| Shared | WO-1, WO-2, WO-3, WO-6, WO-26, WO-32 | Already implemented enough to start WO-40 |
+| 1 | WO-40 | MPP reader projection for WSR facts |
+| 2 | WO-9 | WSR generation API and plan-based narrative |
+| 3 | WO-5 | Approved WSR PDF export |
+| 4 | WO-13 | Dashboard |
+| 5 | WO-18 | Compose E2E (WSR path only) |
+| Shared | WO-1, WO-2, WO-3, WO-6, WO-26, WO-32 | Already implemented enough to run WO-40 |
 
-WO-38 native MPP write does **not** block this slice. SOW/Plan/Retro E2E (WO-16, WO-17, WO-19) wait until WO-18 passes.
+WO-38 native MPP write does **not** block this slice. WO-39 and WO-41 are cancelled for V1. SOW/Plan/Retro E2E (WO-16, WO-17, WO-19) are blocked by WO-18 until WSR is accepted.
 
 ## Remaining environment check
 
