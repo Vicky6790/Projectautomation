@@ -18,12 +18,8 @@ WSR_SECTIONS = (
     ("phase_statuses", "Phase-Wise Status"),
     ("progress_to_date", "Progress to Date"),
     ("upcoming_milestones", "Upcoming Milestones"),
-    ("client_needs", "What We Need From the Bank Team"),
     ("issues", "Issues"),
-    ("dependencies", "Dependencies"),
     ("risks", "Risks & Focus Areas"),
-    ("management_attention", "Management Attention"),
-    ("decisions_required", "Decisions Required"),
     ("next_7_day_priorities", "Next Seven-Day Priorities"),
 )
 

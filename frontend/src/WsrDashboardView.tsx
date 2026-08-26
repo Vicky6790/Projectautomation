@@ -34,12 +34,8 @@ const GENERATE_STAGES = [
 ];
 
 const AI_SECTIONS: { key: keyof StatusReport; label: string; tone?: "risk" | "need" }[] = [
-  { key: "client_needs", label: "What We Need From the Bank Team", tone: "need" },
   { key: "issues", label: "Issues" },
-  { key: "dependencies", label: "Dependencies" },
   { key: "risks", label: "Risks & Focus Areas", tone: "risk" },
-  { key: "management_attention", label: "Management Attention" },
-  { key: "decisions_required", label: "Decisions Required" },
   { key: "next_7_day_priorities", label: "Next Seven-Day Priorities" },
 ];
 
@@ -470,6 +466,7 @@ export function WsrDashboardView() {
           </Section>
 
           <Section n={4} title="Progress to Date">
+            <p className="muted">Tasks scheduled this week</p>
             {facts.progress_to_date?.length ? (
               <ul className="progress-list">
                 {facts.progress_to_date.map((item: ProgressItem, index) => (
@@ -488,11 +485,12 @@ export function WsrDashboardView() {
                 ))}
               </ul>
             ) : (
-              <p>Unavailable</p>
+              <p>No tasks scheduled in the current week</p>
             )}
           </Section>
 
           <Section n={5} title="Upcoming Milestones">
+            <p className="muted">Next planned tasks</p>
             {facts.upcoming_milestones?.length ? (
               <ul className="milestone-list">
                 {facts.upcoming_milestones.map((item: MilestoneItem, index) => (
@@ -506,7 +504,7 @@ export function WsrDashboardView() {
                 ))}
               </ul>
             ) : (
-              <p>No upcoming milestone was identified</p>
+              <p>No upcoming planned tasks</p>
             )}
           </Section>
 

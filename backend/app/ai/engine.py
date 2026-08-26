@@ -114,16 +114,6 @@ def _stub_wsr_items(plan, as_of: str) -> dict[str, list[dict[str, Any]]]:
         item = resolve_item(plan, "next_7_day_priorities", f"Advance {task.name}", [task.name])
         if item is not None:
             grouped["next_7_day_priorities"].append(item.model_dump())
-    for task in plan.tasks:
-        if task.predecessor_names:
-            item = resolve_item(
-                plan,
-                "dependencies",
-                f"{task.name} depends on {', '.join(task.predecessor_names)}",
-                [task.name],
-            )
-            if item is not None:
-                grouped["dependencies"].append(item.model_dump())
     return grouped
 
 

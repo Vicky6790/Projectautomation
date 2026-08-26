@@ -65,7 +65,7 @@ def derive_wsr_facts(
     completed_count = None
     if planned_count is not None:
         completed_count = sum(1 for task in leaves if _complete(task))
-    phases = [_phase_status(phase) for phase in plan.phases]
+    phases = _phase_statuses(plan)
     dated_phases = [item for item in phases if item.planned_start or item.planned_finish]
     overview = _overview(plan, as_of, health, go_live)
     return WsrPlanFacts(
@@ -81,7 +81,7 @@ def derive_wsr_facts(
         capacity_utilization=_capacity(plan),
         people_planned=_people_planned(plan),
         resources_deployed=_resources_deployed(plan),
-        phase_count=len(plan.phases) if plan.phases else None,
+        phase_count=len(phases) if phases else None,
         last_signed_off_milestone=_last_signed_off(leaves, as_of_d),
         next_gate=_next_gate(leaves, as_of_d),
         planned_go_live_date=None if go_live is None else go_live.isoformat(),
@@ -89,7 +89,7 @@ def derive_wsr_facts(
         timeline=dated_phases or None,
         phase_statuses=phases,
         progress_to_date=_progress_to_date(leaves, as_of_d),
-        upcoming_milestones=_upcoming_milestones(leaves, as_of_d),
+        upcoming_milestones=_next_planned_tasks(leaves, as_of_d),
     )
 
 
@@ -276,6 +276,70 @@ def _next_gate(tasks: list[PlanTaskData], as_of: date) -> NamedDateValue | None:
     return None
 
 
+def select_phase_summaries(tasks: list[PlanTaskData]) -> list[PlanTaskData]:
+    summaries = [task for task in tasks if task.is_summary]
+    if not summaries:
+        return []
+    min_level = min(task.outline_level for task in summaries)
+    at_min = [task for task in tasks if task.is_summary and task.outline_level == min_level]
+    if len(at_min) == 1:
+        nested = [
+            task
+            for task in tasks
+            if task.is_summary and task.outline_level == min_level + 1
+        ]
+        return nested or at_min
+    return at_min
+
+
+def _descendants(tasks: list[PlanTaskData], parent: PlanTaskData) -> list[PlanTaskData]:
+    start = next((index for index, task in enumerate(tasks) if task.id == parent.id), None)
+    if start is None:
+        return []
+    children: list[PlanTaskData] = []
+    for task in tasks[start + 1 :]:
+        if task.outline_level <= parent.outline_level:
+            break
+        children.append(task)
+    return children
+
+
+def _phase_statuses(plan: ProjectPlanData) -> list[PhaseStatus]:
+    rows = select_phase_summaries(plan.tasks)
+    if rows:
+        return [_phase_from_task(plan.tasks, row) for row in rows]
+    return [_phase_status(phase) for phase in plan.phases]
+
+
+def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseStatus:
+    children = _descendants(tasks, phase)
+    leaves = [task for task in children if not task.is_summary] or children
+    dated = [phase, *leaves]
+    starts = [parse_date(task.scheduled_start) for task in dated]
+    finishes = [parse_date(task.scheduled_finish) for task in dated]
+    start_ok = [item for item in starts if item]
+    finish_ok = [item for item in finishes if item]
+    if phase.percent_complete >= 100:
+        state = "complete"
+    elif not phase.actual_start and phase.percent_complete == 0:
+        if any(task.percent_complete or task.actual_start for task in leaves):
+            state = "in_progress"
+        else:
+            state = "not_started"
+    else:
+        state = "in_progress"
+    progress = phase.percent_complete
+    if not progress and leaves:
+        progress = round(sum(task.percent_complete for task in leaves) / len(leaves), 1)
+    return PhaseStatus(
+        name=phase.name,
+        planned_start=None if not start_ok else min(start_ok).isoformat(),
+        planned_finish=None if not finish_ok else max(finish_ok).isoformat(),
+        progress=progress,
+        state=state,
+    )
+
+
 def _phase_status(phase) -> PhaseStatus:
     if phase.percent_complete >= 100:
         state = "complete"
@@ -292,14 +356,28 @@ def _phase_status(phase) -> PhaseStatus:
     )
 
 
+def _week_bounds(as_of: date) -> tuple[date, date]:
+    start = as_of - timedelta(days=as_of.weekday())
+    return start, start + timedelta(days=6)
+
+
+def _overlaps_week(task: PlanTaskData, week_start: date, week_end: date) -> bool:
+    start = parse_date(task.scheduled_start) or parse_date(task.actual_start)
+    finish = parse_date(task.scheduled_finish) or parse_date(task.actual_finish)
+    if start is None and finish is None:
+        return False
+    start = start or finish
+    finish = finish or start
+    return start <= week_end and finish >= week_start
+
+
 def _progress_to_date(tasks: list[PlanTaskData], as_of: date) -> list[ProgressItem]:
+    week_start, week_end = _week_bounds(as_of)
     items: list[ProgressItem] = []
     for task in tasks:
-        if not (_complete(task) or task.percent_complete > 0 or task.actual_start):
+        if not _overlaps_week(task, week_start, week_end):
             continue
         when = _candidate_date(task)
-        if when and when > as_of and not _complete(task) and task.percent_complete == 0:
-            continue
         items.append(
             ProgressItem(
                 name=task.name,
@@ -310,16 +388,20 @@ def _progress_to_date(tasks: list[PlanTaskData], as_of: date) -> list[ProgressIt
     return items
 
 
-def _upcoming_milestones(tasks: list[PlanTaskData], as_of: date) -> list[MilestoneItem]:
+def _next_planned_tasks(tasks: list[PlanTaskData], as_of: date) -> list[MilestoneItem]:
+    _week_start, week_end = _week_bounds(as_of)
     items: list[MilestoneItem] = []
     for task in tasks:
-        if not task.is_milestone:
+        if _complete(task):
             continue
-        when = _candidate_date(task)
-        if when is None or when <= as_of or _complete(task):
+        start = parse_date(task.scheduled_start)
+        finish = parse_date(task.scheduled_finish)
+        when = start or finish
+        if when is None or when <= week_end:
             continue
         items.append(MilestoneItem(name=task.name, date=when.isoformat()))
-    return items
+    items.sort(key=lambda item: item.date or "")
+    return items[:12]
 
 
 def _overview(plan: ProjectPlanData, as_of: str, health: str, go_live: date | None) -> str | None:

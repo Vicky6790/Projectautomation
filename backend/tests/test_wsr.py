@@ -141,15 +141,18 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
         "Phase-Wise Status",
         "Progress to Date",
         "Upcoming Milestones",
-        "What We Need From the Bank Team",
         "Issues",
-        "Dependencies",
         "Risks & Focus Areas",
-        "Management Attention",
-        "Decisions Required",
         "Next Seven-Day Priorities",
     ):
         assert heading in text
+    for removed in (
+        "What We Need From the Bank Team",
+        "Dependencies",
+        "Management Attention",
+        "Decisions Required",
+    ):
+        assert removed not in text
     assert "No items identified from the plan" in text
 
 

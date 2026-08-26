@@ -163,6 +163,12 @@ def test_wsr_report_matches_dashboard_sections() -> None:
         assert label in text
     for _key, heading in WSR_SECTIONS:
         assert heading in text
+    for removed in (
+        "What We Need From the Bank Team",
+        "Management Attention",
+        "Decisions Required",
+    ):
+        assert removed not in text
     assert "No items identified from the plan" in text
     assert "A timeline cannot be generated" in text
     assert "Unavailable" in text

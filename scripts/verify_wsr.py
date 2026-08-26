@@ -124,13 +124,24 @@ def main() -> int:
             "Overall Progress",
             "Last Signed-Off Milestone",
             "No items identified from the plan",
+            "No tasks scheduled in the current week",
+            "Next planned tasks",
             "Reading the file",
             "Creating narrative",
         ),
     )
     if not page_js_ok:
         return 1
-    if _client_bundle_has_any(client, ("View Source", "Review is required")):
+    if _client_bundle_has_any(
+        client,
+        (
+            "View Source",
+            "Review is required",
+            "What We Need From the Bank Team",
+            "Management Attention",
+            "Decisions Required",
+        ),
+    ):
         print("client bundle still includes cancelled review UI")
         return 1
 
@@ -165,12 +176,8 @@ def main() -> int:
         "Phase-Wise Status",
         "Progress to Date",
         "Upcoming Milestones",
-        "What We Need From the Bank Team",
         "Issues",
-        "Dependencies",
         "Risks & Focus Areas",
-        "Management Attention",
-        "Decisions Required",
         "Next Seven-Day Priorities",
     ):
         if heading not in text:

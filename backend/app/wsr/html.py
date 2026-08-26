@@ -11,12 +11,8 @@ from app.models import (
 )
 
 _AI_SECTIONS = (
-    ("client_needs", "What We Need From the Bank Team"),
     ("issues", "Issues"),
-    ("dependencies", "Dependencies"),
     ("risks", "Risks & Focus Areas"),
-    ("management_attention", "Management Attention"),
-    ("decisions_required", "Decisions Required"),
     ("next_7_day_priorities", "Next Seven-Day Priorities"),
 )
 _GANTT_COLORS = ("#1f9d6a", "#3b82f6", "#4338ca", "#f59e0b", "#0ea5e9", "#8b5cf6", "#db2777")
@@ -231,9 +227,10 @@ def _phases(facts: WsrPlanFacts) -> str:
 
 def _progress(facts: WsrPlanFacts) -> str:
     items = facts.progress_to_date or []
+    intro = "<p class='muted'>Tasks scheduled this week</p>"
     if not items:
-        return "<p>Unavailable</p>"
-    rows = []
+        return intro + "<p>No tasks scheduled in the current week</p>"
+    rows = [intro]
     for item in items:
         extra = f" - {_percent(item.progress)}" if item.progress is not None else ""
         rows.append(
@@ -245,10 +242,11 @@ def _progress(facts: WsrPlanFacts) -> str:
 
 def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
     items = facts.upcoming_milestones or []
+    intro = "<p class='muted'>Next planned tasks</p>"
     if not items:
-        return "<p>No upcoming milestone was identified</p>"
+        return intro + "<p>No upcoming planned tasks</p>"
     as_of_d = _day(as_of)
-    rows = []
+    rows = [intro]
     for item in items:
         delayed = ""
         item_day = _day(item.date)

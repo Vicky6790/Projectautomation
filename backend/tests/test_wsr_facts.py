@@ -204,3 +204,112 @@ def test_team_capacity_unavailable_without_planned_work() -> None:
         generated_at="2026-08-22T10:00:00Z",
     )
     assert facts.capacity_utilization is None
+
+
+def test_phase_status_includes_all_nested_phases_with_child_dates() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Programme", outline_level=1, is_summary=True),
+                PlanTaskData(id=2, name="UX", outline_level=2, is_summary=True),
+                PlanTaskData(
+                    id=3,
+                    name="Research",
+                    outline_level=3,
+                    scheduled_start="2026-08-01",
+                    scheduled_finish="2026-08-10",
+                    percent_complete=100,
+                ),
+                PlanTaskData(id=4, name="UI", outline_level=2, is_summary=True),
+                PlanTaskData(
+                    id=5,
+                    name="Screens",
+                    outline_level=3,
+                    scheduled_start="2026-08-11",
+                    scheduled_finish="2026-08-31",
+                    percent_complete=40,
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    names = [phase.name for phase in facts.phase_statuses]
+    assert names == ["UX", "UI"]
+    assert facts.phase_statuses[0].planned_start == "2026-08-01"
+    assert facts.phase_statuses[0].planned_finish == "2026-08-10"
+    assert facts.phase_statuses[1].planned_start == "2026-08-11"
+    assert facts.phase_statuses[1].planned_finish == "2026-08-31"
+
+
+def test_progress_to_date_is_current_week_only() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Last month kickoff",
+                    scheduled_start="2026-07-01",
+                    scheduled_finish="2026-07-02",
+                    percent_complete=100,
+                    actual_finish="2026-07-02",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="This week build",
+                    scheduled_start="2026-08-17",
+                    scheduled_finish="2026-08-21",
+                    percent_complete=50,
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Next month release",
+                    scheduled_start="2026-09-01",
+                    scheduled_finish="2026-09-05",
+                ),
+                PlanTaskData(
+                    id=4,
+                    name="Go Live",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-11",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    names = [item.name for item in facts.progress_to_date]
+    assert names == ["This week build"]
+
+
+def test_upcoming_lists_next_planned_tasks() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Done kickoff",
+                    scheduled_finish="2026-08-01",
+                    percent_complete=100,
+                    actual_finish="2026-08-01",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Build screens",
+                    scheduled_start="2026-08-25",
+                    scheduled_finish="2026-08-28",
+                    percent_complete=0,
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Go Live",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-11",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    names = [item.name for item in facts.upcoming_milestones]
+    assert names == ["Build screens", "Go Live"]

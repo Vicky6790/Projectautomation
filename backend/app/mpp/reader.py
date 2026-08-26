@@ -12,6 +12,7 @@ from app.models import (
     ProjectPlanData,
 )
 from app.mpp.bridge import ensure_jvm
+from app.wsr.facts import select_phase_summaries
 
 
 def read_mpp_bytes(content: bytes, filename: str = "plan.mpp") -> ProjectPlanData:
@@ -136,7 +137,7 @@ def project_from_mpxj(project) -> ProjectPlanData:
         planned_only=not has_actuals,
         tasks=tasks,
         resources=resources,
-        phases=[_phase(task) for task in tasks if task.is_summary and task.outline_level == 1],
+        phases=[_phase(task) for task in select_phase_summaries(tasks)],
     )
 
 
