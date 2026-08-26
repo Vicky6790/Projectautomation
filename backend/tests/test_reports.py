@@ -168,6 +168,67 @@ def test_wsr_report_matches_dashboard_sections() -> None:
     assert "Unavailable" in text
 
 
+def test_wsr_report_renders_timeline_without_zero_width_cells() -> None:
+    filename, media, body = export_report(
+        "wsr",
+        _job(
+            "wsr",
+            "succeeded",
+            {
+                "as_of_date": "2026-08-22",
+                "generated_at": "2026-08-22T10:00:00Z",
+                "exportable": True,
+                "project_health": "on_track",
+                "facts": {
+                    "project_name": "Demo",
+                    "as_of_date": "2026-08-22",
+                    "generated_at": "2026-08-22T10:00:00Z",
+                    "project_health": "on_track",
+                    "timeline": [
+                        {
+                            "name": "Kickoff",
+                            "planned_start": "2026-08-01",
+                            "planned_finish": "2026-08-10",
+                            "state": "complete",
+                            "progress": 100,
+                        },
+                        {
+                            "name": "Build",
+                            "planned_start": "2026-08-11",
+                            "planned_finish": "2026-08-31",
+                            "state": "in_progress",
+                            "progress": 40,
+                        },
+                        {
+                            "name": "Go Live",
+                            "planned_start": "2026-09-01",
+                            "planned_finish": "2026-09-11",
+                            "state": "not_started",
+                        },
+                    ],
+                    "phase_statuses": [
+                        {
+                            "name": "Kickoff",
+                            "planned_start": "2026-08-01",
+                            "planned_finish": "2026-08-10",
+                            "state": "complete",
+                            "progress": 100,
+                        }
+                    ],
+                },
+            },
+        ),
+    )
+    assert filename.endswith(".pdf")
+    assert media == "application/pdf"
+    assert body.startswith(b"%PDF")
+    text = " ".join(pdf_text(body).split())
+    assert "Kickoff" in text
+    assert "Build" in text
+    assert "Go Live" in text
+    assert "A timeline cannot be generated" not in text
+
+
 def test_wsr_pending_insights_still_export() -> None:
     filename, media, body = export_report(
         "wsr",

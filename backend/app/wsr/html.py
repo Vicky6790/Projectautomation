@@ -77,6 +77,8 @@ p {{ margin: 0 0 6px; }}
 .health-at_risk {{ color: #9a6700; font-weight: bold; }}
 .health-off_track {{ color: #b42318; font-weight: bold; }}
 .health-unavailable {{ color: #4a6278; font-weight: bold; }}
+.gantt {{ width: 100%; border-collapse: collapse; margin: 0 0 6px; }}
+.gantt td {{ border: none; padding: 0; background: #ffffff; }}
 .gantt-bar {{ height: 10px; }}
 .badge {{ color: #b42318; font-weight: bold; }}
 table {{ width: 100%; border-collapse: collapse; margin: 0 0 10px; }}
@@ -199,12 +201,7 @@ def _timeline(facts: WsrPlanFacts) -> str:
         left = int(((start - minimum).days / span) * 100)
         width = max(int(((finish - start).days / span) * 100), 2)
         color = _GANTT_COLORS[index % len(_GANTT_COLORS)]
-        rows.append(
-            f"<p>{html.escape(phase.name)}</p>"
-            f'<table><tr><td width="{left}%">&nbsp;</td>'
-            f'<td width="{width}%" bgcolor="{color}" class="gantt-bar">&nbsp;</td>'
-            f"<td>&nbsp;</td></tr></table>"
-        )
+        rows.append(_gantt_bar(phase.name, left, width, color))
     return "".join(rows)
 
 
@@ -269,6 +266,23 @@ def _insights(items: list[AiDerivedItem] | None) -> str:
         return "<p>No items identified from the plan</p>"
     return "".join(
         f"<p><b>AI-derived</b> {html.escape(item.content)}</p>" for item in visible
+    )
+
+
+def _gantt_bar(name: str, left: int, width: int, color: str) -> str:
+    left = max(left, 0)
+    width = max(min(width, 100 - left), 1)
+    right = max(100 - left - width, 0)
+    cells = []
+    if left:
+        cells.append(f'<td width="{left}%">&nbsp;</td>')
+    cells.append(f'<td width="{width}%" bgcolor="{color}" class="gantt-bar">&nbsp;</td>')
+    if right:
+        cells.append(f'<td width="{right}%">&nbsp;</td>')
+    return (
+        f"<p>{html.escape(name)}</p>"
+        '<table class="gantt" cellpadding="0" cellspacing="0">'
+        f"<tr>{''.join(cells)}</tr></table>"
     )
 
 

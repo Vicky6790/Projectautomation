@@ -12,7 +12,10 @@ from app.wsr.html import render_wsr_html
 def render_wsr_pdf(handle: str, payload: StatusReport) -> bytes:
     html = render_wsr_html(handle, payload)
     output = BytesIO()
-    result = pisa.CreatePDF(html, dest=output, encoding="utf-8")
+    try:
+        result = pisa.CreatePDF(html, dest=output, encoding="utf-8")
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise AppError(500, "WSR_PDF_FAILED", "The WSR PDF could not be rendered") from exc
     if result.err:
         raise AppError(500, "WSR_PDF_FAILED", "The WSR PDF could not be rendered")
     body = output.getvalue()
