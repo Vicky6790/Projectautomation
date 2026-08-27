@@ -88,7 +88,7 @@ def test_generate_uses_mpp_status_date(client: TestClient, monkeypatch) -> None:
     assert result["facts"]["executive_summary"]["summary"]
     assert result["facts"]["executive_overview"] == result["facts"]["executive_summary"]["summary"]
     assert result["exportable"] is True
-    assert result["milestones"] == ["Go Live"]
+    assert result["milestones"] == ["Build"]
     status = client.get(f"/api/v1/wsr/requests/{handle}")
     assert status.json()["status"] == "succeeded"
     again = client.post(f"/api/v1/wsr/requests/{handle}/generate")
@@ -137,11 +137,11 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     assert "WSR & Insights" in text
     assert "WSR Publish Date: 22 Aug 2026" in text
     for heading in (
-        "AI Executive Summary",
+        "Executive Summary",
         "Project Timeline",
         "Phase-Wise Status",
-        "Progress to Date",
-        "Upcoming Milestones",
+        "Progress of current week",
+        "Upcoming milestone for Next Week",
         "Risks & Focus Areas",
     ):
         assert heading in text
@@ -160,8 +160,6 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     assert overview
     compact = " ".join(text.split())
     assert " ".join(overview.split()) in compact
-    assert "Overall Health" in compact
-    assert "AI Recommended Actions" in compact
 
 
 def _pending_ai(_data: dict) -> dict:

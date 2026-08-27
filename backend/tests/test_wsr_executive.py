@@ -2,6 +2,7 @@ from datetime import date
 
 from app.models import PlanTaskData, ProjectPlanData
 from app.wsr.detection import upcoming_horizon_days
+from app.wsr.evidence import items_from_situation_risks
 from app.wsr.executive import fallback_executive_summary, generate_executive_summary, validate_executive_summary
 from app.wsr.facts import derive_wsr_facts, work_based_progress
 from app.wsr.intelligence import build_executive_summary_input
@@ -182,6 +183,9 @@ def test_related_overdue_work_is_one_executive_risk() -> None:
     assert len(overdue_risks) == 1
     assert len(overdue_risks[0]["evidence"]) >= 2
     assert all(risk.get("evidence") for risk in payload["risks"])
+    cards = items_from_situation_risks(plan, payload["risks"])
+    assert cards
+    assert any("Overdue work" in item.content for item in cards)
 
 
 def test_fallback_summary_does_not_invent_signoff_or_stakeholders() -> None:

@@ -4,7 +4,7 @@ from app import storage as storage_mod
 from app.ai.engine import analyze_wsr
 from app.errors import AppError
 from app.models import AiDerivedItem, ProcessingResponse, StatusReport
-from app.wsr.evidence import STORED_AI_SECTIONS
+from app.wsr.evidence import STORED_AI_SECTIONS, items_from_situation_risks
 from app.wsr.executive import generate_executive_summary
 from app.wsr.facts import derive_wsr_facts, resolve_as_of
 from app.wsr.intelligence import build_executive_summary_input
@@ -38,6 +38,9 @@ def run_wsr_generation(handle: str, *, force: bool = False) -> ProcessingRespons
             key: [AiDerivedItem.model_validate(item) for item in grouped.get(key) or []]
             for key in STORED_AI_SECTIONS
         }
+        situation_risks = items_from_situation_risks(plan, intelligence.get("risks") or [])
+        if situation_risks:
+            ai_fields["risks"] = situation_risks
         report = StatusReport(
             request_handle=handle,
             as_of_date=as_of,

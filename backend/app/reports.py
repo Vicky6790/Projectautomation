@@ -13,11 +13,11 @@ SOW_SECTIONS = (
 )
 
 WSR_SECTIONS = (
-    ("executive_overview", "AI Executive Summary"),
+    ("executive_overview", "Executive Summary"),
     ("timeline", "Project Timeline"),
     ("phase_statuses", "Phase-Wise Status"),
-    ("progress_to_date", "Progress to Date"),
-    ("upcoming_milestones", "Upcoming Milestones"),
+    ("progress_to_date", "Progress of current week"),
+    ("upcoming_milestones", "Upcoming milestone for Next Week"),
     ("risks", "Risks & Focus Areas"),
 )
 

@@ -5,7 +5,6 @@ from datetime import date, datetime
 
 from app.models import (
     AiDerivedItem,
-    ExecutiveSummary,
     StatusReport,
     WsrPlanFacts,
 )
@@ -32,11 +31,11 @@ def render_wsr_html(handle: str, payload: StatusReport) -> str:
         [
             _hero(payload, facts, health),
             _kpi_grid(facts),
-            _section(1, "AI Executive Summary", _overview(facts)),
+            _section(1, "Executive Summary", _overview(facts)),
             _section(2, "Project Timeline", _timeline(facts)),
             _section(3, "Phase-Wise Status", _phases(facts)),
-            _section(4, "Progress to Date", _progress(facts)),
-            _section(5, "Upcoming Milestones", _milestones(facts, payload.as_of_date)),
+            _section(4, "Progress of current week", _progress(facts)),
+            _section(5, "Upcoming milestone for Next Week", _milestones(facts, payload.as_of_date)),
             *[
                 _section(index + 6, label, _insights(getattr(payload, key)))
                 for index, (key, label) in enumerate(_AI_SECTIONS)
@@ -134,57 +133,30 @@ def _kpi_grid(facts: WsrPlanFacts) -> str:
 
 
 def _overview(facts: WsrPlanFacts) -> str:
-    summary = facts.executive_summary
-    if summary is None:
-        return f"<p>{_esc(facts.executive_overview)}</p>"
-    health = (facts.project_health or "unavailable").replace("_", " ").upper()
-    blocks = [
-        f"<p><b>Overall Health:</b> {html.escape(health)}</p>",
-        f"<p>{_esc(summary.summary)}</p>",
-        _overview_list("Key Highlights", summary.highlights, _highlight_line),
-        _overview_list("Current Focus", summary.current_focus, lambda item: f"{item.title} - {item.description}"),
-        _overview_list("Executive Risks", summary.executive_risks, _risk_line),
-        _overview_actions(summary),
-    ]
-    return "".join(blocks)
-
-
-def _overview_list(title: str, items: list, line) -> str:
-    if not items:
-        return f"<p><b>{html.escape(title)}</b></p><p>Unavailable from plan data</p>"
-    rows = "".join(f"<p>• {html.escape(line(item))}</p>" for item in items)
-    return f"<p><b>{html.escape(title)}</b></p>{rows}"
-
-
-def _highlight_line(item) -> str:
-    return f"{item.title}: {item.description}"
-
-
-def _risk_line(item) -> str:
-    return f"[{item.severity.upper()}] {item.title}: {item.description}"
-
-
-def _overview_actions(summary: ExecutiveSummary) -> str:
-    if not summary.recommended_actions:
-        return "<p><b>AI Recommended Actions</b></p><p>Unavailable from plan data</p>"
-    rows = "".join(
-        f"<p>• AI Recommended Action: {html.escape(item.action)} "
-        f"({html.escape(item.reason)})</p>"
-        for item in summary.recommended_actions
-    )
-    return f"<p><b>AI Recommended Actions</b></p>{rows}"
+    text = None
+    if facts.executive_summary and facts.executive_summary.summary.strip():
+        text = facts.executive_summary.summary
+    else:
+        text = facts.executive_overview
+    return f"<p>{_esc(text)}</p>"
 
 
 def _timeline(facts: WsrPlanFacts) -> str:
     phases = [
         phase
         for phase in (facts.timeline or [])
-        if phase.planned_start or phase.planned_finish
+        if (phase.planned_start or phase.planned_finish or phase.actual_start or phase.actual_finish)
     ]
     if not phases:
         return "<p>A timeline cannot be generated</p>"
-    starts = [_day(phase.planned_start or phase.planned_finish) for phase in phases]
-    ends = [_day(phase.planned_finish or phase.planned_start) for phase in phases]
+    starts = [
+        _day(phase.planned_start or phase.actual_start or phase.planned_finish or phase.actual_finish)
+        for phase in phases
+    ]
+    ends = [
+        _day(phase.planned_finish or phase.actual_finish or phase.planned_start or phase.actual_start)
+        for phase in phases
+    ]
     starts_ok = [item for item in starts if item]
     ends_ok = [item for item in ends if item]
     if not starts_ok or not ends_ok:
@@ -194,13 +166,21 @@ def _timeline(facts: WsrPlanFacts) -> str:
     span = max((maximum - minimum).days, 1)
     rows = []
     for index, phase in enumerate(phases):
-        start = _day(phase.planned_start or phase.planned_finish) or minimum
-        finish = _day(phase.planned_finish or phase.planned_start) or start
+        start = (
+            _day(phase.planned_start or phase.actual_start or phase.planned_finish or phase.actual_finish)
+            or minimum
+        )
+        finish = (
+            _day(phase.planned_finish or phase.actual_finish or phase.planned_start or phase.actual_start)
+            or start
+        )
         left = int(((start - minimum).days / span) * 100)
         width = max(int(((finish - start).days / span) * 100), 2)
         color = _GANTT_COLORS[index % len(_GANTT_COLORS)]
-        window = _window(phase.planned_start, phase.planned_finish, arrow=True)
-        days = _duration_days(phase.planned_start, phase.planned_finish)
+        planned_start = phase.planned_start or phase.actual_start
+        planned_finish = phase.planned_finish or phase.actual_finish
+        window = _window(planned_start, planned_finish, arrow=True)
+        days = _duration_days(planned_start, planned_finish)
         dur = f"{days}d" if days is not None else "-"
         rows.append(
             f"<p><b>{html.escape(_wbs_label(phase, index + 1))}</b> {html.escape(phase.name)} "
@@ -216,7 +196,7 @@ def _phases(facts: WsrPlanFacts) -> str:
         return "<p>Unavailable</p>"
     rows = [
         "<tr><td><b>WBS</b></td><td><b>Phase</b></td>"
-        "<td><b>Planned Window</b></td><td><b>Deviated Window</b></td>"
+        "<td><b>Planned End</b></td><td><b>Deviated Date</b></td>"
         "<td><b>Progress</b></td></tr>"
     ]
     for index, phase in enumerate(phases, start=1):
@@ -224,17 +204,16 @@ def _phases(facts: WsrPlanFacts) -> str:
             progress = _percent(phase.progress)
         else:
             progress = _PHASE_STATE.get(phase.state, phase.state)
-        planned = _window(phase.planned_start, phase.planned_finish)
-        if phase.actual_start or phase.actual_finish:
-            actual = _window(phase.actual_start, phase.actual_finish)
-        else:
-            actual = "-"
+        planned = _short_date(phase.planned_finish)
+        current = _short_date(phase.actual_finish)
+        if planned == current:
+            current = "-"
         rows.append(
             "<tr>"
             f"<td>{html.escape(_wbs_label(phase, index))}</td>"
             f"<td>{html.escape(phase.name)}</td>"
             f"<td>{html.escape(planned)}</td>"
-            f"<td>{html.escape(actual)}</td>"
+            f"<td>{html.escape(current)}</td>"
             f"<td>{html.escape(progress)}</td>"
             "</tr>"
         )
@@ -275,8 +254,8 @@ def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
         today = ""
         if as_of_d and item_day and item_day == as_of_d:
             today = ' <span class="badge">Today</span>'
-        start = html.escape(_compact_date(item.scheduled_start))
-        finish = html.escape(_compact_date(item.scheduled_finish or item.date))
+        start = html.escape(_week_date(item.scheduled_start))
+        finish = html.escape(_week_date(item.scheduled_finish or item.date))
         name = html.escape(item.name)
         rows.append(
             f"<tr><td>{start}</td><td>{finish}</td><td>{name}</td><td>{today}</td></tr>"
@@ -384,6 +363,13 @@ def _compact_date(value: str | None) -> str:
     if parsed is None:
         return "Unavailable"
     return f"{parsed.day} {parsed.strftime('%b')}"
+
+
+def _week_date(value: str | None) -> str:
+    parsed = _day(value)
+    if parsed is None:
+        return "Unavailable"
+    return parsed.strftime("%d%b%Y")
 
 
 def _day(value: str | None) -> date | None:

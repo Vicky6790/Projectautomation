@@ -59,6 +59,38 @@ def reference_for(task: PlanTaskData) -> EvidenceReference:
     )
 
 
+def items_from_situation_risks(
+    plan: ProjectPlanData,
+    risks: list[dict],
+) -> list[AiDerivedItem]:
+    """Turn current-plan risk-engine output into dashboard risk cards."""
+
+    items: list[AiDerivedItem] = []
+    for risk in risks:
+        names = [str(name) for name in (risk.get("affectedTasks") or []) if name]
+        evidence_lines = [str(line) for line in (risk.get("evidence") or []) if line]
+        if not names:
+            names = _names_mentioned(plan, evidence_lines)
+        title = str(risk.get("title") or "Project risk").strip()
+        detail = " ".join(evidence_lines[:2]).strip()
+        content = f"{title}: {detail}" if detail else title
+        item = resolve_item(plan, "risks", content, names)
+        if item is not None:
+            items.append(item)
+    return items
+
+
+def _names_mentioned(plan: ProjectPlanData, lines: list[str]) -> list[str]:
+    haystack = " ".join(lines).lower()
+    names: list[str] = []
+    for task in plan.tasks:
+        if task.is_summary or not task.name:
+            continue
+        if task.name.lower() in haystack:
+            names.append(task.name)
+    return names
+
+
 def resolve_item(
     plan: ProjectPlanData,
     section: str,

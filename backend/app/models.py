@@ -222,6 +222,12 @@ class NamedDateValue(BaseModel):
 
 
 class PhaseStatus(BaseModel):
+    """WSR phase row.
+
+    planned_* comes from Baseline Start/Finish (planned end).
+    actual_* holds the current Finish window used as the deviation date.
+    """
+
     name: str
     wbs: str | None = None
     planned_start: str | None = None

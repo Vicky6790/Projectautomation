@@ -170,11 +170,11 @@ def main() -> int:
     text = " ".join(text.split())
     for heading in (
         "WSR & Insights",
-        "AI Executive Summary",
+        "Executive Summary",
         "Project Timeline",
         "Phase-Wise Status",
-        "Progress to Date",
-        "Upcoming Milestones",
+        "Progress of current week",
+        "Upcoming milestone for Next Week",
         "Risks & Focus Areas",
     ):
         if heading not in text:

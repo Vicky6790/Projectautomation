@@ -6,7 +6,6 @@ import { WsrProgressRing } from "./components/WsrProgressRing";
 import { ShellMetaContext } from "./shellMeta";
 import type {
   AiDerivedItem,
-  ExecutiveSummary,
   FileRecord,
   MilestoneItem,
   PhaseStatus,
@@ -16,7 +15,6 @@ import type {
   WsrPlanFacts,
 } from "./types";
 import {
-  healthLabel,
   personDaysLabel,
   percent,
   phaseState,
@@ -24,7 +22,7 @@ import {
   shortDate,
   splitInsight,
   unavailable,
-  windowRange,
+  weekDate,
 } from "./wsrFormat";
 
 const GENERATE_STAGES = [
@@ -386,12 +384,10 @@ export function WsrDashboardView() {
             ))}
           </div>
 
-          <Section n={1} title="AI Executive Summary" flush>
-            <ExecutiveSummaryPanel
-              health={facts.project_health}
-              summary={facts.executive_summary}
-              overview={facts.executive_overview}
-            />
+          <Section n={1} title="Executive Summary" flush>
+            <p className="overview-copy">
+              {unavailable(facts.executive_summary?.summary || facts.executive_overview)}
+            </p>
           </Section>
 
           <Section
@@ -413,15 +409,18 @@ export function WsrDashboardView() {
                   <tr>
                     <th>WBS</th>
                     <th>Phase</th>
-                    <th>Planned Window</th>
-                    <th>Deviated Window</th>
+                    <th>Planned End</th>
+                    <th>Deviated Date</th>
                     <th>Progress</th>
                   </tr>
                 </thead>
                 <tbody>
                   {facts.phase_statuses.map((phase: PhaseStatus, index) => {
                     const active = phase.state !== "not_started";
-                    const hasActual = Boolean(phase.actual_start || phase.actual_finish);
+                    const plannedEnd = shortDate(phase.planned_finish);
+                    const currentFinish = shortDate(phase.actual_finish);
+                    const hasDeviation =
+                      Boolean(phase.actual_finish) && plannedEnd !== currentFinish;
                     return (
                       <tr key={`${phase.name}-${index}`} className={active ? "phase-active" : undefined}>
                         <td className="mono">{phaseWbs(phase, index)}</td>
@@ -431,13 +430,9 @@ export function WsrDashboardView() {
                             <span className="status-badge">In Progress</span>
                           ) : null}
                         </td>
-                        <td className="mono">
-                          {windowRange(phase.planned_start, phase.planned_finish)}
-                        </td>
-                        <td className={`mono${hasActual ? " phase-deviated" : ""}`}>
-                          {hasActual
-                            ? windowRange(phase.actual_start, phase.actual_finish)
-                            : "—"}
+                        <td className="mono">{plannedEnd}</td>
+                        <td className={`mono${hasDeviation ? " phase-deviated" : ""}`}>
+                          {hasDeviation ? currentFinish : "—"}
                         </td>
                         <td>
                           {phase.state === "not_started" && !phase.progress ? (
@@ -471,7 +466,7 @@ export function WsrDashboardView() {
           </Section>
 
           <div className="wsr-paired">
-            <Section n={4} title="Progress to Date">
+            <Section n={4} title="Progress of current week">
               {facts.progress_to_date?.length ? (
                 <table className="milestone-table">
                   <thead>
@@ -500,8 +495,8 @@ export function WsrDashboardView() {
 
             <Section
               n={5}
-              title="Upcoming Milestones"
-              hint="Key dates from today through the next planned tasks."
+              title="Upcoming milestone for Next Week"
+              hint="Incomplete work overlapping the calendar week after the as-of week."
             >
               {facts.upcoming_milestones?.length ? (
                 <table className="milestone-table">
@@ -521,10 +516,8 @@ export function WsrDashboardView() {
                       );
                       return (
                         <tr key={`${item.name}-${index}`} className={today ? "milestone-today" : undefined}>
-                          <td className="mono">{shortDate(item.scheduled_start).replace(/ \d{4}$/, "")}</td>
-                          <td className="mono">
-                            {shortDate(item.scheduled_finish || item.date).replace(/ \d{4}$/, "")}
-                          </td>
+                          <td className="mono">{weekDate(item.scheduled_start)}</td>
+                          <td className="mono">{weekDate(item.scheduled_finish || item.date)}</td>
                           <td>{item.name}</td>
                           <td>{today ? <span className="today-badge">Today</span> : null}</td>
                         </tr>
@@ -553,82 +546,5 @@ export function WsrDashboardView() {
         </div>
       )}
     </section>
-  );
-}
-
-function ExecutiveSummaryPanel({
-  health,
-  summary,
-  overview,
-}: {
-  health?: string | null;
-  summary?: ExecutiveSummary | null;
-  overview?: string | null;
-}) {
-  const tone =
-    health && ["on_track", "at_risk", "off_track", "unavailable"].includes(health)
-      ? health
-      : "unavailable";
-  if (!summary) {
-    return <p className="overview-copy">{unavailable(overview)}</p>;
-  }
-  return (
-    <div className="exec-summary">
-      <p className="exec-health">
-        Overall Health:{" "}
-        <span className={`health health-${tone}`}>{healthLabel(health).toUpperCase()}</span>
-      </p>
-      <p className="overview-copy">{unavailable(summary.summary)}</p>
-      <ExecBlock title="Key Highlights" empty="Unavailable from plan data">
-        {summary.highlights.map((item, index) => (
-          <li key={`${item.title}-${index}`}>
-            <strong>{item.title}:</strong> {item.description}
-          </li>
-        ))}
-      </ExecBlock>
-      <ExecBlock title="Current Focus" empty="Unavailable from plan data">
-        {summary.current_focus.map((item, index) => (
-          <li key={`${item.title}-${index}`}>
-            <strong>{item.title}</strong>
-            {item.description ? ` — ${item.description}` : ""}
-          </li>
-        ))}
-      </ExecBlock>
-      <ExecBlock title="Executive Risks" empty="Unavailable from plan data">
-        {summary.executive_risks.map((item, index) => (
-          <li key={`${item.title}-${index}`}>
-            <span className={`exec-severity exec-severity-${item.severity}`}>{item.severity}</span>{" "}
-            <strong>{item.title}:</strong> {item.description}
-          </li>
-        ))}
-      </ExecBlock>
-      <ExecBlock title="AI Recommended Actions" empty="Unavailable from plan data">
-        {summary.recommended_actions.map((item, index) => (
-          <li key={`${item.action}-${index}`}>
-            <span className="exec-ai-label">AI Recommended Action</span> {item.action}
-            {item.reason ? ` (${item.reason})` : ""}
-          </li>
-        ))}
-      </ExecBlock>
-    </div>
-  );
-}
-
-function ExecBlock({
-  title,
-  empty,
-  children,
-}: {
-  title: string;
-  empty: string;
-  children: ReactNode;
-}) {
-  const items = Array.isArray(children) ? children : [children];
-  const present = items.filter(Boolean);
-  return (
-    <div className="exec-block">
-      <h4>{title}</h4>
-      {present.length ? <ul>{children}</ul> : <p className="muted">{empty}</p>}
-    </div>
   );
 }

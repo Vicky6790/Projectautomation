@@ -240,12 +240,40 @@ def test_phase_status_includes_all_nested_phases_with_child_dates() -> None:
     )
     names = [phase.name for phase in facts.phase_statuses]
     assert names == ["UX", "UI"]
-    assert facts.phase_statuses[0].planned_start == "2026-08-01"
-    assert facts.phase_statuses[0].planned_finish == "2026-08-10"
-    assert facts.phase_statuses[1].planned_start == "2026-08-11"
-    assert facts.phase_statuses[1].planned_finish == "2026-08-31"
-    assert facts.phase_statuses[0].actual_start is None
-    assert facts.phase_statuses[1].actual_start is None
+    assert facts.phase_statuses[0].planned_start is None
+    assert facts.phase_statuses[0].planned_finish is None
+    assert facts.phase_statuses[0].actual_start == "2026-08-01"
+    assert facts.phase_statuses[0].actual_finish == "2026-08-10"
+    assert facts.phase_statuses[1].actual_start == "2026-08-11"
+    assert facts.phase_statuses[1].actual_finish == "2026-08-31"
+
+
+def test_phase_planned_end_uses_baseline_finish_and_deviation_uses_finish() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Programme", outline_level=1, is_summary=True),
+                PlanTaskData(id=2, name="UX", outline_level=2, is_summary=True),
+                PlanTaskData(
+                    id=3,
+                    name="Research",
+                    outline_level=3,
+                    baseline_start="2026-08-01",
+                    baseline_finish="2026-08-10",
+                    scheduled_start="2026-08-03",
+                    scheduled_finish="2026-08-18",
+                    percent_complete=40,
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    phase = facts.phase_statuses[0]
+    assert phase.planned_start == "2026-08-01"
+    assert phase.planned_finish == "2026-08-10"
+    assert phase.actual_start == "2026-08-03"
+    assert phase.actual_finish == "2026-08-18"
 
 
 def test_person_days_and_deviated_window_come_from_plan() -> None:
@@ -285,8 +313,8 @@ def test_person_days_and_deviated_window_come_from_plan() -> None:
         generated_at="2026-08-22T10:00:00Z",
     )
     assert facts.person_days_planned == 5.0
-    assert facts.phase_statuses[0].actual_start == "2026-08-02"
-    assert facts.phase_statuses[0].actual_finish == "2026-08-12"
+    assert facts.phase_statuses[0].actual_start == "2026-08-01"
+    assert facts.phase_statuses[0].actual_finish == "2026-08-10"
 
 
 def test_children_of_project_named_parent_are_all_phases() -> None:
@@ -709,6 +737,49 @@ def test_progress_to_date_is_current_week_only() -> None:
     assert item.progress == 50
 
 
+def test_current_week_progress_is_ordered_by_date_then_completion() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Later lower",
+                    scheduled_start="2026-08-20",
+                    scheduled_finish="2026-08-21",
+                    percent_complete=20,
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Earlier lower",
+                    scheduled_start="2026-08-17",
+                    scheduled_finish="2026-08-18",
+                    percent_complete=40,
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Earlier higher",
+                    scheduled_start="2026-08-17",
+                    scheduled_finish="2026-08-19",
+                    percent_complete=90,
+                ),
+                PlanTaskData(
+                    id=4,
+                    name="Go Live",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-11",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    assert [item.name for item in facts.progress_to_date] == [
+        "Earlier higher",
+        "Earlier lower",
+        "Later lower",
+    ]
+
+
 def test_upcoming_lists_next_planned_tasks() -> None:
     facts = derive_wsr_facts(
         _plan(
@@ -739,13 +810,10 @@ def test_upcoming_lists_next_planned_tasks() -> None:
         generated_at="2026-08-22T10:00:00Z",
     )
     names = [item.name for item in facts.upcoming_milestones]
-    assert names == ["Build screens", "Go Live"]
+    assert names == ["Build screens"]
     build = facts.upcoming_milestones[0]
     assert build.scheduled_start == "2026-08-25"
     assert build.scheduled_finish == "2026-08-28"
-    go_live = facts.upcoming_milestones[1]
-    assert go_live.scheduled_start is None
-    assert go_live.scheduled_finish == "2026-09-11"
 
 
 def test_project_name_comes_from_wbs_one() -> None:

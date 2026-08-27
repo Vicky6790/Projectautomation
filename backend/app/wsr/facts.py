@@ -470,14 +470,14 @@ def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseSta
     children = _descendants(tasks, phase)
     leaves = [task for task in children if not task.is_summary] or children
     dated = [phase, *leaves]
-    starts = [parse_date(task.scheduled_start) for task in dated]
-    finishes = [parse_date(task.scheduled_finish) for task in dated]
-    actual_starts = [parse_date(task.actual_start) for task in dated]
-    actual_finishes = [parse_date(task.actual_finish) for task in dated]
-    start_ok = [item for item in starts if item]
-    finish_ok = [item for item in finishes if item]
-    actual_start_ok = [item for item in actual_starts if item]
-    actual_finish_ok = [item for item in actual_finishes if item]
+    baseline_starts = [parse_date(task.baseline_start) for task in dated]
+    baseline_finishes = [parse_date(task.baseline_finish) for task in dated]
+    current_starts = [parse_date(task.scheduled_start) for task in dated]
+    current_finishes = [parse_date(task.scheduled_finish) for task in dated]
+    baseline_start_ok = [item for item in baseline_starts if item]
+    baseline_finish_ok = [item for item in baseline_finishes if item]
+    current_start_ok = [item for item in current_starts if item]
+    current_finish_ok = [item for item in current_finishes if item]
     if phase.percent_complete >= 100:
         state = "complete"
     elif not phase.actual_start and phase.percent_complete == 0:
@@ -490,10 +490,10 @@ def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseSta
     return PhaseStatus(
         name=phase.name,
         wbs=(phase.wbs or "").strip() or None,
-        planned_start=None if not start_ok else min(start_ok).isoformat(),
-        planned_finish=None if not finish_ok else max(finish_ok).isoformat(),
-        actual_start=None if not actual_start_ok else min(actual_start_ok).isoformat(),
-        actual_finish=None if not actual_finish_ok else max(actual_finish_ok).isoformat(),
+        planned_start=None if not baseline_start_ok else min(baseline_start_ok).isoformat(),
+        planned_finish=None if not baseline_finish_ok else max(baseline_finish_ok).isoformat(),
+        actual_start=None if not current_start_ok else min(current_start_ok).isoformat(),
+        actual_finish=None if not current_finish_ok else max(current_finish_ok).isoformat(),
         progress=phase.percent_complete,
         state=state,
     )
@@ -509,10 +509,10 @@ def _phase_status(phase) -> PhaseStatus:
     return PhaseStatus(
         name=phase.name,
         wbs=getattr(phase, "wbs", None),
-        planned_start=phase.scheduled_start,
-        planned_finish=phase.scheduled_finish,
-        actual_start=phase.actual_start,
-        actual_finish=None,
+        planned_start=phase.baseline_start,
+        planned_finish=phase.baseline_finish,
+        actual_start=phase.scheduled_start,
+        actual_finish=phase.scheduled_finish,
         progress=phase.percent_complete,
         state=state,
     )
@@ -549,30 +549,41 @@ def _progress_to_date(tasks: list[PlanTaskData], as_of: date) -> list[ProgressIt
                 progress=task.percent_complete,
             )
         )
+    items.sort(
+        key=lambda item: (
+            item.scheduled_start or item.scheduled_finish or item.date or "",
+            -(item.progress or 0),
+            item.name,
+        )
+    )
     return items
 
 
 def _next_planned_tasks(tasks: list[PlanTaskData], as_of: date) -> list[MilestoneItem]:
-    _week_start, week_end = _week_bounds(as_of)
+    next_start, next_end = _next_week_bounds(as_of)
     items: list[MilestoneItem] = []
     for task in tasks:
         if _complete(task):
             continue
-        start = parse_date(task.scheduled_start)
-        finish = parse_date(task.scheduled_finish)
-        when = start or finish
-        if when is None or when <= week_end:
+        if not _overlaps_week(task, next_start, next_end):
             continue
+        when = _candidate_date(task)
         items.append(
             MilestoneItem(
                 name=task.name,
-                date=when.isoformat(),
+                date=None if when is None else when.isoformat(),
                 scheduled_start=task.scheduled_start,
                 scheduled_finish=task.scheduled_finish,
             )
         )
-    items.sort(key=lambda item: item.date or "")
+    items.sort(key=lambda item: item.scheduled_start or item.date or "")
     return items[:12]
+
+
+def _next_week_bounds(as_of: date) -> tuple[date, date]:
+    _week_start, week_end = _week_bounds(as_of)
+    next_start = week_end + timedelta(days=1)
+    return next_start, next_start + timedelta(days=6)
 
 
 def next_seven_day_tasks(plan: ProjectPlanData, as_of: str) -> list[PlanTaskData]:

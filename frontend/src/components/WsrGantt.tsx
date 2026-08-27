@@ -36,12 +36,18 @@ type Props = {
 };
 
 export function WsrGantt({ phases, asOf }: Props) {
-  const rows = phases.map((phase, index) => ({
-    ...phase,
-    wbs: phaseWbs(phase, index),
-    start: parseDay(phase.planned_start),
-    finish: parseDay(phase.planned_finish),
-  }));
+  const rows = phases.map((phase, index) => {
+    const startValue = phase.planned_start || phase.actual_start;
+    const finishValue = phase.planned_finish || phase.actual_finish;
+    return {
+      ...phase,
+      wbs: phaseWbs(phase, index),
+      startValue,
+      finishValue,
+      start: parseDay(startValue),
+      finish: parseDay(finishValue),
+    };
+  });
   const dated = rows.filter((phase) => phase.start || phase.finish);
   if (!dated.length) {
     return <p className="muted">A timeline cannot be generated</p>;
@@ -88,7 +94,7 @@ export function WsrGantt({ phases, asOf }: Props) {
             const left = start ? dateToPercent(start, months) : null;
             const right = finish ? dateToPercent(finish, months) : null;
             const width = left != null && right != null ? Math.max(right - left, 1.5) : 0;
-            const days = durationDays(phase.planned_start, phase.planned_finish);
+            const days = durationDays(phase.startValue, phase.finishValue);
             const showLabel = width >= 12;
             return (
               <div className="gantt-row-exec" key={`${phase.wbs}-${phase.name}`}>
@@ -98,7 +104,7 @@ export function WsrGantt({ phases, asOf }: Props) {
                 </div>
                 <div className="gantt-window-exec">
                   {phase.start || phase.finish
-                    ? windowRange(phase.planned_start, phase.planned_finish, "arrow")
+                    ? windowRange(phase.startValue, phase.finishValue, "arrow")
                     : "—"}
                 </div>
                 <div className="gantt-dur-exec">{days != null ? `${days}d` : "—"}</div>
@@ -114,7 +120,7 @@ export function WsrGantt({ phases, asOf }: Props) {
                         width: `${width}%`,
                         background: COLORS[index % COLORS.length],
                       }}
-                      title={`${phase.name}: ${windowRange(phase.planned_start, phase.planned_finish, "dash")}`}
+                      title={`${phase.name}: ${windowRange(phase.startValue, phase.finishValue, "dash")}`}
                     >
                       {showLabel ? phase.name : ""}
                     </span>
