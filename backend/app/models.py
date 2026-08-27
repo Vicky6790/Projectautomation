@@ -235,12 +235,16 @@ class PhaseStatus(BaseModel):
 class ProgressItem(BaseModel):
     name: str
     date: str | None = None
+    scheduled_start: str | None = None
+    scheduled_finish: str | None = None
     progress: float | None = None
 
 
 class MilestoneItem(BaseModel):
     name: str
     date: str | None = None
+    scheduled_start: str | None = None
+    scheduled_finish: str | None = None
 
 
 class WsrPlanFacts(BaseModel):

@@ -9,12 +9,12 @@ from app.models import (
     WsrEvidenceResponse,
     WsrItemDecision,
 )
-from app.wsr.evidence import AI_SECTIONS, items_exportable
+from app.wsr.evidence import AI_SECTIONS, STORED_AI_SECTIONS, items_exportable
 
 
 def iter_items(report: StatusReport) -> list[AiDerivedItem]:
     items: list[AiDerivedItem] = []
-    for key in AI_SECTIONS:
+    for key in STORED_AI_SECTIONS:
         items.extend(getattr(report, key))
     return items
 

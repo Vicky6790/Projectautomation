@@ -109,12 +109,16 @@ export type PhaseStatus = {
 export type ProgressItem = {
   name: string;
   date?: string | null;
+  scheduled_start?: string | null;
+  scheduled_finish?: string | null;
   progress?: number | null;
 };
 
 export type MilestoneItem = {
   name: string;
   date?: string | null;
+  scheduled_start?: string | null;
+  scheduled_finish?: string | null;
 };
 
 export type WsrPlanFacts = {

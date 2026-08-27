@@ -14,14 +14,15 @@ SOW_CRITERIA = (
 WSR_CRITERIA = (
     "Use only the supplied facts and evidence catalog. Do not invent actuals, "
     "tasks, or project health. Health is computed outside this prompt.\n"
-    "- client_needs: client actions, prerequisites, or reviews required to progress.\n"
+    "- executive_overview: 1-3 short sentences summarizing project status. "
+    "Minimal words. Use only supplied facts. Empty string if insufficient.\n"
     "- risks: potential future problems or focus areas.\n"
     "- issues: current problems already occurring.\n"
     "- dependencies: internal or external predecessors.\n"
     "- management_attention: items needing executive awareness.\n"
     "- decisions_required: choices that must be made.\n"
     "- next_7_day_priorities: work due in the next 7 days from the as-of date.\n"
-    "Every item must include evidence_names that exist in the catalog. "
+    "Every list item must include evidence_names that exist in the catalog. "
     "If evidence is insufficient, leave that category as an empty list.\n"
 )
 

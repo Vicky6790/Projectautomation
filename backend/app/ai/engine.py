@@ -63,24 +63,27 @@ def analyze_sow(sow_text: str) -> AnalysisReport:
     return _report(AnalysisReport, parsed, _SOW_LISTS)
 
 
-def analyze_wsr(plan_data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def analyze_wsr(plan_data: dict[str, Any]) -> dict[str, Any]:
     from app.wsr.evidence import AI_SECTIONS, resolve_item
 
     plan = _plan_from_payload(plan_data)
     if settings.ai_stub:
-        return _stub_wsr_items(plan, plan_data.get("as_of_date") or "")
+        return _stub_wsr_items(plan, plan_data)
     parsed = _client.complete_json(
         system_prompt=(
-            "You are a PMO status analyst. Return JSON only with keys client_needs, "
-            "risks, issues, dependencies, management_attention, decisions_required, "
-            "next_7_day_priorities. Each value is an array of objects with content "
-            "(string) and evidence_names (array of plan task names from the catalog). "
+            "You are a PMO status analyst. Return JSON only with keys "
+            "executive_overview, risks, issues, dependencies, "
+            "management_attention, decisions_required, next_7_day_priorities. "
+            "executive_overview is a short string (1-3 sentences, minimal words). "
+            "Each other value is an array of objects with content (string) and "
+            "evidence_names (array of plan task names from the catalog). "
             "Do not set project health or invent tasks. Omit an item that has no "
             "catalog evidence. " + WSR_CRITERIA
         ),
         user_prompt=json.dumps(outbound_wsr_payload(plan_data)),
     )
-    grouped: dict[str, list[dict[str, Any]]] = {key: [] for key in AI_SECTIONS}
+    grouped: dict[str, Any] = {key: [] for key in AI_SECTIONS}
+    grouped["executive_overview"] = _ai_overview_text(parsed)
     for key in AI_SECTIONS:
         raw_items = parsed.get(key) or []
         if not isinstance(raw_items, list):
@@ -105,11 +108,42 @@ def analyze_wsr(plan_data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     return grouped
 
 
-def _stub_wsr_items(plan, as_of: str) -> dict[str, list[dict[str, Any]]]:
+def _ai_overview_text(parsed: dict[str, Any]) -> str | None:
+    raw = parsed.get("executive_overview")
+    if not isinstance(raw, str):
+        return None
+    text = " ".join(raw.split()).strip()
+    return text or None
+
+
+def _stub_overview(plan_data: dict[str, Any]) -> str | None:
+    facts = plan_data.get("facts") or {}
+    name = facts.get("project_name") or plan_data.get("name")
+    health = str(facts.get("project_health") or "").replace("_", " ")
+    go_live = facts.get("planned_go_live_date")
+    progress = facts.get("overall_progress")
+    if not name and not health and go_live is None and progress is None:
+        return None
+    parts: list[str] = []
+    title = str(name or "This project")
+    if health:
+        parts.append(f"{title} is {health}.")
+    else:
+        parts.append(f"{title} status is unavailable.")
+    if isinstance(progress, (int, float)):
+        value = int(progress) if float(progress).is_integer() else progress
+        parts.append(f"{value}% complete.")
+    parts.append(f"Go-Live {go_live or 'unavailable'}.")
+    return " ".join(parts)
+
+
+def _stub_wsr_items(plan, plan_data: dict[str, Any]) -> dict[str, Any]:
     from app.wsr.evidence import AI_SECTIONS, resolve_item
     from app.wsr.facts import next_seven_day_tasks
 
-    grouped: dict[str, list[dict[str, Any]]] = {key: [] for key in AI_SECTIONS}
+    grouped: dict[str, Any] = {key: [] for key in AI_SECTIONS}
+    grouped["executive_overview"] = _stub_overview(plan_data)
+    as_of = plan_data.get("as_of_date") or ""
     for task in next_seven_day_tasks(plan, as_of):
         item = resolve_item(plan, "next_7_day_priorities", f"Advance {task.name}", [task.name])
         if item is not None:

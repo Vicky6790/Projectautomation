@@ -18,7 +18,6 @@ WSR_SECTIONS = (
     ("phase_statuses", "Phase-Wise Status"),
     ("progress_to_date", "Progress to Date"),
     ("upcoming_milestones", "Upcoming Milestones"),
-    ("client_needs", "What We Need From the Bank Team"),
     ("risks", "Risks & Focus Areas"),
 )
 

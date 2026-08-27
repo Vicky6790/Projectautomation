@@ -5,7 +5,6 @@ import uuid
 from app.models import AiDerivedItem, EvidenceReference, PlanTaskData, ProjectPlanData
 
 AI_SECTIONS = (
-    "client_needs",
     "risks",
     "issues",
     "dependencies",
@@ -13,6 +12,7 @@ AI_SECTIONS = (
     "decisions_required",
     "next_7_day_priorities",
 )
+STORED_AI_SECTIONS = ("client_needs",) + AI_SECTIONS
 
 _SECTION_LABEL = {
     "client_needs": "client_need",

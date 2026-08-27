@@ -140,11 +140,11 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
         "Phase-Wise Status",
         "Progress to Date",
         "Upcoming Milestones",
-        "What We Need From the Bank Team",
         "Risks & Focus Areas",
     ):
         assert heading in text
     for removed in (
+        "What We Need From the Bank Team",
         "Issues",
         "Next Seven-Day Priorities",
         "Dependencies",
@@ -253,7 +253,8 @@ def test_review_keep_edit_remove_and_download(client: TestClient, monkeypatch) -
     assert report.status_code == 200
     text = pdf_text(report.content)
     assert "Build is at risk against Go Live" in text
-    assert "Kickoff evidence is incomplete" in text
+    assert "Kickoff evidence is incomplete" not in text
+    assert "What We Need From the Bank Team" not in text
 
     removed = client.patch(
         f"/api/v1/wsr/requests/{handle}/items/need-1",

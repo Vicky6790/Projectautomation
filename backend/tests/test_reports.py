@@ -157,6 +157,7 @@ def test_wsr_report_matches_dashboard_sections() -> None:
     for _key, heading in WSR_SECTIONS:
         assert heading in text
     for removed in (
+        "What We Need From the Bank Team",
         "Issues",
         "Next Seven-Day Priorities",
         "Management Attention",
@@ -314,7 +315,6 @@ def test_wsr_report_omits_removed_items() -> None:
     assert "Kept risk" in text
     assert "Removed risk" not in text
     assert "Removed issue" not in text
-    assert "No items identified from the plan" in text
 
 
 def test_retro_report_includes_summary_and_seven_sections() -> None:

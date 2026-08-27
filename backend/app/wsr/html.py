@@ -10,7 +10,6 @@ from app.models import (
 )
 
 _AI_SECTIONS = (
-    ("client_needs", "What We Need From the Bank Team"),
     ("risks", "Risks & Focus Areas"),
 )
 _GANTT_COLORS = ("#475569", "#6366f1", "#10b981", "#8b5cf6", "#f59e0b")
@@ -207,14 +206,20 @@ def _progress(facts: WsrPlanFacts) -> str:
     items = facts.progress_to_date or []
     if not items:
         return "<p>No tasks scheduled in the current week</p>"
-    rows = []
+    rows = [
+        "<tr><td><b>Task</b></td><td><b>Start</b></td><td><b>End</b></td>"
+        "<td><b>Complete</b></td></tr>"
+    ]
     for item in items:
-        extra = f" - {_percent(item.progress)}" if item.progress is not None else ""
         rows.append(
-            f"<p><b>{html.escape(item.name)}</b> "
-            f"<span class='muted'>{_esc(item.date)}{html.escape(extra)}</span></p>"
+            "<tr>"
+            f"<td>{html.escape(item.name)}</td>"
+            f"<td>{html.escape(_short_date(item.scheduled_start))}</td>"
+            f"<td>{html.escape(_short_date(item.scheduled_finish or item.date))}</td>"
+            f"<td>{html.escape(_percent(item.progress))}</td>"
+            "</tr>"
         )
-    return "".join(rows)
+    return f"<table>{''.join(rows)}</table>"
 
 
 def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
@@ -223,16 +228,20 @@ def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
         return "<p>No upcoming planned tasks</p>"
     as_of_d = _day(as_of)
     rows = [
-        "<tr><td><b>Date</b></td><td><b>Milestone / Activity</b></td><td></td></tr>"
+        "<tr><td><b>Start</b></td><td><b>End</b></td>"
+        "<td><b>Milestone / Activity</b></td><td></td></tr>"
     ]
     for item in items:
+        item_day = _day(item.scheduled_start) or _day(item.date)
         today = ""
-        item_day = _day(item.date)
         if as_of_d and item_day and item_day == as_of_d:
             today = ' <span class="badge">Today</span>'
-        when = html.escape(_compact_date(item.date))
+        start = html.escape(_compact_date(item.scheduled_start))
+        finish = html.escape(_compact_date(item.scheduled_finish or item.date))
         name = html.escape(item.name)
-        rows.append(f"<tr><td>{when}</td><td>{name}</td><td>{today}</td></tr>")
+        rows.append(
+            f"<tr><td>{start}</td><td>{finish}</td><td>{name}</td><td>{today}</td></tr>"
+        )
     return f"<table>{''.join(rows)}</table>"
 
 

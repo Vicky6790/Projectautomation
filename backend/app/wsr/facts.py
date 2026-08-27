@@ -28,12 +28,6 @@ _LIBRARY_PHASE_NAMES = frozenset(
     " ".join(str(phase["name"]).casefold().split()) for phase in PHASES
 )
 _PHASE_WBS = re.compile(r"^1\.\d+$")
-_HEALTH_LABELS = {
-    "on_track": "On track",
-    "at_risk": "At risk",
-    "off_track": "Off track",
-    "unavailable": "Unavailable — insufficient plan data",
-}
 
 
 def parse_date(value: str | None) -> date | None:
@@ -64,7 +58,7 @@ def derive_wsr_facts(
     now = datetime.now(UTC).replace(microsecond=0).isoformat()
     stamp = generated_at or now.replace("+00:00", "Z")
     leaves = [task for task in plan.tasks if not task.is_summary]
-    go_live = _planned_go_live(leaves, as_of_d)
+    go_live = _planned_go_live(plan.tasks, as_of_d)
     health = _health(leaves, as_of_d, go_live)
     countdown = None if go_live is None else (go_live - as_of_d).days
     planned_count = len(leaves) if plan.tasks else None
@@ -72,9 +66,8 @@ def derive_wsr_facts(
     if planned_count is not None:
         completed_count = sum(1 for task in leaves if _complete(task))
     phases = _phase_statuses(plan)
-    overview = _overview(plan, as_of, health, go_live)
     return WsrPlanFacts(
-        project_name=plan.name or None,
+        project_name=_project_title(plan),
         project_owner=plan.owner,
         as_of_date=as_of,
         generated_at=stamp,
@@ -91,7 +84,7 @@ def derive_wsr_facts(
         last_signed_off_milestone=_last_signed_off(leaves, as_of_d),
         next_gate=_next_gate(leaves, as_of_d),
         planned_go_live_date=None if go_live is None else go_live.isoformat(),
-        executive_overview=overview,
+        executive_overview=None,
         timeline=phases or None,
         phase_statuses=phases,
         progress_to_date=_progress_to_date(leaves, as_of_d),
@@ -117,28 +110,25 @@ def _contains(text: str | None, markers: tuple[str, ...]) -> bool:
 
 
 def _planned_go_live(tasks: list[PlanTaskData], as_of: date) -> date | None:
-    incomplete = [
+    named = [
         task
         for task in tasks
-        if not _complete(task) and _candidate_date(task) is not None
+        if _contains(task.gate, _GO_LIVE_MARKERS) or _contains(task.name, _GO_LIVE_MARKERS)
     ]
-    for matcher in (
-        lambda task: _contains(task.gate, _GO_LIVE_MARKERS),
-        lambda task: _contains(task.name, _GO_LIVE_MARKERS),
-        lambda task: task.is_milestone,
-    ):
-        matched = [task for task in incomplete if matcher(task)]
-        if not matched:
-            continue
-        future = [
-            task
-            for task in matched
-            if (_candidate_date(task) or date.min) >= as_of
-        ]
-        pool = future or matched
-        dates = [_candidate_date(task) for task in pool]
-        return min(item for item in dates if item is not None)
-    return None
+    dates = [item for item in (_candidate_date(task) for task in named) if item is not None]
+    if not dates:
+        return None
+    future = [item for item in dates if item >= as_of]
+    return min(future) if future else max(dates)
+
+
+def _project_title(plan: ProjectPlanData) -> str | None:
+    for task in plan.tasks:
+        if (task.wbs or "").strip() == "1":
+            name = (task.name or "").strip()
+            if name:
+                return name
+    return plan.name or None
 
 
 def _health(
@@ -529,6 +519,8 @@ def _progress_to_date(tasks: list[PlanTaskData], as_of: date) -> list[ProgressIt
             ProgressItem(
                 name=task.name,
                 date=None if when is None else when.isoformat(),
+                scheduled_start=task.scheduled_start,
+                scheduled_finish=task.scheduled_finish,
                 progress=task.percent_complete,
             )
         )
@@ -546,19 +538,16 @@ def _next_planned_tasks(tasks: list[PlanTaskData], as_of: date) -> list[Mileston
         when = start or finish
         if when is None or when <= week_end:
             continue
-        items.append(MilestoneItem(name=task.name, date=when.isoformat()))
+        items.append(
+            MilestoneItem(
+                name=task.name,
+                date=when.isoformat(),
+                scheduled_start=task.scheduled_start,
+                scheduled_finish=task.scheduled_finish,
+            )
+        )
     items.sort(key=lambda item: item.date or "")
     return items[:12]
-
-
-def _overview(plan: ProjectPlanData, as_of: str, health: str, go_live: date | None) -> str | None:
-    name = plan.name or None
-    if not name and health == "unavailable" and go_live is None:
-        return None
-    label = _HEALTH_LABELS[health]
-    go_live_text = go_live.isoformat() if go_live else "unavailable"
-    title = name or "This project"
-    return f"{title} is {label} as of {as_of}. Planned Go-Live is {go_live_text}."
 
 
 def next_seven_day_tasks(plan: ProjectPlanData, as_of: str) -> list[PlanTaskData]:

@@ -703,6 +703,10 @@ def test_progress_to_date_is_current_week_only() -> None:
     )
     names = [item.name for item in facts.progress_to_date]
     assert names == ["This week build"]
+    item = facts.progress_to_date[0]
+    assert item.scheduled_start == "2026-08-17"
+    assert item.scheduled_finish == "2026-08-21"
+    assert item.progress == 50
 
 
 def test_upcoming_lists_next_planned_tasks() -> None:
@@ -736,3 +740,39 @@ def test_upcoming_lists_next_planned_tasks() -> None:
     )
     names = [item.name for item in facts.upcoming_milestones]
     assert names == ["Build screens", "Go Live"]
+    build = facts.upcoming_milestones[0]
+    assert build.scheduled_start == "2026-08-25"
+    assert build.scheduled_finish == "2026-08-28"
+    go_live = facts.upcoming_milestones[1]
+    assert go_live.scheduled_start is None
+    assert go_live.scheduled_finish == "2026-09-11"
+
+
+def test_project_name_comes_from_wbs_one() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Core Banking Portal", wbs="1", is_summary=True),
+                PlanTaskData(
+                    id=2,
+                    name="UX Phase",
+                    wbs="1.1",
+                    is_summary=True,
+                    scheduled_start="2026-06-15",
+                    scheduled_finish="2026-09-25",
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Go Live",
+                    wbs="1.2",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-11",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    assert facts.project_name == "Core Banking Portal"
+    assert facts.countdown_days == (date(2026, 9, 11) - date(2026, 8, 22)).days
+    assert facts.planned_go_live_date == "2026-09-11"

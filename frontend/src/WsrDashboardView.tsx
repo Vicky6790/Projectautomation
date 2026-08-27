@@ -467,20 +467,26 @@ export function WsrDashboardView() {
           <div className="wsr-paired">
             <Section n={4} title="Progress to Date">
               {facts.progress_to_date?.length ? (
-                <ul className="progress-list">
-                  {facts.progress_to_date.map((item: ProgressItem, index) => (
-                    <li key={`${item.name}-${index}`}>
-                      <span className="material-symbols-outlined check-icon" aria-hidden="true">
-                        check_circle
-                      </span>
-                      <div>
-                        <strong>{item.name}</strong>
-                        {item.date ? ` · ${shortDate(item.date)}` : ""}
-                        {item.progress != null ? ` · ${percent(item.progress)}` : ""}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <table className="milestone-table">
+                  <thead>
+                    <tr>
+                      <th>Task</th>
+                      <th>Start</th>
+                      <th>End</th>
+                      <th>Complete</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {facts.progress_to_date.map((item: ProgressItem, index) => (
+                      <tr key={`${item.name}-${index}`}>
+                        <td>{item.name}</td>
+                        <td className="mono">{shortDate(item.scheduled_start)}</td>
+                        <td className="mono">{shortDate(item.scheduled_finish || item.date)}</td>
+                        <td>{item.progress == null ? "Unavailable" : percent(item.progress)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <p>No tasks scheduled in the current week</p>
               )}
@@ -495,17 +501,24 @@ export function WsrDashboardView() {
                 <table className="milestone-table">
                   <thead>
                     <tr>
-                      <th>Date</th>
+                      <th>Start</th>
+                      <th>End</th>
                       <th>Milestone / Activity</th>
                       <th />
                     </tr>
                   </thead>
                   <tbody>
                     {facts.upcoming_milestones.map((item: MilestoneItem, index) => {
-                      const today = isSameDay(item.date, report.as_of_date);
+                      const today = isSameDay(
+                        item.scheduled_start || item.date,
+                        report.as_of_date,
+                      );
                       return (
                         <tr key={`${item.name}-${index}`} className={today ? "milestone-today" : undefined}>
-                          <td>{item.date ? shortDate(item.date).replace(/ \d{4}$/, "") : "Unavailable"}</td>
+                          <td className="mono">{shortDate(item.scheduled_start).replace(/ \d{4}$/, "")}</td>
+                          <td className="mono">
+                            {shortDate(item.scheduled_finish || item.date).replace(/ \d{4}$/, "")}
+                          </td>
                           <td>{item.name}</td>
                           <td>{today ? <span className="today-badge">Today</span> : null}</td>
                         </tr>
@@ -519,15 +532,7 @@ export function WsrDashboardView() {
             </Section>
           </div>
 
-          <Section n={6} title="What We Need From the Bank Team">
-            <InsightCards
-              items={visibleInsights(report.client_needs)}
-              tone="need"
-              empty="No items identified from the plan"
-            />
-          </Section>
-
-          <Section n={7} title="Risks & Focus Areas">
+          <Section n={6} title="Risks & Focus Areas">
             <InsightCards
               items={visibleInsights(report.risks)}
               tone="risk"

@@ -123,7 +123,6 @@ def main() -> int:
             "Phases to Go-Live",
             "Person-Days Planned",
             "Work Items Complete",
-            "What We Need From the Bank Team",
             "No items identified from the plan",
             "No tasks scheduled in the current week",
             "Reading the file",
@@ -176,13 +175,12 @@ def main() -> int:
         "Phase-Wise Status",
         "Progress to Date",
         "Upcoming Milestones",
-        "What We Need From the Bank Team",
         "Risks & Focus Areas",
     ):
         if heading not in text:
             print("report missing heading", heading)
             return 1
-    for heading in ("Issues", "Next Seven-Day Priorities"):
+    for heading in ("Issues", "Next Seven-Day Priorities", "What We Need From the Bank Team"):
         if heading in text:
             print("report still includes removed heading", heading)
             return 1

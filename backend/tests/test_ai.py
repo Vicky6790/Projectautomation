@@ -162,7 +162,7 @@ def test_analyze_sow_schema_mismatch_is_retryable(monkeypatch: pytest.MonkeyPatc
 
 def _wsr_ai_body(**overrides: object) -> dict:
     body = {
-        "client_needs": [],
+        "executive_overview": "Demo is on track.",
         "risks": [],
         "issues": [],
         "dependencies": [],
@@ -193,6 +193,7 @@ def test_analyze_wsr_keeps_evidence_backed_items(monkeypatch: pytest.MonkeyPatch
         }
     )
     assert result["risks"][0]["content"] == "Vendor delay"
+    assert result["executive_overview"] == "Demo is on track."
     assert result["risks"][0]["review_status"] == "pending"
     assert result["risks"][0]["evidence_references"][0]["task_or_milestone_name"] == "Build"
     assert result["issues"] == []
