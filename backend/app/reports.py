@@ -13,7 +13,7 @@ SOW_SECTIONS = (
 )
 
 WSR_SECTIONS = (
-    ("executive_overview", "Executive Overview"),
+    ("executive_overview", "AI Executive Summary"),
     ("timeline", "Project Timeline"),
     ("phase_statuses", "Phase-Wise Status"),
     ("progress_to_date", "Progress to Date"),

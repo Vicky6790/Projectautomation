@@ -170,7 +170,7 @@ def main() -> int:
     text = " ".join(text.split())
     for heading in (
         "WSR & Insights",
-        "Executive Overview",
+        "AI Executive Summary",
         "Project Timeline",
         "Phase-Wise Status",
         "Progress to Date",

@@ -17,6 +17,8 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       AI_STUB: ${AI_STUB:-true}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-52428800}
+      WSR_GO_LIVE_MARKERS: ${WSR_GO_LIVE_MARKERS:-go-live,go live}
+      WSR_UPCOMING_DAYS: ${WSR_UPCOMING_DAYS:-7}
       REQUEST_TTL_HOURS: ${REQUEST_TTL_HOURS:-24}
       CORS_ORIGINS: http://localhost:8080
     volumes:

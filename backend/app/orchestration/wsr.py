@@ -5,7 +5,9 @@ from app.ai.engine import analyze_wsr
 from app.errors import AppError
 from app.models import AiDerivedItem, ProcessingResponse, StatusReport
 from app.wsr.evidence import STORED_AI_SECTIONS
+from app.wsr.executive import generate_executive_summary
 from app.wsr.facts import derive_wsr_facts, resolve_as_of
+from app.wsr.intelligence import build_executive_summary_input
 
 
 def run_wsr_generation(handle: str, *, force: bool = False) -> ProcessingResponse:
@@ -24,9 +26,14 @@ def run_wsr_generation(handle: str, *, force: bool = False) -> ProcessingRespons
         snapshot["as_of_date"] = as_of
         snapshot["facts"] = facts.model_dump()
         grouped = analyze_wsr(snapshot)
-        overview = grouped.get("executive_overview")
-        if isinstance(overview, str) and overview.strip():
-            facts = facts.model_copy(update={"executive_overview": overview.strip()})
+        intelligence = build_executive_summary_input(plan, facts, as_of)
+        summary = generate_executive_summary(intelligence)
+        facts = facts.model_copy(
+            update={
+                "executive_summary": summary,
+                "executive_overview": summary.summary,
+            }
+        )
         ai_fields = {
             key: [AiDerivedItem.model_validate(item) for item in grouped.get(key) or []]
             for key in STORED_AI_SECTIONS

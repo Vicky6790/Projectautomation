@@ -749,6 +749,84 @@ label select {
   margin: 0;
 }
 
+.exec-summary {
+  padding: 0 32px 24px;
+  background: rgba(238, 242, 255, 0.3);
+}
+
+.exec-summary .overview-copy {
+  padding: 0 0 8px;
+  background: transparent;
+}
+
+.exec-health {
+  margin: 0 0 12px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+.exec-block {
+  margin-top: 16px;
+}
+
+.exec-block h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.exec-block ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+}
+
+.exec-block li + li {
+  margin-top: 6px;
+}
+
+.exec-ai-label {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.exec-severity {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.exec-severity-critical,
+.exec-severity-high {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+.exec-severity-medium {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.exec-severity-low {
+  background: #ecfdf5;
+  color: #047857;
+}
+
 .wsr-section-flush .wsr-section-head {
   background: rgba(238, 242, 255, 0.3);
   margin: 0;

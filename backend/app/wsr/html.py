@@ -5,6 +5,7 @@ from datetime import date, datetime
 
 from app.models import (
     AiDerivedItem,
+    ExecutiveSummary,
     StatusReport,
     WsrPlanFacts,
 )
@@ -31,7 +32,7 @@ def render_wsr_html(handle: str, payload: StatusReport) -> str:
         [
             _hero(payload, facts, health),
             _kpi_grid(facts),
-            _section(1, "Executive Overview", _overview(facts)),
+            _section(1, "AI Executive Summary", _overview(facts)),
             _section(2, "Project Timeline", _timeline(facts)),
             _section(3, "Phase-Wise Status", _phases(facts)),
             _section(4, "Progress to Date", _progress(facts)),
@@ -133,7 +134,45 @@ def _kpi_grid(facts: WsrPlanFacts) -> str:
 
 
 def _overview(facts: WsrPlanFacts) -> str:
-    return f"<p>{_esc(facts.executive_overview)}</p>"
+    summary = facts.executive_summary
+    if summary is None:
+        return f"<p>{_esc(facts.executive_overview)}</p>"
+    health = (facts.project_health or "unavailable").replace("_", " ").upper()
+    blocks = [
+        f"<p><b>Overall Health:</b> {html.escape(health)}</p>",
+        f"<p>{_esc(summary.summary)}</p>",
+        _overview_list("Key Highlights", summary.highlights, _highlight_line),
+        _overview_list("Current Focus", summary.current_focus, lambda item: f"{item.title} - {item.description}"),
+        _overview_list("Executive Risks", summary.executive_risks, _risk_line),
+        _overview_actions(summary),
+    ]
+    return "".join(blocks)
+
+
+def _overview_list(title: str, items: list, line) -> str:
+    if not items:
+        return f"<p><b>{html.escape(title)}</b></p><p>Unavailable from plan data</p>"
+    rows = "".join(f"<p>• {html.escape(line(item))}</p>" for item in items)
+    return f"<p><b>{html.escape(title)}</b></p>{rows}"
+
+
+def _highlight_line(item) -> str:
+    return f"{item.title}: {item.description}"
+
+
+def _risk_line(item) -> str:
+    return f"[{item.severity.upper()}] {item.title}: {item.description}"
+
+
+def _overview_actions(summary: ExecutiveSummary) -> str:
+    if not summary.recommended_actions:
+        return "<p><b>AI Recommended Actions</b></p><p>Unavailable from plan data</p>"
+    rows = "".join(
+        f"<p>• AI Recommended Action: {html.escape(item.action)} "
+        f"({html.escape(item.reason)})</p>"
+        for item in summary.recommended_actions
+    )
+    return f"<p><b>AI Recommended Actions</b></p>{rows}"
 
 
 def _timeline(facts: WsrPlanFacts) -> str:

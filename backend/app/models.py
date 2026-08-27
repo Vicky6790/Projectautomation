@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 Module = Literal["sow", "wsr", "retrospective", "plan"]
 JobStatus = Literal["queued", "running", "succeeded", "failed"]
@@ -247,6 +247,62 @@ class MilestoneItem(BaseModel):
     scheduled_finish: str | None = None
 
 
+class ExecutiveHighlight(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str
+    description: str
+    source_type: Literal["mpp", "calculation", "risk-engine"] = Field(
+        validation_alias=AliasChoices("source_type", "sourceType"),
+    )
+
+
+class ExecutiveFocusItem(BaseModel):
+    title: str
+    description: str
+
+
+class ExecutiveRiskItem(BaseModel):
+    title: str
+    description: str
+    severity: Literal["critical", "high", "medium", "low"]
+
+
+class ExecutiveAction(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    action: str
+    reason: str
+    source_type: Literal["ai-recommendation"] = Field(
+        default="ai-recommendation",
+        validation_alias=AliasChoices("source_type", "sourceType"),
+    )
+
+    @field_validator("source_type", mode="before")
+    @classmethod
+    def _recommendation_source(cls, value: object) -> str:
+        return "ai-recommendation"
+
+
+class ExecutiveSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    summary: str
+    highlights: list[ExecutiveHighlight] = Field(default_factory=list)
+    current_focus: list[ExecutiveFocusItem] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("current_focus", "currentFocus"),
+    )
+    executive_risks: list[ExecutiveRiskItem] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("executive_risks", "executiveRisks"),
+    )
+    recommended_actions: list[ExecutiveAction] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("recommended_actions", "recommendedActions"),
+    )
+
+
 class WsrPlanFacts(BaseModel):
     project_name: str | None = None
     project_owner: str | None = None
@@ -266,6 +322,7 @@ class WsrPlanFacts(BaseModel):
     next_gate: NamedDateValue | None = None
     planned_go_live_date: str | None = None
     executive_overview: str | None = None
+    executive_summary: ExecutiveSummary | None = None
     timeline: list[PhaseStatus] | None = None
     phase_statuses: list[PhaseStatus] = Field(default_factory=list)
     progress_to_date: list[ProgressItem] = Field(default_factory=list)

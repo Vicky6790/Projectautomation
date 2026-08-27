@@ -6,6 +6,7 @@ import { WsrProgressRing } from "./components/WsrProgressRing";
 import { ShellMetaContext } from "./shellMeta";
 import type {
   AiDerivedItem,
+  ExecutiveSummary,
   FileRecord,
   MilestoneItem,
   PhaseStatus,
@@ -15,6 +16,7 @@ import type {
   WsrPlanFacts,
 } from "./types";
 import {
+  healthLabel,
   personDaysLabel,
   percent,
   phaseState,
@@ -384,8 +386,12 @@ export function WsrDashboardView() {
             ))}
           </div>
 
-          <Section n={1} title="Executive Overview" flush>
-            <p className="overview-copy">{unavailable(facts.executive_overview)}</p>
+          <Section n={1} title="AI Executive Summary" flush>
+            <ExecutiveSummaryPanel
+              health={facts.project_health}
+              summary={facts.executive_summary}
+              overview={facts.executive_overview}
+            />
           </Section>
 
           <Section
@@ -547,5 +553,82 @@ export function WsrDashboardView() {
         </div>
       )}
     </section>
+  );
+}
+
+function ExecutiveSummaryPanel({
+  health,
+  summary,
+  overview,
+}: {
+  health?: string | null;
+  summary?: ExecutiveSummary | null;
+  overview?: string | null;
+}) {
+  const tone =
+    health && ["on_track", "at_risk", "off_track", "unavailable"].includes(health)
+      ? health
+      : "unavailable";
+  if (!summary) {
+    return <p className="overview-copy">{unavailable(overview)}</p>;
+  }
+  return (
+    <div className="exec-summary">
+      <p className="exec-health">
+        Overall Health:{" "}
+        <span className={`health health-${tone}`}>{healthLabel(health).toUpperCase()}</span>
+      </p>
+      <p className="overview-copy">{unavailable(summary.summary)}</p>
+      <ExecBlock title="Key Highlights" empty="Unavailable from plan data">
+        {summary.highlights.map((item, index) => (
+          <li key={`${item.title}-${index}`}>
+            <strong>{item.title}:</strong> {item.description}
+          </li>
+        ))}
+      </ExecBlock>
+      <ExecBlock title="Current Focus" empty="Unavailable from plan data">
+        {summary.current_focus.map((item, index) => (
+          <li key={`${item.title}-${index}`}>
+            <strong>{item.title}</strong>
+            {item.description ? ` — ${item.description}` : ""}
+          </li>
+        ))}
+      </ExecBlock>
+      <ExecBlock title="Executive Risks" empty="Unavailable from plan data">
+        {summary.executive_risks.map((item, index) => (
+          <li key={`${item.title}-${index}`}>
+            <span className={`exec-severity exec-severity-${item.severity}`}>{item.severity}</span>{" "}
+            <strong>{item.title}:</strong> {item.description}
+          </li>
+        ))}
+      </ExecBlock>
+      <ExecBlock title="AI Recommended Actions" empty="Unavailable from plan data">
+        {summary.recommended_actions.map((item, index) => (
+          <li key={`${item.action}-${index}`}>
+            <span className="exec-ai-label">AI Recommended Action</span> {item.action}
+            {item.reason ? ` (${item.reason})` : ""}
+          </li>
+        ))}
+      </ExecBlock>
+    </div>
+  );
+}
+
+function ExecBlock({
+  title,
+  empty,
+  children,
+}: {
+  title: string;
+  empty: string;
+  children: ReactNode;
+}) {
+  const items = Array.isArray(children) ? children : [children];
+  const present = items.filter(Boolean);
+  return (
+    <div className="exec-block">
+      <h4>{title}</h4>
+      {present.length ? <ul>{children}</ul> : <p className="muted">{empty}</p>}
+    </div>
   );
 }

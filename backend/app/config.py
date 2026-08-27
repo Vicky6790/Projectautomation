@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     openai_timeout_seconds: float = 60
     ai_stub: bool = False
     max_upload_bytes: int = 52_428_800
+    wsr_go_live_markers: str = "go-live,go live"
+    wsr_upcoming_days: int = 7
     request_ttl_hours: int = 24
 
     def ensure_storage(self) -> None:

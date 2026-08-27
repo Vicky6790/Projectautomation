@@ -13,17 +13,12 @@ from app.models import (
     WsrPlanFacts,
 )
 from app.plan.library import PHASES
-
-_GO_LIVE_MARKERS = ("go-live", "go live")
-_SIGN_OFF_MARKERS = (
-    "sign-off",
-    "sign off",
-    "review & approval",
-    "review and approval",
-    "uat sign-off",
-    "project plan sign-off",
+from app.wsr.detection import (
+    gate_name_markers,
+    go_live_markers,
+    sign_off_markers,
+    upcoming_horizon_days,
 )
-_GATE_NAME_MARKERS = _SIGN_OFF_MARKERS + _GO_LIVE_MARKERS + ("approval",)
 _LIBRARY_PHASE_NAMES = frozenset(
     " ".join(str(phase["name"]).casefold().split()) for phase in PHASES
 )
@@ -113,7 +108,7 @@ def _planned_go_live(tasks: list[PlanTaskData], as_of: date) -> date | None:
     named = [
         task
         for task in tasks
-        if _contains(task.gate, _GO_LIVE_MARKERS) or _contains(task.name, _GO_LIVE_MARKERS)
+        if _contains(task.gate, go_live_markers()) or _contains(task.name, go_live_markers())
     ]
     dates = [item for item in (_candidate_date(task) for task in named) if item is not None]
     if not dates:
@@ -157,29 +152,59 @@ def _health(
     return "at_risk" if overdue else "on_track"
 
 
-def _overall_progress(tasks: list[PlanTaskData]) -> float | None:
-    work = [
-        (task.percent_complete, task.planned_work_hours)
-        for task in tasks
-        if task.planned_work_hours
-    ]
-    if work:
-        total = sum(hours for _pct, hours in work)
-        if total <= 0:
-            return None
-        return round(sum(pct * hours for pct, hours in work) / total, 1)
-    durations: list[tuple[float, float]] = []
+def work_based_progress(tasks: list[PlanTaskData]) -> dict[str, float | str | None]:
+    """Leaf actual work / planned work. Does not convert duration into work."""
+
+    planned = 0.0
+    actual = 0.0
+    remaining = 0.0
+    paired = False
     for task in tasks:
-        start = parse_date(task.scheduled_start)
-        finish = parse_date(task.scheduled_finish)
-        if start is None or finish is None or finish < start:
+        if task.is_summary:
             continue
-        days = (finish - start).days or 1
-        durations.append((task.percent_complete, float(days)))
-    if not durations:
-        return None
-    total = sum(days for _pct, days in durations)
-    return round(sum(pct * days for pct, days in durations) / total, 1)
+        planned_hours, actual_hours = _leaf_work_hours(task)
+        if not planned_hours or planned_hours <= 0 or actual_hours is None:
+            continue
+        paired = True
+        planned += planned_hours
+        actual += actual_hours
+        remaining += max(0.0, planned_hours - actual_hours)
+    if not paired or planned <= 0:
+        return {
+            "metric": "unavailable",
+            "overall_percent": None,
+            "planned": None,
+            "actual": None,
+            "remaining": None,
+        }
+    return {
+        "metric": "work",
+        "overall_percent": round(actual / planned * 100, 1),
+        "planned": round(planned, 1),
+        "actual": round(actual, 1),
+        "remaining": round(remaining, 1),
+    }
+
+
+def _leaf_work_hours(task: PlanTaskData) -> tuple[float | None, float | None]:
+    planned = task.planned_work_hours
+    actual = task.actual_work_hours
+    if planned is None:
+        assignment_planned = [
+            item.planned_work_hours for item in task.assignments if item.planned_work_hours
+        ]
+        planned = sum(assignment_planned) if assignment_planned else None
+    if actual is None:
+        assignment_actual = [
+            item.actual_work_hours for item in task.assignments if item.actual_work_hours is not None
+        ]
+        actual = sum(assignment_actual) if assignment_actual else None
+    return planned, actual
+
+
+def _overall_progress(tasks: list[PlanTaskData]) -> float | None:
+    percent = work_based_progress(tasks)["overall_percent"]
+    return None if percent is None else float(percent)
 
 
 def _capacity(plan: ProjectPlanData) -> float | None:
@@ -254,7 +279,7 @@ def _last_signed_off(tasks: list[PlanTaskData], as_of: date) -> NamedDateValue |
     for matcher in (
         lambda task: bool((task.gate or "").strip()),
         lambda task: task.is_milestone,
-        lambda task: _contains(task.name, _SIGN_OFF_MARKERS),
+        lambda task: _contains(task.name, sign_off_markers()),
     ):
         matched = [task for task in completed if matcher(task)]
         if matched:
@@ -275,7 +300,7 @@ def _next_gate(tasks: list[PlanTaskData], as_of: date) -> NamedDateValue | None:
     for matcher in (
         lambda task: bool((task.gate or "").strip()),
         lambda task: task.is_milestone,
-        lambda task: _contains(task.name, _GATE_NAME_MARKERS),
+        lambda task: _contains(task.name, gate_name_markers()),
     ):
         matched = [task for task in incomplete if matcher(task)]
         if matched:
@@ -359,7 +384,7 @@ def _named_phase_rows(
 def _matches_phase_convention(task: PlanTaskData) -> bool:
     if _is_phase_named(task.name):
         return True
-    if _contains(task.name, _GO_LIVE_MARKERS):
+    if _contains(task.name, go_live_markers()):
         return True
     return _norm_name(task.name) in _LIBRARY_PHASE_NAMES
 
@@ -552,7 +577,7 @@ def _next_planned_tasks(tasks: list[PlanTaskData], as_of: date) -> list[Mileston
 
 def next_seven_day_tasks(plan: ProjectPlanData, as_of: str) -> list[PlanTaskData]:
     as_of_d = date.fromisoformat(as_of)
-    horizon = as_of_d + timedelta(days=7)
+    horizon = as_of_d + timedelta(days=upcoming_horizon_days())
     due: list[PlanTaskData] = []
     for task in plan.tasks:
         if task.is_summary or _complete(task):

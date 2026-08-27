@@ -121,6 +121,37 @@ export type MilestoneItem = {
   scheduled_finish?: string | null;
 };
 
+export type ExecutiveHighlight = {
+  title: string;
+  description: string;
+  source_type: "mpp" | "calculation" | "risk-engine";
+};
+
+export type ExecutiveFocusItem = {
+  title: string;
+  description: string;
+};
+
+export type ExecutiveRiskItem = {
+  title: string;
+  description: string;
+  severity: "critical" | "high" | "medium" | "low";
+};
+
+export type ExecutiveAction = {
+  action: string;
+  reason: string;
+  source_type: "ai-recommendation";
+};
+
+export type ExecutiveSummary = {
+  summary: string;
+  highlights: ExecutiveHighlight[];
+  current_focus: ExecutiveFocusItem[];
+  executive_risks: ExecutiveRiskItem[];
+  recommended_actions: ExecutiveAction[];
+};
+
 export type WsrPlanFacts = {
   project_name?: string | null;
   project_owner?: string | null;
@@ -140,6 +171,7 @@ export type WsrPlanFacts = {
   next_gate?: NamedDateValue | null;
   planned_go_live_date?: string | null;
   executive_overview?: string | null;
+  executive_summary?: ExecutiveSummary | null;
   timeline?: PhaseStatus[] | null;
   phase_statuses?: PhaseStatus[];
   progress_to_date?: ProgressItem[];

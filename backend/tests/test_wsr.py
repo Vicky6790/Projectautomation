@@ -85,6 +85,8 @@ def test_generate_uses_mpp_status_date(client: TestClient, monkeypatch) -> None:
     assert result["facts"]["as_of_date"] == "2026-08-22"
     assert result["facts"]["project_health"] == "on_track"
     assert result["facts"]["planned_go_live_date"] == "2026-09-11"
+    assert result["facts"]["executive_summary"]["summary"]
+    assert result["facts"]["executive_overview"] == result["facts"]["executive_summary"]["summary"]
     assert result["exportable"] is True
     assert result["milestones"] == ["Go Live"]
     status = client.get(f"/api/v1/wsr/requests/{handle}")
@@ -135,7 +137,7 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     assert "WSR & Insights" in text
     assert "WSR Publish Date: 22 Aug 2026" in text
     for heading in (
-        "Executive Overview",
+        "AI Executive Summary",
         "Project Timeline",
         "Phase-Wise Status",
         "Progress to Date",
@@ -153,6 +155,13 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     ):
         assert removed not in text
     assert "No items identified from the plan" in text
+    generated = client.get(f"/api/v1/wsr/requests/{handle}").json()["result"]
+    overview = generated["facts"]["executive_summary"]["summary"]
+    assert overview
+    compact = " ".join(text.split())
+    assert " ".join(overview.split()) in compact
+    assert "Overall Health" in compact
+    assert "AI Recommended Actions" in compact
 
 
 def _pending_ai(_data: dict) -> dict:
