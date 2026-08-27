@@ -97,8 +97,11 @@ export type NamedDateValue = {
 
 export type PhaseStatus = {
   name: string;
+  wbs?: string | null;
   planned_start?: string | null;
   planned_finish?: string | null;
+  actual_start?: string | null;
+  actual_finish?: string | null;
   progress?: number | null;
   state: "not_started" | "in_progress" | "complete";
 };
@@ -127,6 +130,7 @@ export type WsrPlanFacts = {
   capacity_utilization?: number | null;
   people_planned?: number | null;
   resources_deployed?: number | null;
+  person_days_planned?: number | null;
   phase_count?: number | null;
   last_signed_off_milestone?: NamedDateValue | null;
   next_gate?: NamedDateValue | null;

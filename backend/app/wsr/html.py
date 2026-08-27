@@ -5,23 +5,15 @@ from datetime import date, datetime
 
 from app.models import (
     AiDerivedItem,
-    NamedDateValue,
     StatusReport,
     WsrPlanFacts,
 )
 
 _AI_SECTIONS = (
-    ("issues", "Issues"),
+    ("client_needs", "What We Need From the Bank Team"),
     ("risks", "Risks & Focus Areas"),
-    ("next_7_day_priorities", "Next Seven-Day Priorities"),
 )
-_GANTT_COLORS = ("#1f9d6a", "#3b82f6", "#4338ca", "#f59e0b", "#0ea5e9", "#8b5cf6", "#db2777")
-_HEALTH = {
-    "on_track": "On track",
-    "at_risk": "At risk",
-    "off_track": "Off track",
-    "unavailable": "Unavailable - insufficient plan data",
-}
+_GANTT_COLORS = ("#475569", "#6366f1", "#10b981", "#8b5cf6", "#f59e0b")
 _PHASE_STATE = {
     "not_started": "Not started",
     "in_progress": "In progress",
@@ -30,7 +22,11 @@ _PHASE_STATE = {
 
 
 def render_wsr_html(handle: str, payload: StatusReport) -> str:
-    facts = payload.facts or WsrPlanFacts()
+    facts = payload.facts or WsrPlanFacts(
+        as_of_date=payload.as_of_date or "",
+        generated_at=payload.generated_at or "",
+        project_health=payload.project_health or "unavailable",
+    )
     health = facts.project_health or payload.project_health or "unavailable"
     body = "".join(
         [
@@ -54,29 +50,25 @@ def render_wsr_html(handle: str, payload: StatusReport) -> str:
 <title>WSR &amp; Insights</title>
 <style>
 @page {{ size: A4; margin: 12mm; }}
-body {{ font-family: Helvetica, Arial, sans-serif; color: #1e1b4b; font-size: 10px; }}
-h1 {{ font-size: 18px; margin: 0 0 8px; color: #102033; }}
-h2 {{ font-size: 13px; margin: 0; color: #102033; }}
+body {{ font-family: Helvetica, Arial, sans-serif; color: #334155; font-size: 10px; }}
+h1 {{ font-size: 18px; margin: 0 0 8px; color: #1e293b; }}
+h2 {{ font-size: 13px; margin: 0; color: #1e293b; }}
 h3 {{ font-size: 12px; margin: 0 0 6px; }}
 p {{ margin: 0 0 6px; }}
-.muted {{ color: #4a6278; }}
-.card {{ border: 1px solid #d5e0ec; background: #ffffff; padding: 8px; }}
-.hero td, .kpis td, .stats td {{
-  border: 1px solid #d5e0ec; background: #f4f7fb; padding: 8px; vertical-align: top;
+.muted {{ color: #64748b; }}
+.card {{ border: 1px solid #e2e8f0; background: #ffffff; padding: 8px; }}
+.hero td, .kpis td {{
+  border: 1px solid #e2e8f0; background: #f8fafc; padding: 8px; vertical-align: top;
 }}
-.label {{ color: #4a6278; font-size: 8px; }}
-.value {{ font-size: 14px; font-weight: bold; }}
-.countdown {{ font-size: 28px; font-weight: bold; color: #b42318; }}
+.label {{ color: #64748b; font-size: 8px; }}
+.value {{ font-size: 14px; font-weight: bold; color: #1e293b; }}
+.countdown {{ font-size: 28px; font-weight: bold; color: #f43f5e; }}
 .ring {{ font-size: 22px; font-weight: bold; text-align: center; }}
 .num {{ color: #ffffff; background: #4f46e5; padding: 2px 6px; }}
-.health-on_track {{ color: #0b7a3e; font-weight: bold; }}
-.health-at_risk {{ color: #9a6700; font-weight: bold; }}
-.health-off_track {{ color: #b42318; font-weight: bold; }}
-.health-unavailable {{ color: #4a6278; font-weight: bold; }}
 .gantt {{ width: 100%; border-collapse: collapse; margin: 0 0 6px; }}
 .gantt td {{ border: none; padding: 0; background: #ffffff; }}
 .gantt-bar {{ height: 10px; }}
-.badge {{ color: #b42318; font-weight: bold; }}
+.badge {{ color: #4f46e5; font-weight: bold; }}
 table {{ width: 100%; border-collapse: collapse; margin: 0 0 10px; }}
 .section {{ margin: 0 0 12px; }}
 </style>
@@ -90,26 +82,18 @@ table {{ width: 100%; border-collapse: collapse; margin: 0 0 10px; }}
 """
 
 
-def _hero(payload: StatusReport, facts: WsrPlanFacts, health: str) -> str:
+def _hero(payload: StatusReport, facts: WsrPlanFacts, _health: str) -> str:
     countdown = (
         str(facts.countdown_days) if facts.countdown_days is not None else "Unavailable"
     )
     progress = _percent(facts.overall_progress)
-    planned = " - planned data only" if payload.planned_only else ""
-    owner = (
-        f"Owner: {_esc(facts.project_owner)} - as of {_short_date(payload.as_of_date)}"
-        f" - generated {_esc(payload.generated_at)}{html.escape(planned)}"
-    )
-    stamp = f"As of: {_esc(payload.as_of_date)} - Generated: {_esc(payload.generated_at)}"
-    health_label = html.escape(_HEALTH.get(health, health))
+    stamp = f"WSR Publish Date: {_short_date(payload.as_of_date)}"
     return f"""
 <table class="hero">
 <tr>
 <td width="46%">
 <h2>{_esc(facts.project_name)}</h2>
-<p class="muted">{owner}</p>
 <p class="muted">{stamp}</p>
-<p class="health-{html.escape(health)}">Project health: {health_label}</p>
 </td>
 <td width="27%" align="center">
 <p class="label">Countdown</p>
@@ -119,6 +103,7 @@ def _hero(payload: StatusReport, facts: WsrPlanFacts, health: str) -> str:
 <td width="27%" align="center">
 <p class="ring">{html.escape(progress if progress != "Unavailable" else "—")}</p>
 <p class="muted">Overall Progress</p>
+<p class="muted">By work completion</p>
 </td>
 </tr>
 </table>
@@ -126,51 +111,30 @@ def _hero(payload: StatusReport, facts: WsrPlanFacts, health: str) -> str:
 
 
 def _kpi_grid(facts: WsrPlanFacts) -> str:
-    work = "Unavailable"
-    if facts.completed_work_items is not None and facts.planned_work_items is not None:
-        work = f"{facts.completed_work_items} / {facts.planned_work_items}"
-    elif facts.completed_work_items is not None:
-        work = str(facts.completed_work_items)
-    signed = facts.last_signed_off_milestone
-    gate = facts.next_gate
-    capacity_hint = "Actual vs planned work" if facts.capacity_utilization is not None else ""
+    work = _count(facts.completed_work_items)
+    work_hint = (
+        f"of {facts.planned_work_items} planned"
+        if facts.planned_work_items is not None
+        else "of planned work items"
+    )
+    deployed = facts.resources_deployed if facts.resources_deployed is not None else facts.people_planned
     cards = [
-        ("Overall Progress", _percent(facts.overall_progress), "By work completed"),
-        ("Last Signed-Off Milestone", _named(signed), signed.name if signed else ""),
-        ("Work Items Completed", work, "actual / planned" if "/" in work else ""),
-        ("Team Capacity", _percent(facts.capacity_utilization), capacity_hint),
-        ("Next Gate", _named_compact(gate), gate.name if gate else ""),
-        ("Go-Live", _short_date(facts.planned_go_live_date), "Production dates"),
+        ("Phases to Go-Live", _count(facts.phase_count), "Across project lifecycle"),
+        ("Resources Deployed", _count(deployed), "From Resource Sheet"),
+        ("Person-Days Planned", _person_days(facts.person_days_planned), "Total effort estimated"),
+        ("Work Items Complete", work, work_hint),
     ]
-    rows = []
-    for start in (0, 3):
-        cells = "".join(
-            f'<td width="33%"><p class="label">{html.escape(label)}</p>'
-            f'<p class="value">{html.escape(value)}</p>'
-            f'<p class="muted">{html.escape(hint)}</p></td>'
-            for label, value, hint in cards[start : start + 3]
-        )
-        rows.append(f"<tr>{cells}</tr>")
-    return f'<table class="kpis">{"".join(rows)}</table>'
+    cells = "".join(
+        f'<td width="25%"><p class="label">{html.escape(label)}</p>'
+        f'<p class="value">{html.escape(value)}</p>'
+        f'<p class="muted">{html.escape(hint)}</p></td>'
+        for label, value, hint in cards
+    )
+    return f'<table class="kpis"><tr>{cells}</tr></table>'
 
 
 def _overview(facts: WsrPlanFacts) -> str:
-    stats = [
-        ("Overall Progress", _percent(facts.overall_progress)),
-        ("Phases to Go-Live", _count(facts.phase_count)),
-        ("People Planned", _count(facts.people_planned)),
-        ("Resources Deployed", _count(facts.resources_deployed)),
-        ("Days to Go-Live", _count(facts.countdown_days, suffix="d")),
-    ]
-    cells = "".join(
-        (
-            f'<td width="20%"><p class="value">{html.escape(value)}</p>'
-            f'<p class="muted">{html.escape(label)}</p></td>'
-        )
-        for label, value in stats
-    )
-    overview = _esc(facts.executive_overview)
-    return f'<p>{overview}</p><table class="stats"><tr>{cells}</tr></table>'
+    return f"<p>{_esc(facts.executive_overview)}</p>"
 
 
 def _timeline(facts: WsrPlanFacts) -> str:
@@ -197,6 +161,13 @@ def _timeline(facts: WsrPlanFacts) -> str:
         left = int(((start - minimum).days / span) * 100)
         width = max(int(((finish - start).days / span) * 100), 2)
         color = _GANTT_COLORS[index % len(_GANTT_COLORS)]
+        window = _window(phase.planned_start, phase.planned_finish, arrow=True)
+        days = _duration_days(phase.planned_start, phase.planned_finish)
+        dur = f"{days}d" if days is not None else "-"
+        rows.append(
+            f"<p><b>{html.escape(_wbs_label(phase, index + 1))}</b> {html.escape(phase.name)} "
+            f"<span class='muted'>{html.escape(window)} {html.escape(dur)}</span></p>"
+        )
         rows.append(_gantt_bar(phase.name, left, width, color))
     return "".join(rows)
 
@@ -207,18 +178,25 @@ def _phases(facts: WsrPlanFacts) -> str:
         return "<p>Unavailable</p>"
     rows = [
         "<tr><td><b>WBS</b></td><td><b>Phase</b></td>"
-        "<td><b>Planned timing</b></td><td><b>Progress</b></td></tr>"
+        "<td><b>Planned Window</b></td><td><b>Deviated Window</b></td>"
+        "<td><b>Progress</b></td></tr>"
     ]
     for index, phase in enumerate(phases, start=1):
         if phase.progress is not None:
             progress = _percent(phase.progress)
         else:
             progress = _PHASE_STATE.get(phase.state, phase.state)
+        planned = _window(phase.planned_start, phase.planned_finish)
+        if phase.actual_start or phase.actual_finish:
+            actual = _window(phase.actual_start, phase.actual_finish)
+        else:
+            actual = "-"
         rows.append(
             "<tr>"
-            f"<td>{index}</td>"
+            f"<td>{html.escape(_wbs_label(phase, index))}</td>"
             f"<td>{html.escape(phase.name)}</td>"
-            f"<td>{_esc(phase.planned_start)} - {_esc(phase.planned_finish)}</td>"
+            f"<td>{html.escape(planned)}</td>"
+            f"<td>{html.escape(actual)}</td>"
             f"<td>{html.escape(progress)}</td>"
             "</tr>"
         )
@@ -227,14 +205,13 @@ def _phases(facts: WsrPlanFacts) -> str:
 
 def _progress(facts: WsrPlanFacts) -> str:
     items = facts.progress_to_date or []
-    intro = "<p class='muted'>Tasks scheduled this week</p>"
     if not items:
-        return intro + "<p>No tasks scheduled in the current week</p>"
-    rows = [intro]
+        return "<p>No tasks scheduled in the current week</p>"
+    rows = []
     for item in items:
         extra = f" - {_percent(item.progress)}" if item.progress is not None else ""
         rows.append(
-            f"<p><b>{html.escape(item.name)}</b><br/>"
+            f"<p><b>{html.escape(item.name)}</b> "
             f"<span class='muted'>{_esc(item.date)}{html.escape(extra)}</span></p>"
         )
     return "".join(rows)
@@ -242,29 +219,28 @@ def _progress(facts: WsrPlanFacts) -> str:
 
 def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
     items = facts.upcoming_milestones or []
-    intro = "<p class='muted'>Next planned tasks</p>"
     if not items:
-        return intro + "<p>No upcoming planned tasks</p>"
+        return "<p>No upcoming planned tasks</p>"
     as_of_d = _day(as_of)
-    rows = [intro]
+    rows = [
+        "<tr><td><b>Date</b></td><td><b>Milestone / Activity</b></td><td></td></tr>"
+    ]
     for item in items:
-        delayed = ""
+        today = ""
         item_day = _day(item.date)
-        if as_of_d and item_day and item_day < as_of_d:
-            delayed = ' <span class="badge">DELAYED</span>'
-        when = html.escape(_short_date(item.date))
+        if as_of_d and item_day and item_day == as_of_d:
+            today = ' <span class="badge">Today</span>'
+        when = html.escape(_compact_date(item.date))
         name = html.escape(item.name)
-        rows.append(f"<p>{when} {name}{delayed}</p>")
-    return "".join(rows)
+        rows.append(f"<tr><td>{when}</td><td>{name}</td><td>{today}</td></tr>")
+    return f"<table>{''.join(rows)}</table>"
 
 
 def _insights(items: list[AiDerivedItem] | None) -> str:
     visible = [item for item in (items or []) if item.review_status != "removed"]
     if not visible:
         return "<p>No items identified from the plan</p>"
-    return "".join(
-        f"<p><b>AI-derived</b> {html.escape(item.content)}</p>" for item in visible
-    )
+    return "".join(f"<p>{html.escape(item.content)}</p>" for item in visible)
 
 
 def _gantt_bar(name: str, left: int, width: int, color: str) -> str:
@@ -278,7 +254,6 @@ def _gantt_bar(name: str, left: int, width: int, color: str) -> str:
     if right:
         cells.append(f'<td width="{right}%">&nbsp;</td>')
     return (
-        f"<p>{html.escape(name)}</p>"
         '<table class="gantt" cellpadding="0" cellspacing="0">'
         f"<tr>{''.join(cells)}</tr></table>"
     )
@@ -298,6 +273,11 @@ def _esc(value: object) -> str:
     return html.escape(str(value).replace("\u2014", "-").replace("\u2013", "-"))
 
 
+def _wbs_label(phase, index: int) -> str:
+    code = (getattr(phase, "wbs", None) or "").strip()
+    return code or f"1.{index}"
+
+
 def _percent(value: float | None) -> str:
     if value is None:
         return "Unavailable"
@@ -306,26 +286,42 @@ def _percent(value: float | None) -> str:
     return f"{value}%"
 
 
-def _count(value: int | None, suffix: str = "") -> str:
+def _count(value: int | float | None, suffix: str = "") -> str:
     if value is None:
         return "Unavailable"
+    if isinstance(value, float) and value.is_integer():
+        return f"{int(value)}{suffix}"
     return f"{value}{suffix}"
 
 
-def _named(value: NamedDateValue | None) -> str:
-    if value is None or not value.name:
-        return "Unavailable"
-    if not value.date:
-        return value.name
-    return f"{value.name} ({_compact_date(value.date)})"
-
-
-def _named_compact(value: NamedDateValue | None) -> str:
+def _person_days(value: float | None) -> str:
     if value is None:
         return "Unavailable"
-    if value.date:
-        return _compact_date(value.date)
-    return value.name or "Unavailable"
+    return f"~{int(round(value)):,}"
+
+
+def _window(start: str | None, finish: str | None, *, arrow: bool = False) -> str:
+    start_d = _day(start)
+    finish_d = _day(finish)
+    if start_d is None and finish_d is None:
+        return "Unavailable"
+    if start_d is None:
+        return _short_date(finish)
+    if finish_d is None:
+        return _short_date(start)
+    left = f"{start_d.day} {start_d.strftime('%b')}"
+    right = f"{finish_d.day} {finish_d.strftime('%b %Y')}"
+    sep = " -> " if arrow else " - "
+    return f"{left}{sep}{right}"
+
+
+def _duration_days(start: str | None, finish: str | None) -> int | None:
+    start_d = _day(start)
+    finish_d = _day(finish)
+    if start_d is None or finish_d is None:
+        return None
+    days = (finish_d - start_d).days + 1
+    return days if days > 0 else 1
 
 
 def _short_date(value: str | None) -> str:

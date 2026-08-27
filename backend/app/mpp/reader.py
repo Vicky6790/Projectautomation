@@ -109,7 +109,8 @@ def project_from_mpxj(project) -> ProjectPlanData:
             PlanTaskData(
                 id=int(unique_id),
                 name=str(task_name),
-                outline_level=int(task.getOutlineLevel() or 1),
+                wbs=_wbs_code(task),
+                outline_level=int(task.getOutlineLevel()) if task.getOutlineLevel() is not None else 1,
                 is_summary=bool(task.getSummary()),
                 is_milestone=bool(task.getMilestone()),
                 set_name=_text_field(task, 1),
@@ -137,7 +138,7 @@ def project_from_mpxj(project) -> ProjectPlanData:
         planned_only=not has_actuals,
         tasks=tasks,
         resources=resources,
-        phases=[_phase(task) for task in select_phase_summaries(tasks)],
+        phases=[_phase(task) for task in select_phase_summaries(tasks, project_name=name)],
     )
 
 
@@ -192,6 +193,36 @@ def _number(value) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _wbs_code(task) -> str | None:
+    codes: list[str] = []
+    for raw in (_task_value(task, "getWBS"), _task_value(task, "getOutlineNumber")):
+        text = str(raw).strip() if raw is not None else ""
+        if text and text.lower() != "none":
+            codes.append(text)
+    for text in codes:
+        if _is_project_or_phase_wbs(text):
+            return text
+    return codes[0] if codes else None
+
+
+def _task_value(task, method: str):
+    getter = getattr(task, method, None)
+    if getter is None:
+        return None
+    try:
+        return getter()
+    except Exception:  # noqa: BLE001 - optional MPXJ field
+        return None
+
+
+def _is_project_or_phase_wbs(value: str) -> bool:
+    text = value.strip()
+    if text == "1":
+        return True
+    parts = text.split(".")
+    return len(parts) == 2 and parts[0] == "1" and parts[1].isdigit()
 
 
 def _first_text(*values) -> str | None:

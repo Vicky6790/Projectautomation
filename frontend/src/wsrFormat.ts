@@ -37,6 +37,11 @@ export function namedDate(value: NamedDateValue | null | undefined): string {
   return value.date ? `${value.name} (${value.date})` : value.name;
 }
 
+export function phaseWbs(phase: { wbs?: string | null }, index: number): string {
+  const value = phase.wbs?.trim();
+  return value || `1.${index + 1}`;
+}
+
 export function phaseState(value: string | null | undefined): string {
   if (value === "not_started") {
     return "Not started";
@@ -70,4 +75,74 @@ export function compactDate(value: string | null | undefined): string {
     return value;
   }
   return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function parseDay(value: string | null | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function windowRange(
+  start: string | null | undefined,
+  finish: string | null | undefined,
+  style: "arrow" | "dash" = "dash",
+): string {
+  const startDay = parseDay(start);
+  const finishDay = parseDay(finish);
+  if (!startDay && !finishDay) {
+    return "Unavailable";
+  }
+  if (!startDay) {
+    return style === "dash" ? shortDate(finish) : compactDate(finish);
+  }
+  if (!finishDay) {
+    return style === "dash" ? shortDate(start) : compactDate(start);
+  }
+  const sameYear = startDay.getFullYear() === finishDay.getFullYear();
+  const left = startDay.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const right = finishDay.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    ...(sameYear && style === "arrow" ? {} : { year: "numeric" }),
+  });
+  const sep = style === "arrow" ? " → " : " – ";
+  return `${left}${sep}${right}`;
+}
+
+export function durationDays(
+  start: string | null | undefined,
+  finish: string | null | undefined,
+): number | null {
+  const startDay = parseDay(start);
+  const finishDay = parseDay(finish);
+  if (!startDay || !finishDay) {
+    return null;
+  }
+  const days = Math.round((finishDay.getTime() - startDay.getTime()) / 86_400_000) + 1;
+  return days > 0 ? days : 1;
+}
+
+export function personDaysLabel(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "Unavailable";
+  }
+  return `~${Math.round(value).toLocaleString("en-US")}`;
+}
+
+export function splitInsight(content: string): { title: string; body: string } {
+  const separators = [" — ", " – ", ": "];
+  for (const separator of separators) {
+    const index = content.indexOf(separator);
+    if (index > 8 && index < 80) {
+      return { title: content.slice(0, index).trim(), body: content.slice(index + separator.length).trim() };
+    }
+  }
+  const sentence = content.match(/^(.{12,72}?[.!?])\s+/);
+  if (sentence) {
+    return { title: sentence[1].replace(/[.!?]$/, ""), body: content.slice(sentence[0].length).trim() };
+  }
+  return { title: content, body: "" };
 }

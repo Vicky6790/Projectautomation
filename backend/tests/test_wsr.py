@@ -133,21 +133,20 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     assert ".pdf" in report.headers["content-disposition"]
     text = pdf_text(report.content)
     assert "WSR & Insights" in text
-    assert "As of: 2026-08-22" in text
-    assert "On track" in text
+    assert "WSR Publish Date: 22 Aug 2026" in text
     for heading in (
         "Executive Overview",
         "Project Timeline",
         "Phase-Wise Status",
         "Progress to Date",
         "Upcoming Milestones",
-        "Issues",
+        "What We Need From the Bank Team",
         "Risks & Focus Areas",
-        "Next Seven-Day Priorities",
     ):
         assert heading in text
     for removed in (
-        "What We Need From the Bank Team",
+        "Issues",
+        "Next Seven-Day Priorities",
         "Dependencies",
         "Management Attention",
         "Decisions Required",
@@ -176,15 +175,16 @@ def _pending_ai(_data: dict) -> dict:
             "review_status": "pending",
         }
     ]
-    empty["issues"] = [
+    empty["client_needs"] = [
         {
-            "id": "issue-1",
-            "section": "issue",
+            "id": "need-1",
+            "section": "client_need",
             "content": "Kickoff evidence is incomplete",
             "evidence_references": [{"task_or_milestone_name": "Kickoff", "date": "2026-08-12"}],
             "review_status": "pending",
         }
     ]
+    empty["issues"] = []
     return empty
 
 
@@ -230,12 +230,12 @@ def test_review_keep_edit_remove_and_download(client: TestClient, monkeypatch) -
     assert blank.json()["error"]["code"] == "INVALID_REVIEW"
 
     keep = client.patch(
-        f"/api/v1/wsr/requests/{handle}/items/issue-1",
+        f"/api/v1/wsr/requests/{handle}/items/need-1",
         json={"decision": "kept"},
     )
     assert keep.status_code == 200
     assert keep.json()["result"]["exportable"] is False
-    assert keep.json()["result"]["issues"][0]["review_status"] == "kept"
+    assert keep.json()["result"]["client_needs"][0]["review_status"] == "kept"
 
     edit = client.patch(
         f"/api/v1/wsr/requests/{handle}/items/risk-1",
@@ -256,12 +256,12 @@ def test_review_keep_edit_remove_and_download(client: TestClient, monkeypatch) -
     assert "Kickoff evidence is incomplete" in text
 
     removed = client.patch(
-        f"/api/v1/wsr/requests/{handle}/items/issue-1",
+        f"/api/v1/wsr/requests/{handle}/items/need-1",
         json={"decision": "removed"},
     )
     assert removed.status_code == 200
     assert removed.json()["result"]["exportable"] is True
-    assert removed.json()["result"]["issues"][0]["review_status"] == "removed"
+    assert removed.json()["result"]["client_needs"][0]["review_status"] == "removed"
 
     after_remove = client.get(f"/api/v1/wsr/requests/{handle}/report")
     assert after_remove.status_code == 200

@@ -145,28 +145,23 @@ def test_wsr_report_matches_dashboard_sections() -> None:
     assert body.startswith(b"%PDF")
     text = " ".join(pdf_text(body).split())
     assert "WSR & Insights" in text
-    assert "As of: 2026-08-22" in text
-    assert "Generated: 2026-08-22T10:00:00Z" in text
-    assert "On track" in text
+    assert "WSR Publish Date: 22 Aug 2026" in text
+    assert "Overall Progress" in text
     for label in (
-        "Overall Progress",
-        "Last Signed-Off Milestone",
-        "Work Items Completed",
-        "Team Capacity",
-        "Next Gate",
-        "Go-Live",
         "Phases to Go-Live",
-        "People Planned",
         "Resources Deployed",
-        "Days to Go-Live",
+        "Person-Days Planned",
+        "Work Items Complete",
     ):
         assert label in text
     for _key, heading in WSR_SECTIONS:
         assert heading in text
     for removed in (
-        "What We Need From the Bank Team",
+        "Issues",
+        "Next Seven-Day Priorities",
         "Management Attention",
         "Decisions Required",
+        "Last Signed-Off Milestone",
     ):
         assert removed not in text
     assert "No items identified from the plan" in text

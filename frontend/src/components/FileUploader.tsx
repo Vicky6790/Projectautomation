@@ -6,8 +6,9 @@ type Props = {
   disabled?: boolean;
   accept?: string;
   label?: string;
+  hint?: string;
   endpoint?: string;
-  variant?: "default" | "button";
+  variant?: "default" | "button" | "card";
   onUploaded: (file: FileRecord) => void;
   onError: (message: string) => void;
 };
@@ -16,6 +17,7 @@ export function FileUploader({
   disabled,
   accept = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   label = "Choose SOW (PDF or Word)",
+  hint,
   endpoint = "/api/v1/sow/uploads",
   variant = "default",
   onUploaded,
@@ -51,7 +53,7 @@ export function FileUploader({
   const input = (
     <input
       ref={inputRef}
-      className={variant === "button" ? "sr-only" : undefined}
+      className={variant === "button" || variant === "card" ? "sr-only" : undefined}
       type="file"
       accept={accept}
       onChange={chooseFile}
@@ -60,8 +62,23 @@ export function FileUploader({
   );
 
   return (
-    <div className={`uploader${variant === "button" ? " uploader-button" : ""}`}>
-      {variant === "button" ? (
+    <div className={`uploader${variant === "button" || variant === "card" ? " uploader-button" : ""}`}>
+      {variant === "card" ? (
+        <button
+          type="button"
+          className="wsr-upload-trigger"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          <span className="wsr-upload-icon" aria-hidden="true">
+            <span className="material-symbols-outlined">upload_file</span>
+          </span>
+          <span>
+            <span className="wsr-upload-title">{label}</span>
+            <span className="wsr-upload-hint">{hint ?? "Microsoft Project (.mpp)"}</span>
+          </span>
+        </button>
+      ) : variant === "button" ? (
         <button
           type="button"
           className="btn btn-outline"
@@ -76,7 +93,7 @@ export function FileUploader({
           {input}
         </label>
       )}
-      {variant === "button" ? input : null}
+      {variant === "button" || variant === "card" ? input : null}
       {progress !== null ? (
         <div className="progress">
           <p>Uploading {progress}%</p>

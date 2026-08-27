@@ -1,9 +1,7 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
-import { downloadWsrReport, generateWsr, retryJob } from "./api";
+import { generateWsr, retryJob } from "./api";
 import { FileUploader } from "./components/FileUploader";
-import { ReportDownloadControl } from "./components/ReportDownloadControl";
 import { WsrGantt } from "./components/WsrGantt";
-import { WsrInsightItem } from "./components/WsrInsightItem";
 import { WsrProgressRing } from "./components/WsrProgressRing";
 import { ShellMetaContext } from "./shellMeta";
 import type {
@@ -17,13 +15,14 @@ import type {
   WsrPlanFacts,
 } from "./types";
 import {
-  compactDate,
-  healthLabel,
-  namedDate,
+  personDaysLabel,
   percent,
   phaseState,
+  phaseWbs,
   shortDate,
+  splitInsight,
   unavailable,
+  windowRange,
 } from "./wsrFormat";
 
 const GENERATE_STAGES = [
@@ -33,11 +32,8 @@ const GENERATE_STAGES = [
   "Rendering the report",
 ];
 
-const AI_SECTIONS: { key: keyof StatusReport; label: string; tone?: "risk" | "need" }[] = [
-  { key: "issues", label: "Issues" },
-  { key: "risks", label: "Risks & Focus Areas", tone: "risk" },
-  { key: "next_7_day_priorities", label: "Next Seven-Day Priorities" },
-];
+const KPI_TONES = ["kpi-indigo", "kpi-emerald", "kpi-amber", "kpi-blue"] as const;
+const KPI_ICONS = ["calendar_today", "person_add", "schedule", "assignment"] as const;
 
 function asReport(result: ProcessingResponse["result"]): StatusReport | null {
   if (!result || typeof result !== "object") {
@@ -67,40 +63,35 @@ function visibleInsights(items: AiDerivedItem[]): AiDerivedItem[] {
   return items.filter((item) => item.review_status !== "removed");
 }
 
-function workItemsValue(facts: WsrPlanFacts): string {
-  if (facts.completed_work_items != null && facts.planned_work_items != null) {
-    return `${facts.completed_work_items} / ${facts.planned_work_items}`;
-  }
-  return unavailable(facts.completed_work_items);
-}
-
-function healthTone(health?: string | null): string {
-  if (health === "off_track") {
-    return "tone-bad";
-  }
-  if (health === "at_risk") {
-    return "tone-warn";
-  }
-  if (health === "on_track") {
-    return "tone-good";
-  }
-  return "";
-}
-
-function isPast(date: string | null | undefined, asOf: string | null | undefined): boolean {
+function isSameDay(date: string | null | undefined, asOf: string | null | undefined): boolean {
   if (!date || !asOf) {
     return false;
   }
-  return date.slice(0, 10) < asOf.slice(0, 10);
+  return date.slice(0, 10) === asOf.slice(0, 10);
 }
 
-function Section({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+function Section({
+  n,
+  title,
+  hint,
+  children,
+  flush,
+}: {
+  n: number;
+  title: string;
+  hint?: string;
+  children: ReactNode;
+  flush?: boolean;
+}) {
   return (
-    <section className="wsr-section">
-      <h3>
-        <span className="wsr-num">{n}</span>
-        {title}
-      </h3>
+    <section className={`wsr-section${flush ? " wsr-section-flush" : ""}`}>
+      <div className="wsr-section-head">
+        <h3>
+          <span className="wsr-num">{n}</span>
+          {title}
+        </h3>
+        {hint ? <p className="muted">{hint}</p> : null}
+      </div>
       {children}
     </section>
   );
@@ -110,19 +101,62 @@ function KpiCard({
   label,
   value,
   hint,
+  icon,
   tone,
 }: {
   label: string;
   value: string;
   hint?: string;
-  tone?: string;
+  icon: string;
+  tone: string;
 }) {
   return (
-    <article className="kpi-card">
+    <article className={`kpi-card ${tone}`}>
+      <div className="kpi-icon">
+        <span className="material-symbols-outlined" aria-hidden="true">
+          {icon}
+        </span>
+      </div>
       <p className="metric-label">{label}</p>
-      <p className={`metric-value ${tone ?? ""}`}>{value}</p>
+      <p className="metric-value">{value}</p>
       {hint ? <p className="metric-hint">{hint}</p> : null}
     </article>
+  );
+}
+
+function InsightCards({
+  items,
+  tone,
+  empty,
+}: {
+  items: AiDerivedItem[];
+  tone: "need" | "risk";
+  empty: string;
+}) {
+  if (!items.length) {
+    return <p>{empty}</p>;
+  }
+  return (
+    <div className="insight-grid">
+      {items.map((item) => {
+        const { title, body } = splitInsight(item.content);
+        return (
+          <article key={item.id} className={`insight-card insight-${tone}`}>
+            <h4>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {tone === "need" ? "description" : "warning"}
+              </span>
+              {title}
+            </h4>
+            {body ? (
+              <ul>
+                <li>{body}</li>
+              </ul>
+            ) : null}
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -138,7 +172,6 @@ export function WsrDashboardView() {
 
   const report = asReport(job?.result ?? null);
   const facts: WsrPlanFacts = report?.facts ?? {};
-  const tone = healthTone(report?.project_health);
 
   useEffect(() => {
     const identity = [facts.project_name, facts.project_owner].filter(Boolean).join(" · ");
@@ -184,23 +217,6 @@ export function WsrDashboardView() {
     await runGenerate(uploaded.id);
   }
 
-  async function download() {
-    if (!uploaded) {
-      return;
-    }
-    try {
-      const { blob, filename } = await downloadWsrReport(uploaded.id);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error: unknown) {
-      setMessage(error instanceof Error ? error.message : "Download failed");
-    }
-  }
-
   function printForMeeting() {
     document.documentElement.classList.add("wsr-printing");
     const cleanup = () => document.documentElement.classList.remove("wsr-printing");
@@ -208,90 +224,105 @@ export function WsrDashboardView() {
     window.setTimeout(() => window.print(), 50);
   }
 
+  const deployed = facts.resources_deployed ?? facts.people_planned;
+  const kpis = [
+    {
+      label: "Phases to Go-Live",
+      value: unavailable(facts.phase_count),
+      hint: "Across project lifecycle",
+    },
+    {
+      label: "Resources Deployed",
+      value: unavailable(deployed),
+      hint: "From Resource Sheet",
+    },
+    {
+      label: "Person-Days Planned",
+      value: personDaysLabel(facts.person_days_planned),
+      hint: "Total effort estimated",
+    },
+    {
+      label: "Work Items Complete",
+      value: unavailable(facts.completed_work_items),
+      hint:
+        facts.planned_work_items != null
+          ? `of ${facts.planned_work_items} planned`
+          : "of planned work items",
+    },
+  ];
+
   return (
     <section className="wsr-page">
       <header className="wsr-page-head">
         <h2>WSR & Insights</h2>
         <p>Generate comprehensive status reports from your project plan.</p>
-        <p className="muted">
-          For an executive meeting, present this dashboard full screen. Use Print for meeting, then
-          Save as PDF, for a leave-behind that matches the screen.
-        </p>
       </header>
 
-      <div className="wsr-action-bar">
-        {uploaded ? (
-          <div className="file-chip">
-            <span className="file-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M14 3v6h6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-            <span>{uploaded.filename}</span>
+      <div className="wsr-upload-card">
+        <div className="wsr-upload-inner">
+          {uploaded ? (
+            <div className="file-chip">
+              <span className="wsr-upload-icon" aria-hidden="true">
+                <span className="material-symbols-outlined">description</span>
+              </span>
+              <div>
+                <p className="wsr-upload-title">{uploaded.filename}</p>
+                <p className="wsr-upload-hint">Microsoft Project (.mpp)</p>
+              </div>
+              <button
+                type="button"
+                className="chip-clear"
+                aria-label="Remove file"
+                disabled={busy}
+                onClick={() => {
+                  setUploaded(null);
+                  setJob(null);
+                  setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <FileUploader
+              variant="card"
+              disabled={busy}
+              accept=".mpp,application/vnd.ms-project"
+              label="Upload Project Plan"
+              hint="Microsoft Project (.mpp)"
+              endpoint="/api/v1/wsr/uploads"
+              onUploaded={(file) => {
+                setUploaded(file);
+                setJob(null);
+                setMessage("File ready. Generate WSR & Insights to build the dashboard.");
+              }}
+              onError={setMessage}
+            />
+          )}
+          <div className="wsr-action-buttons">
             <button
               type="button"
-              className="chip-clear"
-              aria-label="Remove file"
-              disabled={busy}
-              onClick={() => {
-                setUploaded(null);
-                setJob(null);
-                setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
-              }}
+              className="btn btn-outline"
+              disabled={!report || busy}
+              onClick={printForMeeting}
             >
-              ×
+              <span className="material-symbols-outlined" aria-hidden="true">
+                download
+              </span>
+              Download to PDF
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!uploaded || busy}
+              onClick={() => uploaded && void runGenerate(uploaded.id)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                insights
+              </span>
+              Generate WSR & Insights
             </button>
           </div>
-        ) : (
-          <FileUploader
-            variant="button"
-            disabled={busy}
-            accept=".mpp,application/vnd.ms-project"
-            label="Choose Microsoft Project file (.mpp)"
-            endpoint="/api/v1/wsr/uploads"
-            onUploaded={(file) => {
-              setUploaded(file);
-              setJob(null);
-              setMessage("File ready. Generate WSR & Insights to build the dashboard.");
-            }}
-            onError={setMessage}
-          />
-        )}
-        <div className="wsr-action-buttons">
-          <ReportDownloadControl
-            enabled={job?.status === "succeeded" && !busy}
-            label="Download last WSR"
-            onDownload={() => void download()}
-          />
-          <button
-            type="button"
-            className="btn btn-outline"
-            disabled={!report || busy}
-            onClick={printForMeeting}
-          >
-            Print for meeting
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!uploaded || busy}
-            onClick={() => uploaded && void runGenerate(uploaded.id)}
-          >
-            Generate WSR & Insights
-          </button>
         </div>
       </div>
 
@@ -315,109 +346,53 @@ export function WsrDashboardView() {
         <div className="dashboard">
           <section className="wsr-hero">
             <div className="hero-identity">
-              <h3>{unavailable(facts.project_name)}</h3>
-              <p className="muted">
-                Owner: {unavailable(facts.project_owner)} · as of {shortDate(report.as_of_date)} ·
-                generated {unavailable(report.generated_at)}
-                {report.planned_only ? " · planned data only" : ""}
-              </p>
-              <p className={`health health-${report.project_health ?? "unavailable"}`}>
-                Project health: {healthLabel(report.project_health)}
-              </p>
+              <h3>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  account_balance
+                </span>
+                {unavailable(facts.project_name)}
+              </h3>
+              <p className="hero-publish">WSR Publish Date: {shortDate(report.as_of_date)}</p>
             </div>
             <div className="hero-countdown">
               <p className="metric-label">Countdown</p>
               <p className={`countdown-value ${facts.countdown_days != null ? "tone-bad" : ""}`}>
                 {facts.countdown_days != null ? facts.countdown_days : "Unavailable"}
+                {facts.countdown_days != null ? <span>Days</span> : null}
               </p>
-              <p className="metric-hint">
-                {facts.countdown_days != null ? "Days to Go-Live" : "Days to Go-Live"}
-              </p>
+              <p className="metric-hint">to Go-Live</p>
             </div>
-            <WsrProgressRing value={facts.overall_progress} />
+            <div className="hero-progress">
+              <WsrProgressRing value={facts.overall_progress} />
+              <div>
+                <p className="metric-label">Overall Progress</p>
+                <p className="metric-hint">By work completion</p>
+              </div>
+            </div>
           </section>
 
           <div className="kpi-grid">
-            <KpiCard
-              label="Overall Progress"
-              value={percent(facts.overall_progress)}
-              hint="By work completed"
-              tone={tone}
-            />
-            <KpiCard
-              label="Last Signed-Off Milestone"
-              value={
-                facts.last_signed_off_milestone?.date
-                  ? compactDate(facts.last_signed_off_milestone.date)
-                  : namedDate(facts.last_signed_off_milestone)
-              }
-              hint={facts.last_signed_off_milestone?.name ?? undefined}
-              tone={facts.last_signed_off_milestone?.date ? "tone-good" : ""}
-            />
-            <KpiCard
-              label="Work Items Completed"
-              value={workItemsValue(facts)}
-              hint={
-                facts.completed_work_items != null && facts.planned_work_items != null
-                  ? "actual / planned"
-                  : undefined
-              }
-            />
-            <KpiCard
-              label="Team Capacity"
-              value={percent(facts.capacity_utilization)}
-              hint={
-                facts.capacity_utilization != null
-                  ? "Actual vs planned work"
-                  : facts.people_planned != null
-                    ? `${facts.people_planned} resources planned`
-                    : undefined
-              }
-            />
-            <KpiCard
-              label="Next Gate"
-              value={
-                facts.next_gate?.date ? compactDate(facts.next_gate.date) : namedDate(facts.next_gate)
-              }
-              hint={facts.next_gate?.name ?? undefined}
-            />
-            <KpiCard
-              label="Go-Live"
-              value={shortDate(facts.planned_go_live_date)}
-              hint="Production dates"
-              tone={tone}
-            />
+            {kpis.map((kpi, index) => (
+              <KpiCard
+                key={kpi.label}
+                label={kpi.label}
+                value={kpi.value}
+                hint={kpi.hint}
+                icon={KPI_ICONS[index]}
+                tone={KPI_TONES[index]}
+              />
+            ))}
           </div>
 
-          <Section n={1} title="Executive Overview">
+          <Section n={1} title="Executive Overview" flush>
             <p className="overview-copy">{unavailable(facts.executive_overview)}</p>
-            <div className="overview-stats">
-              <article>
-                <strong className={tone}>{percent(facts.overall_progress)}</strong>
-                <span>Overall Progress</span>
-              </article>
-              <article>
-                <strong>{unavailable(facts.phase_count)}</strong>
-                <span>Phases to Go-Live</span>
-              </article>
-              <article>
-                <strong>{unavailable(facts.people_planned)}</strong>
-                <span>People Planned</span>
-              </article>
-              <article>
-                <strong>{unavailable(facts.resources_deployed)}</strong>
-                <span>Resources Deployed</span>
-              </article>
-              <article className="remaining">
-                <strong>
-                  {facts.countdown_days != null ? `${facts.countdown_days}d` : "Unavailable"}
-                </strong>
-                <span>Days to Go-Live</span>
-              </article>
-            </div>
           </Section>
 
-          <Section n={2} title="Project Timeline">
+          <Section
+            n={2}
+            title="Project Timeline"
+            hint="Phases from project planning to Go-Live. The dashed marker shows today's position; hover any bar for full dates."
+          >
             {facts.timeline?.length ? (
               <WsrGantt phases={facts.timeline} asOf={report.as_of_date} />
             ) : (
@@ -432,32 +407,56 @@ export function WsrDashboardView() {
                   <tr>
                     <th>WBS</th>
                     <th>Phase</th>
-                    <th>Planned timing</th>
+                    <th>Planned Window</th>
+                    <th>Deviated Window</th>
                     <th>Progress</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {facts.phase_statuses.map((phase: PhaseStatus, index) => (
-                    <tr key={phase.name}>
-                      <td>{index + 1}</td>
-                      <td>{phase.name}</td>
-                      <td>
-                        {unavailable(phase.planned_start)} – {unavailable(phase.planned_finish)}
-                      </td>
-                      <td>
-                        <div className={`phase-bar state-${phase.state}`}>
-                          <span
-                            style={{
-                              width: `${Math.min(100, Math.max(0, phase.progress ?? 0))}%`,
-                            }}
-                          />
-                        </div>
-                        <small>
-                          {phase.progress == null ? phaseState(phase.state) : percent(phase.progress)}
-                        </small>
-                      </td>
-                    </tr>
-                  ))}
+                  {facts.phase_statuses.map((phase: PhaseStatus, index) => {
+                    const active = phase.state !== "not_started";
+                    const hasActual = Boolean(phase.actual_start || phase.actual_finish);
+                    return (
+                      <tr key={`${phase.name}-${index}`} className={active ? "phase-active" : undefined}>
+                        <td className="mono">{phaseWbs(phase, index)}</td>
+                        <td>
+                          {phase.name}
+                          {phase.state === "in_progress" ? (
+                            <span className="status-badge">In Progress</span>
+                          ) : null}
+                        </td>
+                        <td className="mono">
+                          {windowRange(phase.planned_start, phase.planned_finish)}
+                        </td>
+                        <td className={`mono${hasActual ? " phase-deviated" : ""}`}>
+                          {hasActual
+                            ? windowRange(phase.actual_start, phase.actual_finish)
+                            : "—"}
+                        </td>
+                        <td>
+                          {phase.state === "not_started" && !phase.progress ? (
+                            <div className="phase-progress muted">
+                              <div className="phase-bar state-not_started" />
+                              <span>Not started</span>
+                            </div>
+                          ) : (
+                            <div className="phase-progress">
+                              <div className={`phase-bar state-${phase.state}`}>
+                                <span
+                                  style={{
+                                    width: `${Math.min(100, Math.max(0, phase.progress ?? 0))}%`,
+                                  }}
+                                />
+                              </div>
+                              <strong>
+                                {phase.progress == null ? phaseState(phase.state) : percent(phase.progress)}
+                              </strong>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
@@ -465,65 +464,76 @@ export function WsrDashboardView() {
             )}
           </Section>
 
-          <Section n={4} title="Progress to Date">
-            <p className="muted">Tasks scheduled this week</p>
-            {facts.progress_to_date?.length ? (
-              <ul className="progress-list">
-                {facts.progress_to_date.map((item: ProgressItem, index) => (
-                  <li key={`${item.name}-${index}`}>
-                    <span className="check" aria-hidden="true">
-                      ✓
-                    </span>
-                    <div>
-                      <strong>{item.name}</strong>
-                      <p className="muted">
-                        {unavailable(item.date)}
+          <div className="wsr-paired">
+            <Section n={4} title="Progress to Date">
+              {facts.progress_to_date?.length ? (
+                <ul className="progress-list">
+                  {facts.progress_to_date.map((item: ProgressItem, index) => (
+                    <li key={`${item.name}-${index}`}>
+                      <span className="material-symbols-outlined check-icon" aria-hidden="true">
+                        check_circle
+                      </span>
+                      <div>
+                        <strong>{item.name}</strong>
+                        {item.date ? ` · ${shortDate(item.date)}` : ""}
                         {item.progress != null ? ` · ${percent(item.progress)}` : ""}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No tasks scheduled in the current week</p>
-            )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No tasks scheduled in the current week</p>
+              )}
+            </Section>
+
+            <Section
+              n={5}
+              title="Upcoming Milestones"
+              hint="Key dates from today through the next planned tasks."
+            >
+              {facts.upcoming_milestones?.length ? (
+                <table className="milestone-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Milestone / Activity</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {facts.upcoming_milestones.map((item: MilestoneItem, index) => {
+                      const today = isSameDay(item.date, report.as_of_date);
+                      return (
+                        <tr key={`${item.name}-${index}`} className={today ? "milestone-today" : undefined}>
+                          <td>{item.date ? shortDate(item.date).replace(/ \d{4}$/, "") : "Unavailable"}</td>
+                          <td>{item.name}</td>
+                          <td>{today ? <span className="today-badge">Today</span> : null}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p>No upcoming planned tasks</p>
+              )}
+            </Section>
+          </div>
+
+          <Section n={6} title="What We Need From the Bank Team">
+            <InsightCards
+              items={visibleInsights(report.client_needs)}
+              tone="need"
+              empty="No items identified from the plan"
+            />
           </Section>
 
-          <Section n={5} title="Upcoming Milestones">
-            <p className="muted">Next planned tasks</p>
-            {facts.upcoming_milestones?.length ? (
-              <ul className="milestone-list">
-                {facts.upcoming_milestones.map((item: MilestoneItem, index) => (
-                  <li key={`${item.name}-${index}`}>
-                    <span className="milestone-date">{shortDate(item.date)}</span>
-                    <span>{item.name}</span>
-                    {isPast(item.date, report.as_of_date) ? (
-                      <span className="delay-badge">DELAYED</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No upcoming planned tasks</p>
-            )}
+          <Section n={7} title="Risks & Focus Areas">
+            <InsightCards
+              items={visibleInsights(report.risks)}
+              tone="risk"
+              empty="No items identified from the plan"
+            />
           </Section>
-
-          {AI_SECTIONS.map((section, index) => {
-            const items = visibleInsights((report[section.key] as AiDerivedItem[]) ?? []);
-            return (
-              <Section key={section.key} n={index + 6} title={section.label}>
-                {items.length === 0 ? (
-                  <p>No items identified from the plan</p>
-                ) : (
-                  <ul className={section.tone === "need" ? "insight-list insight-grid" : "insight-list"}>
-                    {items.map((item) => (
-                      <WsrInsightItem key={item.id} item={item} tone={section.tone} />
-                    ))}
-                  </ul>
-                )}
-              </Section>
-            );
-          })}
         </div>
       ) : busy ? null : (
         <div className="wsr-empty">

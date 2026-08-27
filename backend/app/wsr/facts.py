@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime, timedelta
 
 from app.models import (
@@ -11,6 +12,7 @@ from app.models import (
     ProjectPlanData,
     WsrPlanFacts,
 )
+from app.plan.library import PHASES
 
 _GO_LIVE_MARKERS = ("go-live", "go live")
 _SIGN_OFF_MARKERS = (
@@ -22,6 +24,10 @@ _SIGN_OFF_MARKERS = (
     "project plan sign-off",
 )
 _GATE_NAME_MARKERS = _SIGN_OFF_MARKERS + _GO_LIVE_MARKERS + ("approval",)
+_LIBRARY_PHASE_NAMES = frozenset(
+    " ".join(str(phase["name"]).casefold().split()) for phase in PHASES
+)
+_PHASE_WBS = re.compile(r"^1\.\d+$")
 _HEALTH_LABELS = {
     "on_track": "On track",
     "at_risk": "At risk",
@@ -66,7 +72,6 @@ def derive_wsr_facts(
     if planned_count is not None:
         completed_count = sum(1 for task in leaves if _complete(task))
     phases = _phase_statuses(plan)
-    dated_phases = [item for item in phases if item.planned_start or item.planned_finish]
     overview = _overview(plan, as_of, health, go_live)
     return WsrPlanFacts(
         project_name=plan.name or None,
@@ -81,12 +86,13 @@ def derive_wsr_facts(
         capacity_utilization=_capacity(plan),
         people_planned=_people_planned(plan),
         resources_deployed=_resources_deployed(plan),
+        person_days_planned=_person_days(plan),
         phase_count=len(phases) if phases else None,
         last_signed_off_milestone=_last_signed_off(leaves, as_of_d),
         next_gate=_next_gate(leaves, as_of_d),
         planned_go_live_date=None if go_live is None else go_live.isoformat(),
         executive_overview=overview,
-        timeline=dated_phases or None,
+        timeline=phases or None,
         phase_statuses=phases,
         progress_to_date=_progress_to_date(leaves, as_of_d),
         upcoming_milestones=_next_planned_tasks(leaves, as_of_d),
@@ -213,6 +219,26 @@ def _capacity(plan: ProjectPlanData) -> float | None:
     return round(min(100.0, max(0.0, actual / planned * 100)), 1)
 
 
+def _person_days(plan: ProjectPlanData) -> float | None:
+    hours = 0.0
+    found = False
+    for task in plan.tasks:
+        if task.is_summary:
+            continue
+        task_hours = 0.0
+        for item in task.assignments:
+            if item.planned_work_hours:
+                task_hours += item.planned_work_hours
+                found = True
+        if not task_hours and task.planned_work_hours:
+            task_hours = task.planned_work_hours
+            found = True
+        hours += task_hours
+    if not found:
+        return None
+    return round(hours / 8.0, 1)
+
+
 def _people_planned(plan: ProjectPlanData) -> int | None:
     names = {
         item.resource_id or item.resource_name
@@ -223,12 +249,7 @@ def _people_planned(plan: ProjectPlanData) -> int | None:
 
 
 def _resources_deployed(plan: ProjectPlanData) -> int | None:
-    names = {
-        item.resource_id or item.resource_name
-        for task in plan.tasks
-        for item in task.assignments
-        if (item.actual_work_hours or 0) > 0
-    }
+    names = {item.id for item in plan.resources if (item.name or "").strip()}
     return len(names) if names else None
 
 
@@ -276,20 +297,139 @@ def _next_gate(tasks: list[PlanTaskData], as_of: date) -> NamedDateValue | None:
     return None
 
 
-def select_phase_summaries(tasks: list[PlanTaskData]) -> list[PlanTaskData]:
+def select_phase_summaries(
+    tasks: list[PlanTaskData],
+    project_name: str | None = None,
+) -> list[PlanTaskData]:
+    """Select phase rows from WBS 1.x, then naming convention, then outline.
+
+    WBS ``1`` is the project name. Direct codes ``1.1``, ``1.2``, ``1.3``,
+    ``1.5`` (and any other ``1.<n>``) are phases. Subtasks such as ``1.1.1``
+    are not. Generated plans without those codes still use name/outline rules.
+    """
+    if not tasks:
+        return []
+    wbs_phases = _wbs_phase_rows(tasks)
+    if wbs_phases:
+        return wbs_phases
+
+    parent = _project_parent(tasks, project_name)
+    scope = _descendants(tasks, parent) if parent is not None else list(tasks)
+    named = _named_phase_rows(tasks, scope)
+    if named:
+        return named
+
+    if parent is not None:
+        nested = _direct_children(tasks, parent)
+        if nested:
+            return nested
+
     summaries = [task for task in tasks if task.is_summary]
     if not summaries:
         return []
+
     min_level = min(task.outline_level for task in summaries)
-    at_min = [task for task in tasks if task.is_summary and task.outline_level == min_level]
-    if len(at_min) == 1:
-        nested = [
-            task
-            for task in tasks
-            if task.is_summary and task.outline_level == min_level + 1
-        ]
-        return nested or at_min
-    return at_min
+    roots = [task for task in tasks if task.is_summary and task.outline_level == min_level]
+    if len(roots) == 1:
+        nested = _direct_children(tasks, roots[0])
+        return nested or roots
+    return roots
+
+
+def _wbs_phase_rows(tasks: list[PlanTaskData]) -> list[PlanTaskData]:
+    matched = [task for task in tasks if _is_phase_wbs(task.wbs)]
+    matched.sort(key=lambda task: (_wbs_index(task.wbs), task.id))
+    return matched
+
+
+def _is_phase_wbs(value: str | None) -> bool:
+    return bool(_PHASE_WBS.match((value or "").strip()))
+
+
+def _wbs_index(value: str | None) -> int:
+    try:
+        return int((value or "").strip().split(".")[1])
+    except (IndexError, ValueError):
+        return 0
+
+
+def _named_phase_rows(
+    tasks: list[PlanTaskData],
+    scope: list[PlanTaskData],
+) -> list[PlanTaskData]:
+    candidates = [task for task in scope if _matches_phase_convention(task)]
+    selected: list[PlanTaskData] = []
+    for task in candidates:
+        if any(_is_under(tasks, parent, task) for parent in selected):
+            continue
+        selected.append(task)
+    return selected
+
+
+def _matches_phase_convention(task: PlanTaskData) -> bool:
+    if _is_phase_named(task.name):
+        return True
+    if _contains(task.name, _GO_LIVE_MARKERS):
+        return True
+    return _norm_name(task.name) in _LIBRARY_PHASE_NAMES
+
+
+def _is_phase_named(name: str | None) -> bool:
+    text = _norm_name(name)
+    if "(" in text:
+        text = text[: text.index("(")].strip()
+    words = text.split()
+    if not words:
+        return False
+    return words[0] == "phase" or words[-1] == "phase"
+
+
+def _is_under(tasks: list[PlanTaskData], parent: PlanTaskData, child: PlanTaskData) -> bool:
+    return any(item.id == child.id for item in _descendants(tasks, parent))
+
+
+def _project_parent(tasks: list[PlanTaskData], project_name: str | None) -> PlanTaskData | None:
+    wanted = _norm_name(project_name)
+    if not wanted:
+        return None
+    exact = [
+        task
+        for task in tasks
+        if task.is_summary and _norm_name(task.name) == wanted
+    ]
+    if len(exact) == 1:
+        return exact[0]
+    if exact:
+        return min(exact, key=lambda task: (task.outline_level, task.id))
+    contains = [
+        task
+        for task in tasks
+        if task.is_summary
+        and (wanted in _norm_name(task.name) or _norm_name(task.name) in wanted)
+        and _norm_name(task.name)
+    ]
+    if len(contains) == 1:
+        return contains[0]
+    if contains:
+        return min(contains, key=lambda task: (task.outline_level, task.id))
+    return None
+
+
+def _norm_name(value: str | None) -> str:
+    return " ".join((value or "").casefold().split())
+
+
+def _direct_children(tasks: list[PlanTaskData], parent: PlanTaskData) -> list[PlanTaskData]:
+    start = next((index for index, task in enumerate(tasks) if task.id == parent.id), None)
+    if start is None:
+        return []
+    children: list[PlanTaskData] = []
+    for task in tasks[start + 1 :]:
+        if task.outline_level <= parent.outline_level:
+            break
+        if task.outline_level == parent.outline_level + 1:
+            children.append(task)
+    return children
 
 
 def _descendants(tasks: list[PlanTaskData], parent: PlanTaskData) -> list[PlanTaskData]:
@@ -305,7 +445,7 @@ def _descendants(tasks: list[PlanTaskData], parent: PlanTaskData) -> list[PlanTa
 
 
 def _phase_statuses(plan: ProjectPlanData) -> list[PhaseStatus]:
-    rows = select_phase_summaries(plan.tasks)
+    rows = select_phase_summaries(plan.tasks, project_name=plan.name)
     if rows:
         return [_phase_from_task(plan.tasks, row) for row in rows]
     return [_phase_status(phase) for phase in plan.phases]
@@ -317,8 +457,12 @@ def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseSta
     dated = [phase, *leaves]
     starts = [parse_date(task.scheduled_start) for task in dated]
     finishes = [parse_date(task.scheduled_finish) for task in dated]
+    actual_starts = [parse_date(task.actual_start) for task in dated]
+    actual_finishes = [parse_date(task.actual_finish) for task in dated]
     start_ok = [item for item in starts if item]
     finish_ok = [item for item in finishes if item]
+    actual_start_ok = [item for item in actual_starts if item]
+    actual_finish_ok = [item for item in actual_finishes if item]
     if phase.percent_complete >= 100:
         state = "complete"
     elif not phase.actual_start and phase.percent_complete == 0:
@@ -328,14 +472,14 @@ def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseSta
             state = "not_started"
     else:
         state = "in_progress"
-    progress = phase.percent_complete
-    if not progress and leaves:
-        progress = round(sum(task.percent_complete for task in leaves) / len(leaves), 1)
     return PhaseStatus(
         name=phase.name,
+        wbs=(phase.wbs or "").strip() or None,
         planned_start=None if not start_ok else min(start_ok).isoformat(),
         planned_finish=None if not finish_ok else max(finish_ok).isoformat(),
-        progress=progress,
+        actual_start=None if not actual_start_ok else min(actual_start_ok).isoformat(),
+        actual_finish=None if not actual_finish_ok else max(actual_finish_ok).isoformat(),
+        progress=phase.percent_complete,
         state=state,
     )
 
@@ -349,8 +493,11 @@ def _phase_status(phase) -> PhaseStatus:
         state = "in_progress"
     return PhaseStatus(
         name=phase.name,
+        wbs=getattr(phase, "wbs", None),
         planned_start=phase.scheduled_start,
         planned_finish=phase.scheduled_finish,
+        actual_start=phase.actual_start,
+        actual_finish=None,
         progress=phase.percent_complete,
         state=state,
     )

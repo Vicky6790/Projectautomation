@@ -118,14 +118,14 @@ def main() -> int:
     page_js_ok = _client_bundle_has(
         client,
         (
-            "Print for meeting",
-            "Download last WSR",
+            "Download to PDF",
             "Generate WSR & Insights",
-            "Overall Progress",
-            "Last Signed-Off Milestone",
+            "Phases to Go-Live",
+            "Person-Days Planned",
+            "Work Items Complete",
+            "What We Need From the Bank Team",
             "No items identified from the plan",
             "No tasks scheduled in the current week",
-            "Next planned tasks",
             "Reading the file",
             "Creating narrative",
         ),
@@ -137,9 +137,9 @@ def main() -> int:
         (
             "View Source",
             "Review is required",
-            "What We Need From the Bank Team",
             "Management Attention",
             "Decisions Required",
+            "Last Signed-Off Milestone",
         ),
     ):
         print("client bundle still includes cancelled review UI")
@@ -176,25 +176,23 @@ def main() -> int:
         "Phase-Wise Status",
         "Progress to Date",
         "Upcoming Milestones",
-        "Issues",
+        "What We Need From the Bank Team",
         "Risks & Focus Areas",
-        "Next Seven-Day Priorities",
     ):
         if heading not in text:
             print("report missing heading", heading)
             return 1
+    for heading in ("Issues", "Next Seven-Day Priorities"):
+        if heading in text:
+            print("report still includes removed heading", heading)
+            return 1
     for label in (
         "Overall Progress",
-        "Last Signed-Off Milestone",
-        "Work Items Completed",
-        "Team Capacity",
-        "Next Gate",
-        "Go-Live",
         "Phases to Go-Live",
-        "People Planned",
         "Resources Deployed",
-        "Days to Go-Live",
-        as_of,
+        "Person-Days Planned",
+        "Work Items Complete",
+        "WSR Publish Date",
     ):
         if label not in text:
             print("report missing label", label)

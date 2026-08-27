@@ -72,6 +72,7 @@ class PlanPhaseData(BaseModel):
 class PlanTaskData(BaseModel):
     id: int
     name: str
+    wbs: str | None = None
     outline_level: int = 1
     is_summary: bool = False
     is_milestone: bool = False
@@ -222,8 +223,11 @@ class NamedDateValue(BaseModel):
 
 class PhaseStatus(BaseModel):
     name: str
+    wbs: str | None = None
     planned_start: str | None = None
     planned_finish: str | None = None
+    actual_start: str | None = None
+    actual_finish: str | None = None
     progress: float | None = None
     state: Literal["not_started", "in_progress", "complete"]
 
@@ -252,6 +256,7 @@ class WsrPlanFacts(BaseModel):
     capacity_utilization: float | None = None
     people_planned: int | None = None
     resources_deployed: int | None = None
+    person_days_planned: float | None = None
     phase_count: int | None = None
     last_signed_off_milestone: NamedDateValue | None = None
     next_gate: NamedDateValue | None = None
