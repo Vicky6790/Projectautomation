@@ -174,7 +174,7 @@ def main() -> int:
         "Project Timeline",
         "Phase-Wise Status",
         "Progress of current week",
-        "Upcoming milestone for Next Week",
+        "Upcoming Milestones Of Next Week",
         "Risks & Focus Areas",
     ):
         if heading not in text:

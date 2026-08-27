@@ -35,7 +35,7 @@ def render_wsr_html(handle: str, payload: StatusReport) -> str:
             _section(2, "Project Timeline", _timeline(facts)),
             _section(3, "Phase-Wise Status", _phases(facts)),
             _section(4, "Progress of current week", _progress(facts)),
-            _section(5, "Upcoming milestone for Next Week", _milestones(facts, payload.as_of_date)),
+            _section(5, "Upcoming Milestones Of Next Week", _milestones(facts, payload.as_of_date)),
             *[
                 _section(index + 6, label, _insights(getattr(payload, key)))
                 for index, (key, label) in enumerate(_AI_SECTIONS)
@@ -195,15 +195,16 @@ def _phases(facts: WsrPlanFacts) -> str:
     if not phases:
         return "<p>Unavailable</p>"
     rows = [
-        "<tr><td><b>WBS</b></td><td><b>Phase</b></td>"
-        "<td><b>Planned End</b></td><td><b>Deviated Date</b></td>"
-        "<td><b>Progress</b></td></tr>"
+        "<tr><td><b>WBS</b></td><td><b>Phases</b></td>"
+        "<td><b>Start Date</b></td><td><b>Planned End</b></td>"
+        "<td><b>Deviated Date</b></td><td><b>Progress</b></td></tr>"
     ]
     for index, phase in enumerate(phases, start=1):
         if phase.progress is not None:
             progress = _percent(phase.progress)
         else:
             progress = _PHASE_STATE.get(phase.state, phase.state)
+        start = _short_date(phase.planned_start or phase.actual_start)
         planned = _short_date(phase.planned_finish)
         current = _short_date(phase.actual_finish)
         if planned == current:
@@ -212,6 +213,7 @@ def _phases(facts: WsrPlanFacts) -> str:
             "<tr>"
             f"<td>{html.escape(_wbs_label(phase, index))}</td>"
             f"<td>{html.escape(phase.name)}</td>"
+            f"<td>{html.escape(start)}</td>"
             f"<td>{html.escape(planned)}</td>"
             f"<td>{html.escape(current)}</td>"
             f"<td>{html.escape(progress)}</td>"
@@ -225,7 +227,7 @@ def _progress(facts: WsrPlanFacts) -> str:
     if not items:
         return "<p>No tasks scheduled in the current week</p>"
     rows = [
-        "<tr><td><b>Task</b></td><td><b>Start</b></td><td><b>End</b></td>"
+        "<tr><td><b>Tasks</b></td><td><b>Start Date</b></td><td><b>End Date</b></td>"
         "<td><b>Complete</b></td></tr>"
     ]
     for item in items:
@@ -246,7 +248,7 @@ def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
         return "<p>No upcoming planned tasks</p>"
     as_of_d = _day(as_of)
     rows = [
-        "<tr><td><b>Start</b></td><td><b>End</b></td>"
+        "<tr><td><b>Start Date</b></td><td><b>End Date</b></td>"
         "<td><b>Milestone / Activity</b></td><td></td></tr>"
     ]
     for item in items:

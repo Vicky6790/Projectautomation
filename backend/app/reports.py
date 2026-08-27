@@ -17,7 +17,7 @@ WSR_SECTIONS = (
     ("timeline", "Project Timeline"),
     ("phase_statuses", "Phase-Wise Status"),
     ("progress_to_date", "Progress of current week"),
-    ("upcoming_milestones", "Upcoming milestone for Next Week"),
+    ("upcoming_milestones", "Upcoming Milestones Of Next Week"),
     ("risks", "Risks & Focus Areas"),
 )
 

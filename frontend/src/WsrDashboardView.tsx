@@ -74,22 +74,27 @@ function Section({
   n,
   title,
   hint,
+  action,
   children,
   flush,
 }: {
   n: number;
   title: string;
   hint?: string;
+  action?: ReactNode;
   children: ReactNode;
   flush?: boolean;
 }) {
   return (
     <section className={`wsr-section${flush ? " wsr-section-flush" : ""}`}>
       <div className="wsr-section-head">
-        <h3>
-          <span className="wsr-num">{n}</span>
-          {title}
-        </h3>
+        <div className="wsr-section-title-row">
+          <h3>
+            <span className="wsr-num">{n}</span>
+            {title}
+          </h3>
+          {action}
+        </div>
         {hint ? <p className="muted">{hint}</p> : null}
       </div>
       {children}
@@ -402,13 +407,30 @@ export function WsrDashboardView() {
             )}
           </Section>
 
-          <Section n={3} title="Phase-Wise Status">
+          <Section
+            n={3}
+            title="Phase-Wise Status"
+            action={
+              <button
+                type="button"
+                className="btn btn-outline delay-mapping-cta"
+                disabled={!facts.phase_statuses?.length}
+                onClick={() => downloadDelayMappingSheet(facts.phase_statuses || [])}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  table_view
+                </span>
+                Delay Mapping Sheet
+              </button>
+            }
+          >
             {facts.phase_statuses?.length ? (
               <table className="phase-table">
                 <thead>
                   <tr>
                     <th>WBS</th>
-                    <th>Phase</th>
+                    <th>Phases</th>
+                    <th>Start Date</th>
                     <th>Planned End</th>
                     <th>Deviated Date</th>
                     <th>Progress</th>
@@ -417,6 +439,7 @@ export function WsrDashboardView() {
                 <tbody>
                   {facts.phase_statuses.map((phase: PhaseStatus, index) => {
                     const active = phase.state !== "not_started";
+                    const startDate = shortDate(phase.planned_start || phase.actual_start);
                     const plannedEnd = shortDate(phase.planned_finish);
                     const currentFinish = shortDate(phase.actual_finish);
                     const hasDeviation =
@@ -430,6 +453,7 @@ export function WsrDashboardView() {
                             <span className="status-badge">In Progress</span>
                           ) : null}
                         </td>
+                        <td className="mono">{startDate}</td>
                         <td className="mono">{plannedEnd}</td>
                         <td className={`mono${hasDeviation ? " phase-deviated" : ""}`}>
                           {hasDeviation ? currentFinish : "—"}
@@ -471,9 +495,9 @@ export function WsrDashboardView() {
                 <table className="milestone-table">
                   <thead>
                     <tr>
-                      <th>Task</th>
-                      <th>Start</th>
-                      <th>End</th>
+                      <th>Tasks</th>
+                      <th>Start Date</th>
+                      <th>End Date</th>
                       <th>Complete</th>
                     </tr>
                   </thead>
@@ -495,15 +519,15 @@ export function WsrDashboardView() {
 
             <Section
               n={5}
-              title="Upcoming milestone for Next Week"
+              title="Upcoming Milestones Of Next Week"
               hint="Incomplete work overlapping the calendar week after the as-of week."
             >
               {facts.upcoming_milestones?.length ? (
                 <table className="milestone-table">
                   <thead>
                     <tr>
-                      <th>Start</th>
-                      <th>End</th>
+                      <th>Start Date</th>
+                      <th>End Date</th>
                       <th>Milestone / Activity</th>
                       <th />
                     </tr>
@@ -547,4 +571,56 @@ export function WsrDashboardView() {
       )}
     </section>
   );
+}
+
+function csvCell(value: string): string {
+  if (/[",\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function isoDay(value: string | null | undefined): string {
+  return value?.slice(0, 10) || "";
+}
+
+function delayDays(planned: string | null | undefined, current: string | null | undefined): string {
+  const start = isoDay(planned);
+  const finish = isoDay(current);
+  if (!start || !finish) {
+    return "";
+  }
+  const left = new Date(`${start}T00:00:00`);
+  const right = new Date(`${finish}T00:00:00`);
+  if (Number.isNaN(left.getTime()) || Number.isNaN(right.getTime())) {
+    return "";
+  }
+  return String(Math.round((right.getTime() - left.getTime()) / 86_400_000));
+}
+
+function downloadDelayMappingSheet(phases: PhaseStatus[]) {
+  const header = [
+    "WBS",
+    "Phases",
+    "Start Date",
+    "Planned End (Baseline Finish)",
+    "Deviated Date (Finish)",
+    "Delay Days",
+  ];
+  const rows = phases.map((phase, index) => [
+    phaseWbs(phase, index),
+    phase.name,
+    isoDay(phase.planned_start || phase.actual_start),
+    isoDay(phase.planned_finish),
+    isoDay(phase.actual_finish),
+    delayDays(phase.planned_finish, phase.actual_finish),
+  ]);
+  const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "delay-mapping-sheet.csv";
+  link.click();
+  URL.revokeObjectURL(url);
 }

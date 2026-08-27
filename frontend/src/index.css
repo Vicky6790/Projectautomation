@@ -858,6 +858,24 @@ label select {
   margin-bottom: 16px;
 }
 
+.wsr-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.delay-mapping-cta {
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.delay-mapping-cta .material-symbols-outlined {
+  font-size: 18px;
+}
+
 .wsr-section-head .muted {
   margin: 8px 0 0;
   font-size: 14px;
@@ -1506,7 +1524,8 @@ label select {
   html.wsr-printing .wsr-page-head,
   html.wsr-printing .wsr-upload-card,
   html.wsr-printing .wsr-status-msg,
-  html.wsr-printing .wsr-stages {
+  html.wsr-printing .wsr-stages,
+  html.wsr-printing .delay-mapping-cta {
     display: none !important;
   }
 

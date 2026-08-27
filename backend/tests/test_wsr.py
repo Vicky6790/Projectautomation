@@ -141,7 +141,7 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
         "Project Timeline",
         "Phase-Wise Status",
         "Progress of current week",
-        "Upcoming milestone for Next Week",
+        "Upcoming Milestones Of Next Week",
         "Risks & Focus Areas",
     ):
         assert heading in text
