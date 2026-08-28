@@ -4,6 +4,8 @@ import re
 from datetime import UTC, date, datetime, timedelta
 
 from app.models import (
+    DelayMappingRow,
+    DelayMappingSheet,
     MilestoneItem,
     NamedDateValue,
     PhaseStatus,
@@ -82,6 +84,7 @@ def derive_wsr_facts(
         executive_overview=None,
         timeline=phases or None,
         phase_statuses=phases,
+        delay_mapping=_delay_mapping(plan, as_of_d, phases),
         progress_to_date=_progress_to_date(leaves, as_of_d),
         upcoming_milestones=_next_planned_tasks(leaves, as_of_d),
     )
@@ -516,6 +519,178 @@ def _phase_status(phase) -> PhaseStatus:
         progress=phase.percent_complete,
         state=state,
     )
+
+
+def _delay_mapping(
+    plan: ProjectPlanData,
+    as_of: date,
+    phases: list[PhaseStatus],
+) -> DelayMappingSheet:
+    """Build delay rows from Phase-Wise Status dates and incomplete delayed MPP tasks."""
+
+    phase_tasks = select_phase_summaries(plan.tasks, project_name=plan.name)
+    go_live = _named_go_live_task(plan.tasks, as_of)
+    successors = _successor_map(plan.tasks)
+    rows: list[DelayMappingRow] = []
+    for index, status in enumerate(phases):
+        delay = _positive_delay(status.planned_finish, status.actual_finish, as_of, complete=False)
+        if delay is None:
+            continue
+        phase_task = phase_tasks[index] if index < len(phase_tasks) else None
+        rows.append(
+            DelayMappingRow(
+                kind="phase",
+                name=status.name,
+                wbs=status.wbs,
+                planned_start=status.planned_start,
+                planned_finish=status.planned_finish,
+                revised_start=status.actual_start,
+                revised_finish=status.actual_finish,
+                delay_days=delay,
+                go_live_impact=_go_live_impact(phase_task, go_live, successors, plan.tasks),
+                owner=_owner_for_task(plan.tasks, phase_task) if phase_task else None,
+            )
+        )
+    for task in plan.tasks:
+        if task.is_summary or _complete(task):
+            continue
+        delay = _positive_delay(task.baseline_finish, task.scheduled_finish, as_of, complete=False)
+        if delay is None:
+            continue
+        parent = _containing_phase(plan.tasks, phase_tasks, task)
+        rows.append(
+            DelayMappingRow(
+                kind="task",
+                name=task.name,
+                parent_name=None if parent is None else parent.name,
+                wbs=(task.wbs or "").strip() or None,
+                planned_start=task.baseline_start,
+                planned_finish=task.baseline_finish,
+                revised_start=task.scheduled_start,
+                revised_finish=task.scheduled_finish,
+                delay_days=delay,
+                go_live_impact=_go_live_impact(task, go_live, successors, plan.tasks),
+                owner=_task_owner(task),
+            )
+        )
+    task_rows = [row for row in rows if row.kind == "task"]
+    counted = task_rows or [row for row in rows if row.kind == "phase"]
+    return DelayMappingSheet(
+        total_delayed_days=sum(row.delay_days or 0 for row in counted),
+        delayed_task_count=len(task_rows),
+        rows=rows,
+    )
+
+
+def _positive_delay(
+    planned_finish: str | None,
+    current_finish: str | None,
+    as_of: date,
+    *,
+    complete: bool,
+) -> int | None:
+    planned = parse_date(planned_finish)
+    current = parse_date(current_finish)
+    if planned and current:
+        slipped = (current - planned).days
+        if slipped > 0:
+            return slipped
+    if complete:
+        return None
+    if current is not None and current < as_of:
+        return (as_of - current).days
+    return None
+
+
+def _successor_map(tasks: list[PlanTaskData]) -> dict[int, list[int]]:
+    successors: dict[int, list[int]] = {}
+    for task in tasks:
+        for pred in task.predecessor_ids:
+            successors.setdefault(pred, []).append(task.id)
+    return successors
+
+
+def _reaches_target(successors: dict[int, list[int]], start: int, target: int | None) -> bool:
+    if target is None:
+        return False
+    if start == target:
+        return True
+    seen = {start}
+    queue = [start]
+    while queue:
+        current = queue.pop(0)
+        for nxt in successors.get(current, []):
+            if nxt == target:
+                return True
+            if nxt not in seen:
+                seen.add(nxt)
+                queue.append(nxt)
+    return False
+
+
+def _named_go_live_task(tasks: list[PlanTaskData], as_of: date) -> PlanTaskData | None:
+    named = [
+        task
+        for task in tasks
+        if _contains(task.gate, go_live_markers()) or _contains(task.name, go_live_markers())
+    ]
+    if not named:
+        return None
+    dated = [(task, when) for task in named if (when := _candidate_date(task)) is not None]
+    if not dated:
+        return named[0]
+    future = [(task, when) for task, when in dated if when >= as_of]
+    if future:
+        return min(future, key=lambda item: item[1])[0]
+    return max(dated, key=lambda item: item[1])[0]
+
+
+def _go_live_impact(
+    task: PlanTaskData | None,
+    go_live: PlanTaskData | None,
+    successors: dict[int, list[int]],
+    tasks: list[PlanTaskData],
+) -> str | None:
+    if task is None or go_live is None:
+        return None
+    ids = [task.id, *[child.id for child in _descendants(tasks, task)]]
+    if any(_reaches_target(successors, item, go_live.id) for item in ids):
+        return "high"
+    return "medium"
+
+
+def _containing_phase(
+    tasks: list[PlanTaskData],
+    phases: list[PlanTaskData],
+    task: PlanTaskData,
+) -> PlanTaskData | None:
+    matches = [
+        phase
+        for phase in phases
+        if phase.id == task.id or _is_under(tasks, phase, task)
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda item: item.outline_level)
+
+
+def _task_owner(task: PlanTaskData) -> str | None:
+    for item in task.assignments:
+        name = (item.resource_name or "").strip()
+        if name:
+            return name
+    return None
+
+
+def _owner_for_task(tasks: list[PlanTaskData], task: PlanTaskData) -> str | None:
+    owner = _task_owner(task)
+    if owner:
+        return owner
+    for child in _descendants(tasks, task):
+        owner = _task_owner(child)
+        if owner:
+            return owner
+    return None
 
 
 def _week_bounds(as_of: date) -> tuple[date, date]:

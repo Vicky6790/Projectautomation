@@ -238,6 +238,30 @@ class PhaseStatus(BaseModel):
     state: Literal["not_started", "in_progress", "complete"]
 
 
+class DelayMappingRow(BaseModel):
+    """One delayed phase or leaf task. Reason and mitigation stay empty unless present in the plan."""
+
+    kind: Literal["phase", "task"]
+    name: str
+    parent_name: str | None = None
+    wbs: str | None = None
+    planned_start: str | None = None
+    planned_finish: str | None = None
+    revised_start: str | None = None
+    revised_finish: str | None = None
+    delay_days: int | None = None
+    primary_reason: str | None = None
+    go_live_impact: Literal["high", "medium"] | None = None
+    mitigation_plan: str | None = None
+    owner: str | None = None
+
+
+class DelayMappingSheet(BaseModel):
+    total_delayed_days: int = 0
+    delayed_task_count: int = 0
+    rows: list[DelayMappingRow] = Field(default_factory=list)
+
+
 class ProgressItem(BaseModel):
     name: str
     date: str | None = None
@@ -331,6 +355,7 @@ class WsrPlanFacts(BaseModel):
     executive_summary: ExecutiveSummary | None = None
     timeline: list[PhaseStatus] | None = None
     phase_statuses: list[PhaseStatus] = Field(default_factory=list)
+    delay_mapping: DelayMappingSheet | None = None
     progress_to_date: list[ProgressItem] = Field(default_factory=list)
     upcoming_milestones: list[MilestoneItem] = Field(default_factory=list)
 
