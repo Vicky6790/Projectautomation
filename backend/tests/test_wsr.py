@@ -87,6 +87,8 @@ def test_generate_uses_mpp_status_date(client: TestClient, monkeypatch) -> None:
     assert result["facts"]["planned_go_live_date"] == "2026-09-11"
     assert result["facts"]["executive_summary"]["summary"]
     assert result["facts"]["executive_overview"] == result["facts"]["executive_summary"]["summary"]
+    assert "delay_mapping" in result["facts"]
+    assert result["facts"]["delay_mapping"]["delayed_task_count"] >= 0
     assert result["exportable"] is True
     assert result["milestones"] == ["Build"]
     status = client.get(f"/api/v1/wsr/requests/{handle}")

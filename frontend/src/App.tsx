@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react";
 import { AUTH_LOST_EVENT, getCurrentOperator, getHealth, signOut } from "./api";
 import type { HealthResponse, Module, Operator } from "./types";
+import { DelayMappingView } from "./DelayMappingView";
 import { LoginView } from "./LoginView";
 import { OperatorsView } from "./OperatorsView";
 import { PlanGeneratorView } from "./PlanGeneratorView";
@@ -19,6 +20,7 @@ const MODULES: { id: Module; label: string; icon: string }[] = [
 
 const TITLES: Record<string, string> = {
   "/wsr": "Generate WSR",
+  "/wsr/delay-mapping": "Delay Mapping Sheet",
   "/sow": "SOW Analyzer",
   "/plan": "Project Plan Builder",
   "/retrospective": "Retrospective",
@@ -168,6 +170,7 @@ export default function App() {
               <Route path="/sow" element={<SowAnalyzerView />} />
               <Route path="/plan" element={<PlanGeneratorView />} />
               <Route path="/wsr" element={<WsrDashboardView />} />
+              <Route path="/wsr/delay-mapping" element={<DelayMappingView />} />
               <Route path="/retrospective" element={<RetrospectiveView />} />
               <Route
                 path="/operators"

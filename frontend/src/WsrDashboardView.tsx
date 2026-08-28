@@ -1,5 +1,6 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
-import { generateWsr, retryJob } from "./api";
+import { useNavigate } from "react-router-dom";
+import { generateWsr, getWsrRequest, retryJob } from "./api";
 import { FileUploader } from "./components/FileUploader";
 import { WsrGantt } from "./components/WsrGantt";
 import { WsrProgressRing } from "./components/WsrProgressRing";
@@ -11,7 +12,6 @@ import type {
   PhaseStatus,
   ProcessingResponse,
   ProgressItem,
-  StatusReport,
   WsrPlanFacts,
 } from "./types";
 import {
@@ -24,6 +24,13 @@ import {
   unavailable,
   weekDate,
 } from "./wsrFormat";
+import {
+  asWsrReport,
+  clearWsrSession,
+  readWsrSession,
+  restoredUpload,
+  saveWsrSession,
+} from "./wsrSession";
 
 const GENERATE_STAGES = [
   "Reading the file",
@@ -35,28 +42,8 @@ const GENERATE_STAGES = [
 const KPI_TONES = ["kpi-indigo", "kpi-emerald", "kpi-amber", "kpi-blue"] as const;
 const KPI_ICONS = ["calendar_today", "person_add", "schedule", "assignment"] as const;
 
-function asReport(result: ProcessingResponse["result"]): StatusReport | null {
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-  const data = result as StatusReport;
-  return {
-    as_of_date: data.as_of_date ?? null,
-    generated_at: data.generated_at ?? null,
-    planned_only: Boolean(data.planned_only),
-    exportable: Boolean(data.exportable),
-    project_health: data.project_health ?? data.facts?.project_health ?? null,
-    facts: data.facts ?? null,
-    progress: data.progress ?? [],
-    milestones: data.milestones ?? [],
-    client_needs: data.client_needs ?? [],
-    risks: data.risks ?? [],
-    issues: data.issues ?? [],
-    dependencies: data.dependencies ?? [],
-    management_attention: data.management_attention ?? [],
-    decisions_required: data.decisions_required ?? [],
-    next_7_day_priorities: data.next_7_day_priorities ?? [],
-  };
+function asReport(result: ProcessingResponse["result"]) {
+  return asWsrReport(result);
 }
 
 function visibleInsights(items: AiDerivedItem[]): AiDerivedItem[] {
@@ -167,6 +154,7 @@ function InsightCards({
 
 export function WsrDashboardView() {
   const setPageMeta = useContext(ShellMetaContext);
+  const navigate = useNavigate();
   const [uploaded, setUploaded] = useState<FileRecord | null>(null);
   const [job, setJob] = useState<ProcessingResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -174,6 +162,24 @@ export function WsrDashboardView() {
   const [message, setMessage] = useState(
     "Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.",
   );
+
+  useEffect(() => {
+    const session = readWsrSession();
+    if (!session) {
+      return;
+    }
+    setUploaded(restoredUpload(session));
+    getWsrRequest(session.handle)
+      .then((result) => {
+        setJob(result);
+        if (result.status === "succeeded") {
+          setMessage("Status report ready.");
+        }
+      })
+      .catch(() => {
+        clearWsrSession();
+      });
+  }, []);
 
   const report = asReport(job?.result ?? null);
   const facts: WsrPlanFacts = report?.facts ?? {};
@@ -201,7 +207,12 @@ export function WsrDashboardView() {
     try {
       const result = await generateWsr(handle);
       setJob(result);
-      setMessage(result.status === "succeeded" ? "Status report ready." : "Generation failed.");
+      if (result.status === "succeeded") {
+        saveWsrSession(handle, uploaded?.filename || "plan.mpp");
+        setMessage("Status report ready.");
+      } else {
+        setMessage("Generation failed.");
+      }
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : "Generation failed");
     } finally {
@@ -282,6 +293,7 @@ export function WsrDashboardView() {
                 onClick={() => {
                   setUploaded(null);
                   setJob(null);
+                  clearWsrSession();
                   setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
                 }}
               >
@@ -299,6 +311,7 @@ export function WsrDashboardView() {
               onUploaded={(file) => {
                 setUploaded(file);
                 setJob(null);
+                clearWsrSession();
                 setMessage("File ready. Generate WSR & Insights to build the dashboard.");
               }}
               onError={setMessage}
@@ -414,8 +427,8 @@ export function WsrDashboardView() {
               <button
                 type="button"
                 className="btn btn-outline delay-mapping-cta"
-                disabled={!facts.phase_statuses?.length}
-                onClick={() => downloadDelayMappingSheet(facts.phase_statuses || [])}
+                disabled={!report}
+                onClick={() => navigate("/wsr/delay-mapping")}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   table_view
@@ -571,56 +584,4 @@ export function WsrDashboardView() {
       )}
     </section>
   );
-}
-
-function csvCell(value: string): string {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
-
-function isoDay(value: string | null | undefined): string {
-  return value?.slice(0, 10) || "";
-}
-
-function delayDays(planned: string | null | undefined, current: string | null | undefined): string {
-  const start = isoDay(planned);
-  const finish = isoDay(current);
-  if (!start || !finish) {
-    return "";
-  }
-  const left = new Date(`${start}T00:00:00`);
-  const right = new Date(`${finish}T00:00:00`);
-  if (Number.isNaN(left.getTime()) || Number.isNaN(right.getTime())) {
-    return "";
-  }
-  return String(Math.round((right.getTime() - left.getTime()) / 86_400_000));
-}
-
-function downloadDelayMappingSheet(phases: PhaseStatus[]) {
-  const header = [
-    "WBS",
-    "Phases",
-    "Start Date",
-    "Planned End (Baseline Finish)",
-    "Deviated Date (Finish)",
-    "Delay Days",
-  ];
-  const rows = phases.map((phase, index) => [
-    phaseWbs(phase, index),
-    phase.name,
-    isoDay(phase.planned_start || phase.actual_start),
-    isoDay(phase.planned_finish),
-    isoDay(phase.actual_finish),
-    delayDays(phase.planned_finish, phase.actual_finish),
-  ]);
-  const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "delay-mapping-sheet.csv";
-  link.click();
-  URL.revokeObjectURL(url);
 }

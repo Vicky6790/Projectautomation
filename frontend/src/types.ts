@@ -106,6 +106,28 @@ export type PhaseStatus = {
   state: "not_started" | "in_progress" | "complete";
 };
 
+export type DelayMappingRow = {
+  kind: "phase" | "task";
+  name: string;
+  parent_name?: string | null;
+  wbs?: string | null;
+  planned_start?: string | null;
+  planned_finish?: string | null;
+  revised_start?: string | null;
+  revised_finish?: string | null;
+  delay_days?: number | null;
+  primary_reason?: string | null;
+  go_live_impact?: "high" | "medium" | null;
+  mitigation_plan?: string | null;
+  owner?: string | null;
+};
+
+export type DelayMappingSheet = {
+  total_delayed_days?: number;
+  delayed_task_count?: number;
+  rows?: DelayMappingRow[];
+};
+
 export type ProgressItem = {
   name: string;
   date?: string | null;
@@ -174,6 +196,7 @@ export type WsrPlanFacts = {
   executive_summary?: ExecutiveSummary | null;
   timeline?: PhaseStatus[] | null;
   phase_statuses?: PhaseStatus[];
+  delay_mapping?: DelayMappingSheet | null;
   progress_to_date?: ProgressItem[];
   upcoming_milestones?: MilestoneItem[];
 };

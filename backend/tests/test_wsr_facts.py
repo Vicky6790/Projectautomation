@@ -844,3 +844,103 @@ def test_project_name_comes_from_wbs_one() -> None:
     assert facts.project_name == "Core Banking Portal"
     assert facts.countdown_days == (date(2026, 9, 11) - date(2026, 8, 22)).days
     assert facts.planned_go_live_date == "2026-09-11"
+
+
+def test_delay_mapping_uses_phase_deviation_and_delayed_mpp_tasks() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Core Banking Portal", wbs="1", is_summary=True),
+                PlanTaskData(
+                    id=2,
+                    name="UX Phase",
+                    wbs="1.1",
+                    is_summary=True,
+                    outline_level=2,
+                    baseline_start="2026-08-01",
+                    baseline_finish="2026-08-10",
+                    scheduled_start="2026-08-01",
+                    scheduled_finish="2026-08-20",
+                    percent_complete=40,
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Design Sign-off",
+                    wbs="1.1.1",
+                    outline_level=3,
+                    baseline_start="2026-08-01",
+                    baseline_finish="2026-08-10",
+                    scheduled_start="2026-08-01",
+                    scheduled_finish="2026-08-20",
+                    percent_complete=40,
+                    assignments=[PlanAssignmentData(resource_name="Jaya Desai")],
+                ),
+                PlanTaskData(
+                    id=4,
+                    name="On-time build",
+                    wbs="1.1.2",
+                    outline_level=3,
+                    baseline_finish="2026-08-08",
+                    scheduled_finish="2026-08-08",
+                    percent_complete=100,
+                    actual_finish="2026-08-08",
+                ),
+                PlanTaskData(
+                    id=5,
+                    name="Go Live",
+                    wbs="1.2",
+                    outline_level=2,
+                    is_milestone=True,
+                    scheduled_finish="2026-09-01",
+                    predecessor_ids=[3],
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    names = [row.name for row in mapping.rows]
+    assert "UX Phase" in names
+    assert "Design Sign-off" in names
+    assert "On-time build" not in names
+    design = next(row for row in mapping.rows if row.name == "Design Sign-off")
+    assert design.kind == "task"
+    assert design.parent_name == "UX Phase"
+    assert design.delay_days == 10
+    assert design.owner == "Jaya Desai"
+    assert design.primary_reason is None
+    assert design.mitigation_plan is None
+    assert design.go_live_impact == "high"
+    assert mapping.delayed_task_count == 1
+    assert mapping.total_delayed_days == 10
+
+
+def test_delay_mapping_counts_overdue_task_without_baseline() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Late API",
+                    scheduled_finish="2026-08-10",
+                    percent_complete=20,
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Go Live",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-01",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    assert mapping.delayed_task_count == 1
+    assert mapping.rows[0].name == "Late API"
+    assert mapping.rows[0].delay_days == 12
+    assert mapping.rows[0].go_live_impact == "medium"
