@@ -106,6 +106,13 @@ export type PhaseStatus = {
   state: "not_started" | "in_progress" | "complete";
 };
 
+export type DelayAttributionBucket = {
+  key: string;
+  label: string;
+  shift_days: number;
+  task_count?: number;
+};
+
 export type DelayMappingRow = {
   kind?: "phase" | "task";
   name: string;
@@ -115,6 +122,7 @@ export type DelayMappingRow = {
   shift_days?: number | null;
   delay_days?: number | null;
   owner?: string | null;
+  owner_class?: "internal" | "client" | "shared" | "unknown" | null;
   planned_start?: string | null;
   planned_finish?: string | null;
   revised_start?: string | null;
@@ -122,16 +130,28 @@ export type DelayMappingRow = {
   primary_reason?: string | null;
   go_live_impact?: "high" | "medium" | null;
   mitigation_plan?: string | null;
+  impacted_successors?: string[];
+  impacted_milestones?: string[];
 };
 
 export type DelayMappingSheet = {
   baseline_go_live?: string | null;
   current_go_live?: string | null;
+  gross_working_day_shift?: number | null;
   shift_working_days?: number | null;
   holidays?: number | null;
+  net_working_day_shift?: number | null;
   actual_shift_working_days?: number | null;
+  attributed_shift_days?: number;
+  unattributed_shift_days?: number;
+  unattributed_status?: "explained" | "requires_pm_validation" | null;
+  delay_shift_days?: number;
+  additional_shift_days?: number;
   total_delayed_days?: number;
   delayed_task_count?: number;
+  phase_attribution?: DelayAttributionBucket[];
+  owner_attribution?: DelayAttributionBucket[];
+  type_attribution?: DelayAttributionBucket[];
   rows?: DelayMappingRow[];
 };
 

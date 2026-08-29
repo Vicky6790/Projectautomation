@@ -36,6 +36,18 @@ def gate_name_markers() -> tuple[str, ...]:
     return sign_off_markers() + go_live_markers() + ("approval",)
 
 
+def _marker_tuple(raw: str) -> tuple[str, ...]:
+    return tuple(item.strip().lower() for item in (raw or "").split(",") if item.strip())
+
+
+def client_owner_markers() -> tuple[str, ...]:
+    return _marker_tuple(settings.wsr_client_owner_markers)
+
+
+def internal_owner_markers() -> tuple[str, ...]:
+    return _marker_tuple(settings.wsr_internal_owner_markers)
+
+
 def upcoming_horizon_days() -> int:
     try:
         days = int(settings.wsr_upcoming_days)

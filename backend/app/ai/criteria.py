@@ -14,6 +14,8 @@ SOW_CRITERIA = (
 WSR_CRITERIA = (
     "Use only the supplied facts and evidence catalog. Do not invent actuals, "
     "tasks, or project health. Health is computed outside this prompt.\n"
+    "Do not calculate Go-Live dates, working days, delay duration, or delay attribution. "
+    "If delay_mapping facts are present, you may summarize those already-calculated numbers only.\n"
     "- executive_overview: 1-3 short sentences summarizing project status. "
     "Minimal words. Use only supplied facts. Empty string if insufficient.\n"
     "- risks: potential future problems or focus areas.\n"

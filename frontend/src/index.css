@@ -979,6 +979,70 @@ label select {
   border-bottom: none;
 }
 
+.delay-reconcile {
+  margin: 0;
+  padding: 10px 16px 14px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.delay-unattributed {
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #92400e;
+  font-weight: 700;
+}
+
+.delay-attr-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.delay-attr-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.delay-attr-card h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--navy);
+}
+
+.delay-attr-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.delay-attr-table th,
+.delay-attr-table td {
+  padding: 6px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.delay-register th,
+.delay-register td {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.delay-unattr-row td {
+  background: #fffbeb;
+  color: #92400e;
+  font-weight: 700;
+}
+
 .delay-actual {
   color: #be123c;
 }
@@ -1229,6 +1293,10 @@ label select {
 
 @media (max-width: 1100px) {
   .delay-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .delay-attr-grid {
     grid-template-columns: 1fr;
   }
 }

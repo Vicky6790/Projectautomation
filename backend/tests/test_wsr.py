@@ -142,6 +142,7 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
         "Executive Summary",
         "Project Timeline",
         "Phase-Wise Status",
+        "Go-Live Delay Mapping",
         "Progress of current week",
         "Upcoming Milestones Of Next Week",
         "Risks & Focus Areas",

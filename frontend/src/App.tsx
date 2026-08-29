@@ -20,7 +20,7 @@ const MODULES: { id: Module; label: string; icon: string }[] = [
 
 const TITLES: Record<string, string> = {
   "/wsr": "Generate WSR",
-  "/wsr/delay-mapping": "Delay Mapping Sheet",
+  "/wsr/delay-mapping": "Go-Live Delay Mapping",
   "/sow": "SOW Analyzer",
   "/plan": "Project Plan Builder",
   "/retrospective": "Retrospective",

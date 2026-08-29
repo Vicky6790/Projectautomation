@@ -898,13 +898,22 @@ def test_delay_mapping_uses_working_days_and_excludes_phase_rows() -> None:
     assert delay.parent_name == "UX Phase"
     assert delay.shift_days == 8
     assert delay.owner == "Idealake"
+    assert delay.owner_class == "unknown"
+    assert delay.go_live_impact == "high"
     assert mapping.delayed_task_count == 1
     assert mapping.baseline_go_live == "2026-08-20"
     assert mapping.current_go_live == "2026-09-01"
+    assert mapping.gross_working_day_shift == 8
     assert mapping.shift_working_days == 8
     assert mapping.holidays is None
+    assert mapping.net_working_day_shift == 8
     assert mapping.actual_shift_working_days == 8
-    assert mapping.total_delayed_days == mapping.actual_shift_working_days
+    assert mapping.attributed_shift_days == 8
+    assert mapping.unattributed_shift_days == 0
+    assert mapping.unattributed_status == "explained"
+    assert mapping.delay_shift_days == 8
+    assert mapping.additional_shift_days == 0
+    assert mapping.total_delayed_days == mapping.net_working_day_shift
 
 
 def test_delay_mapping_hides_additional_work_that_did_not_move_go_live() -> None:
@@ -954,8 +963,11 @@ def test_delay_mapping_hides_additional_work_that_did_not_move_go_live() -> None
     assert mapping is not None
     assert mapping.rows == []
     assert mapping.actual_shift_working_days == 0
+    assert mapping.net_working_day_shift == 0
+    assert mapping.attributed_shift_days == 0
+    assert mapping.unattributed_shift_days == 0
+    assert mapping.unattributed_status == "explained"
     assert mapping.total_delayed_days == 0
-    assert mapping.delayed_task_count == 0
 
 
 def test_delay_mapping_hides_delays_when_go_live_shift_is_unknown() -> None:
@@ -1017,7 +1029,11 @@ def test_delay_mapping_subtracts_weekday_holidays_from_go_live_shift() -> None:
     assert mapping.shift_working_days == 8
     assert mapping.holidays == 1
     assert mapping.actual_shift_working_days == 7
+    assert mapping.net_working_day_shift == 7
     assert mapping.rows == []
+    assert mapping.attributed_shift_days == 0
+    assert mapping.unattributed_shift_days == 7
+    assert mapping.unattributed_status == "requires_pm_validation"
     assert mapping.total_delayed_days == 0
 
 
@@ -1065,8 +1081,12 @@ def test_delay_mapping_lists_additional_work_that_moved_go_live() -> None:
     assert extra.task_type == "additional"
     assert extra.shift_days == 5
     assert extra.owner == "Idealake & PNB MetLife"
+    assert extra.owner_class == "unknown"
     assert extra.parent_name == "Wireframe Phase"
     assert mapping.actual_shift_working_days == 5
+    assert mapping.attributed_shift_days == 5
+    assert mapping.unattributed_shift_days == 0
+    assert mapping.additional_shift_days == 5
     assert mapping.total_delayed_days == mapping.actual_shift_working_days
     assert mapping.delayed_task_count == 0
 
@@ -1109,9 +1129,12 @@ def test_delay_mapping_drops_named_tasks_that_do_not_add_to_go_live_shift() -> N
     )
     mapping = facts.delay_mapping
     assert mapping is not None
-    assert [row.name for row in mapping.rows] == ["Delay In Presenting Mobile Wireframes"]
-    assert mapping.rows[0].shift_days == 8
+    by_name = {row.name: row.shift_days for row in mapping.rows}
+    assert by_name["Additional Days Due To Unplanned Round 2 Feedback"] == 5
+    assert by_name["Delay In Presenting Mobile Wireframes"] == 3
     assert mapping.actual_shift_working_days == 8
+    assert mapping.attributed_shift_days == 8
+    assert mapping.unattributed_shift_days == 0
     assert mapping.total_delayed_days == 8
 
 
@@ -1186,5 +1209,114 @@ def test_delay_mapping_keeps_only_named_tasks_on_the_go_live_path() -> None:
     assert [row.name for row in mapping.rows] == ["Delay In Presenting Mobile Wireframes"]
     assert mapping.rows[0].shift_days == 8
     assert mapping.actual_shift_working_days == 8
+    assert mapping.attributed_shift_days == 8
+    assert mapping.unattributed_shift_days == 0
     assert mapping.total_delayed_days == 8
+    assert mapping.rows[0].impacted_milestones == ["Go Live"]
+
+
+def test_delay_mapping_does_not_double_count_overlapping_path_delays() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Delay In Sharing Sign-Off",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-20",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Delay Due To Parallel Review Cycle",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-20",
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Go Live",
+                    is_milestone=True,
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-09-01",
+                    predecessor_ids=[1, 2],
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    assert mapping.net_working_day_shift == 8
+    assert mapping.attributed_shift_days == 8
+    assert mapping.unattributed_shift_days == 0
+    assert sum(row.shift_days or 0 for row in mapping.rows) == 8
+    assert len(mapping.rows) == 1
+
+
+def test_delay_mapping_reports_unattributed_remainder_for_pm_validation() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Delay In Sharing Sign-Off",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-13",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Go Live",
+                    is_milestone=True,
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-09-01",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    assert mapping.net_working_day_shift == 8
+    assert mapping.rows[0].shift_days == 3
+    assert mapping.attributed_shift_days == 3
+    assert mapping.unattributed_shift_days == 5
+    assert mapping.unattributed_status == "requires_pm_validation"
+    assert mapping.attributed_shift_days + mapping.unattributed_shift_days == mapping.net_working_day_shift
+
+
+def test_delay_mapping_uses_configured_client_owner_markers(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.wsr.delay_engine.client_owner_markers",
+        lambda: ("pnb metlife",),
+    )
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Delay In Sharing Sign-Off",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-20",
+                    assignments=[PlanAssignmentData(resource_name="PNB MetLife")],
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Go Live",
+                    is_milestone=True,
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-09-01",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    assert mapping.rows[0].owner == "PNB MetLife"
+    assert mapping.rows[0].owner_class == "client"
+    assert mapping.owner_attribution[0].key == "client"
+    assert mapping.rows[0].primary_reason is None
+
 

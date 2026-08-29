@@ -83,6 +83,7 @@ def build_executive_summary_input(
             "goLive": _go_live_health(go_live_task, go_live_date, as_of_d),
             "resource": _resource_health(plan, progress, go_live_date, as_of_d, facts),
         },
+        "delayMapping": _delay_mapping_snapshot(facts.delay_mapping),
     }
 
 
@@ -561,3 +562,44 @@ def _resource_health(
     if float(remaining) > capacity_hours * 0.7:
         return "at-risk"
     return "on-track"
+
+
+def _delay_mapping_snapshot(mapping) -> dict[str, Any] | None:
+    if mapping is None:
+        return None
+    return {
+        "baselineGoLive": mapping.baseline_go_live,
+        "currentGoLive": mapping.current_go_live,
+        "grossWorkingDayShift": mapping.gross_working_day_shift,
+        "holidays": mapping.holidays,
+        "netWorkingDayShift": mapping.net_working_day_shift,
+        "attributedShiftDays": mapping.attributed_shift_days,
+        "unattributedShiftDays": mapping.unattributed_shift_days,
+        "unattributedStatus": mapping.unattributed_status,
+        "delayShiftDays": mapping.delay_shift_days,
+        "additionalShiftDays": mapping.additional_shift_days,
+        "phaseAttribution": [
+            {"label": item.label, "shiftDays": item.shift_days, "taskCount": item.task_count}
+            for item in mapping.phase_attribution
+        ],
+        "ownerAttribution": [
+            {"label": item.label, "shiftDays": item.shift_days, "taskCount": item.task_count}
+            for item in mapping.owner_attribution
+        ],
+        "typeAttribution": [
+            {"label": item.label, "shiftDays": item.shift_days, "taskCount": item.task_count}
+            for item in mapping.type_attribution
+        ],
+        "register": [
+            {
+                "phase": row.parent_name,
+                "task": row.name,
+                "taskType": row.task_type,
+                "owner": row.owner,
+                "ownerClass": row.owner_class,
+                "shiftDays": row.shift_days,
+                "reason": row.primary_reason,
+            }
+            for row in mapping.rows
+        ],
+    }

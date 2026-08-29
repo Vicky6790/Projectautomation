@@ -240,8 +240,15 @@ class PhaseStatus(BaseModel):
     state: Literal["not_started", "in_progress", "complete"]
 
 
+class DelayAttributionBucket(BaseModel):
+    key: str
+    label: str
+    shift_days: int
+    task_count: int = 0
+
+
 class DelayMappingRow(BaseModel):
-    """One named Delay/Additional leaf whose working days moved Go-Live. Causes are not invented."""
+    """One attributed DELAY or ADDITIONAL leaf on the Go-Live path. Causes are not invented."""
 
     kind: Literal["task"] = "task"
     name: str
@@ -251,6 +258,7 @@ class DelayMappingRow(BaseModel):
     shift_days: int | None = None
     delay_days: int | None = None
     owner: str | None = None
+    owner_class: Literal["internal", "client", "shared", "unknown"] = "unknown"
     planned_start: str | None = None
     planned_finish: str | None = None
     revised_start: str | None = None
@@ -258,16 +266,28 @@ class DelayMappingRow(BaseModel):
     primary_reason: str | None = None
     go_live_impact: Literal["high", "medium"] | None = None
     mitigation_plan: str | None = None
+    impacted_successors: list[str] = Field(default_factory=list)
+    impacted_milestones: list[str] = Field(default_factory=list)
 
 
 class DelayMappingSheet(BaseModel):
     baseline_go_live: str | None = None
     current_go_live: str | None = None
+    gross_working_day_shift: int | None = None
     shift_working_days: int | None = None
     holidays: int | None = None
+    net_working_day_shift: int | None = None
     actual_shift_working_days: int | None = None
+    attributed_shift_days: int = 0
+    unattributed_shift_days: int = 0
+    unattributed_status: Literal["explained", "requires_pm_validation"] | None = None
+    delay_shift_days: int = 0
+    additional_shift_days: int = 0
     total_delayed_days: int = 0
     delayed_task_count: int = 0
+    phase_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
+    owner_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
+    type_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
     rows: list[DelayMappingRow] = Field(default_factory=list)
 
 

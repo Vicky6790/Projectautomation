@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     ai_stub: bool = False
     max_upload_bytes: int = 52_428_800
     wsr_go_live_markers: str = "go-live,go live"
+    wsr_client_owner_markers: str = ""
+    wsr_internal_owner_markers: str = ""
     wsr_upcoming_days: int = 7
     request_ttl_hours: int = 24
 
