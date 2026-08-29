@@ -241,7 +241,7 @@ class PhaseStatus(BaseModel):
 
 
 class DelayMappingRow(BaseModel):
-    """One MPP leaf task that slipped or was added after baseline. Causes are not invented."""
+    """One named Delay/Additional leaf whose working days moved Go-Live. Causes are not invented."""
 
     kind: Literal["task"] = "task"
     name: str

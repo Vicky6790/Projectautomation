@@ -904,9 +904,10 @@ def test_delay_mapping_uses_working_days_and_excludes_phase_rows() -> None:
     assert mapping.shift_working_days == 8
     assert mapping.holidays is None
     assert mapping.actual_shift_working_days == 8
+    assert mapping.total_delayed_days == mapping.actual_shift_working_days
 
 
-def test_delay_mapping_marks_unbaselined_work_as_additional() -> None:
+def test_delay_mapping_hides_additional_work_that_did_not_move_go_live() -> None:
     facts = derive_wsr_facts(
         _plan(
             [
@@ -951,18 +952,13 @@ def test_delay_mapping_marks_unbaselined_work_as_additional() -> None:
     )
     mapping = facts.delay_mapping
     assert mapping is not None
-    assert [row.name for row in mapping.rows] == [
-        "Additional Days Due To Unplanned Round 2 Feedback"
-    ]
-    extra = mapping.rows[0]
-    assert extra.task_type == "additional"
-    assert extra.shift_days == 5
-    assert extra.owner == "Idealake & PNB MetLife"
-    assert extra.parent_name == "Wireframe Phase"
+    assert mapping.rows == []
+    assert mapping.actual_shift_working_days == 0
+    assert mapping.total_delayed_days == 0
     assert mapping.delayed_task_count == 0
 
 
-def test_delay_mapping_counts_overdue_task_without_baseline() -> None:
+def test_delay_mapping_hides_delays_when_go_live_shift_is_unknown() -> None:
     facts = derive_wsr_facts(
         _plan(
             [
@@ -992,12 +988,9 @@ def test_delay_mapping_counts_overdue_task_without_baseline() -> None:
     )
     mapping = facts.delay_mapping
     assert mapping is not None
-    assert [row.name for row in mapping.rows] == [
-        "Delay Due To Unavailability Of PNB MetLife Team"
-    ]
-    assert mapping.rows[0].task_type == "delay"
-    assert mapping.rows[0].shift_days == 9
-    assert mapping.rows[0].owner == "PNB MetLife"
+    assert mapping.rows == []
+    assert mapping.actual_shift_working_days is None
+    assert mapping.total_delayed_days == 0
 
 
 def test_delay_mapping_subtracts_weekday_holidays_from_go_live_shift() -> None:
@@ -1024,3 +1017,174 @@ def test_delay_mapping_subtracts_weekday_holidays_from_go_live_shift() -> None:
     assert mapping.shift_working_days == 8
     assert mapping.holidays == 1
     assert mapping.actual_shift_working_days == 7
+    assert mapping.rows == []
+    assert mapping.total_delayed_days == 0
+
+
+def test_delay_mapping_lists_additional_work_that_moved_go_live() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Wireframe Phase",
+                    wbs="1.1",
+                    is_summary=True,
+                    outline_level=1,
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Additional Days Due To Unplanned Round 2 Feedback",
+                    wbs="1.1.1",
+                    outline_level=2,
+                    scheduled_start="2026-08-21",
+                    scheduled_finish="2026-08-27",
+                    assignments=[
+                        PlanAssignmentData(resource_name="Idealake"),
+                        PlanAssignmentData(resource_name="PNB MetLife"),
+                    ],
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Go Live",
+                    is_milestone=True,
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-08-27",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    assert [row.name for row in mapping.rows] == [
+        "Additional Days Due To Unplanned Round 2 Feedback"
+    ]
+    extra = mapping.rows[0]
+    assert extra.task_type == "additional"
+    assert extra.shift_days == 5
+    assert extra.owner == "Idealake & PNB MetLife"
+    assert extra.parent_name == "Wireframe Phase"
+    assert mapping.actual_shift_working_days == 5
+    assert mapping.total_delayed_days == mapping.actual_shift_working_days
+    assert mapping.delayed_task_count == 0
+
+
+def test_delay_mapping_drops_named_tasks_that_do_not_add_to_go_live_shift() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="UX Phase",
+                    wbs="1.1",
+                    is_summary=True,
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Delay In Presenting Mobile Wireframes",
+                    wbs="1.1.1",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-20",
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Additional Days Due To Unplanned Round 2 Feedback",
+                    wbs="1.1.2",
+                    scheduled_start="2026-08-03",
+                    scheduled_finish="2026-08-07",
+                ),
+                PlanTaskData(
+                    id=4,
+                    name="Go Live",
+                    is_milestone=True,
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-09-01",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    assert [row.name for row in mapping.rows] == ["Delay In Presenting Mobile Wireframes"]
+    assert mapping.rows[0].shift_days == 8
+    assert mapping.actual_shift_working_days == 8
+    assert mapping.total_delayed_days == 8
+
+
+def test_delay_mapping_splits_go_live_shift_across_impacting_named_tasks() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Delay In Sharing Sign-Off",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-13",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Additional Days Due To Unplanned Round 2 Feedback",
+                    scheduled_start="2026-08-14",
+                    scheduled_finish="2026-08-20",
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Go Live",
+                    is_milestone=True,
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-09-01",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    by_name = {row.name: row.shift_days for row in mapping.rows}
+    assert by_name["Delay In Sharing Sign-Off"] == 3
+    assert by_name["Additional Days Due To Unplanned Round 2 Feedback"] == 5
+    assert mapping.actual_shift_working_days == 8
+    assert mapping.total_delayed_days == 8
+
+
+def test_delay_mapping_keeps_only_named_tasks_on_the_go_live_path() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Delay In Presenting Mobile Wireframes",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-20",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Additional Days Due To Parallel Review",
+                    scheduled_start="2026-08-03",
+                    scheduled_finish="2026-08-14",
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Go Live",
+                    is_milestone=True,
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-09-01",
+                    predecessor_ids=[1],
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    assert [row.name for row in mapping.rows] == ["Delay In Presenting Mobile Wireframes"]
+    assert mapping.rows[0].shift_days == 8
+    assert mapping.actual_shift_working_days == 8
+    assert mapping.total_delayed_days == 8
+

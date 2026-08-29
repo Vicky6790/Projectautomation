@@ -53,7 +53,10 @@ export function DelayMappingView() {
   const rows = mapping.rows ?? [];
   const groups = useMemo(() => groupByPhase(rows), [rows]);
   const asOf = facts?.as_of_date;
-  const rowTotal = mapping.total_delayed_days ?? rows.reduce((sum, row) => sum + (row.shift_days ?? row.delay_days ?? 0), 0);
+  const rowTotal =
+    mapping.actual_shift_working_days ??
+    mapping.total_delayed_days ??
+    rows.reduce((sum, row) => sum + (row.shift_days ?? row.delay_days ?? 0), 0);
 
   if (!facts) {
     return (
@@ -82,7 +85,8 @@ export function DelayMappingView() {
           </div>
           <h1>Delay Mapping Sheet</h1>
           <p>
-            Working-day Go-Live shift, plus only MPP tasks whose names include Delay or Additional.
+            Working-day Go-Live shift, plus only Delay or Additional MPP tasks that moved that date.
+            Shift Days Count totals the same working days as Actual Shift.
           </p>
         </div>
         <button
@@ -160,7 +164,7 @@ export function DelayMappingView() {
             </table>
           </div>
         ) : (
-          <p className="delay-empty-rows">No Delay or Additional tasks in the uploaded plan</p>
+          <p className="delay-empty-rows">No Delay or Additional tasks impacting the Go-Live shift</p>
         )}
       </div>
     </section>
@@ -249,7 +253,10 @@ function downloadDelayMappingSheet(mapping: DelayMappingSheet, asOf?: string) {
     row.shift_days == null && row.delay_days == null ? "" : String(row.shift_days ?? row.delay_days),
     row.owner || "",
   ]);
-  const total = mapping.total_delayed_days ?? rows.reduce((sum, row) => sum + (row.shift_days ?? row.delay_days ?? 0), 0);
+  const total =
+    mapping.actual_shift_working_days ??
+    mapping.total_delayed_days ??
+    rows.reduce((sum, row) => sum + (row.shift_days ?? row.delay_days ?? 0), 0);
   const csv = [...summary, ...body, ["", "Total Count", "", String(total), ""]]
     .map((line) => line.map(csvCell).join(","))
     .join("\n");

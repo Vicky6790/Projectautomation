@@ -529,7 +529,7 @@ def _delay_mapping(
     phases: list[PhaseStatus],
     go_live_date: date | None,
 ) -> DelayMappingSheet:
-    """Map named Delay/Additional MPP tasks into the sample sheet, grouped by phase."""
+    """Map named Delay/Additional tasks that moved Go-Live, so row days match the header."""
 
     holidays = _holiday_set(plan)
     go_live_task = _named_go_live_task(plan.tasks, as_of)
@@ -552,15 +552,35 @@ def _delay_mapping(
 
     phase_tasks = select_phase_summaries(plan.tasks, project_name=plan.name)
     go_live_id = None if go_live_task is None else go_live_task.id
-    rows: list[DelayMappingRow] = []
+    successors = _successor_map(plan.tasks)
+    has_links = any(task.predecessor_ids for task in plan.tasks)
+    named: list[tuple[PlanTaskData, DelayMappingRow]] = []
     for task in plan.tasks:
         if task.is_summary or task.id == go_live_id:
             continue
         if _contains(task.name, go_live_markers()) or _contains(task.gate, go_live_markers()):
             continue
         mapped = _delay_row(plan.tasks, phase_tasks, task, as_of, holidays)
-        if mapped is not None:
-            rows.append(mapped)
+        if mapped is None or not mapped.shift_days:
+            continue
+        named.append((task, mapped))
+    impacting = _impacting_shift_rows(
+        named,
+        actual_shift=actual_shift,
+        go_live_id=go_live_id,
+        successors=successors,
+        has_links=has_links,
+    )
+    impacting.sort(
+        key=lambda row: (
+            -(row.shift_days or 0),
+            row.revised_start or row.planned_start or "",
+            row.revised_finish or row.planned_finish or "",
+            row.wbs or "",
+            row.name,
+        )
+    )
+    rows = _allocate_shift_days(impacting, actual_shift)
     phase_order = {phase.name: index for index, phase in enumerate(phases)}
     rows.sort(
         key=lambda row: (
@@ -570,13 +590,14 @@ def _delay_mapping(
             row.name,
         )
     )
+    total = sum(row.shift_days or 0 for row in rows)
     return DelayMappingSheet(
         baseline_go_live=None if baseline_go_live is None else baseline_go_live.isoformat(),
         current_go_live=None if current_go_live is None else current_go_live.isoformat(),
         shift_working_days=shift_weekdays,
         holidays=holiday_count,
         actual_shift_working_days=actual_shift,
-        total_delayed_days=sum(row.shift_days or 0 for row in rows),
+        total_delayed_days=total,
         delayed_task_count=sum(1 for row in rows if row.task_type == "delay"),
         rows=rows,
     )
@@ -620,6 +641,71 @@ def _delay_row(
         revised_start=None if current_start is None else current_start.isoformat(),
         revised_finish=None if current_finish is None else current_finish.isoformat(),
     )
+
+
+def _impacting_shift_rows(
+    named: list[tuple[PlanTaskData, DelayMappingRow]],
+    *,
+    actual_shift: int | None,
+    go_live_id: int | None,
+    successors: dict[int, list[int]],
+    has_links: bool,
+) -> list[DelayMappingRow]:
+    """Keep Delay/Additional tasks that moved Go-Live; drop parallel or absorbed work."""
+
+    if not actual_shift or actual_shift <= 0 or go_live_id is None:
+        return []
+    on_path = [
+        row
+        for task, row in named
+        if _reaches_task(successors, task.id, go_live_id)
+    ]
+    if has_links and on_path:
+        return on_path
+    return [row for _, row in named]
+
+
+def _allocate_shift_days(rows: list[DelayMappingRow], actual_shift: int | None) -> list[DelayMappingRow]:
+    """Assign Go-Live shift days once so row totals cannot exceed the header."""
+
+    if not actual_shift or actual_shift <= 0:
+        return []
+    remaining = actual_shift
+    allocated: list[DelayMappingRow] = []
+    for row in rows:
+        raw = row.shift_days or 0
+        if raw <= 0 or remaining <= 0:
+            continue
+        days = min(raw, remaining)
+        allocated.append(row.model_copy(update={"shift_days": days, "delay_days": days}))
+        remaining -= days
+        if remaining <= 0:
+            break
+    return allocated
+
+
+def _successor_map(tasks: list[PlanTaskData]) -> dict[int, list[int]]:
+    successors: dict[int, list[int]] = {}
+    for task in tasks:
+        for pred in task.predecessor_ids:
+            successors.setdefault(pred, []).append(task.id)
+    return successors
+
+
+def _reaches_task(successors: dict[int, list[int]], start: int, target: int) -> bool:
+    if start == target:
+        return True
+    seen = {start}
+    queue = [start]
+    while queue:
+        current = queue.pop(0)
+        for nxt in successors.get(current, []):
+            if nxt == target:
+                return True
+            if nxt not in seen:
+                seen.add(nxt)
+                queue.append(nxt)
+    return False
 
 
 def _named_mapping_type(name: str | None) -> str | None:
