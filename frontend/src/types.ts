@@ -104,6 +104,37 @@ export type PhaseStatus = {
   actual_finish?: string | null;
   progress?: number | null;
   state: "not_started" | "in_progress" | "complete";
+  executable_task_count?: number | null;
+  completed_task_count?: number | null;
+  in_progress_task_count?: number | null;
+  delayed_task_count?: number | null;
+  overdue_task_count?: number | null;
+  delay_percent?: number | null;
+};
+
+export type TaskScheduleStatus = {
+  task_id: string;
+  task_name: string;
+  completion_status: string;
+  delay_status: string;
+  delay_days?: number | null;
+  overdue_status: string;
+  baseline_available: boolean;
+  finish_available: boolean;
+  baseline_finish?: string | null;
+  finish?: string | null;
+  percent_complete?: number | null;
+  successor_names?: string[];
+};
+
+export type WorkItemCounts = {
+  total?: number;
+  completed?: number;
+  in_progress?: number;
+  not_started?: number;
+  delayed?: number;
+  overdue?: number;
+  delay_percent?: number | null;
 };
 
 export type DelayAttributionBucket = {
@@ -235,6 +266,10 @@ export type WsrPlanFacts = {
   timeline?: PhaseStatus[] | null;
   phase_statuses?: PhaseStatus[];
   delay_mapping?: DelayMappingSheet | null;
+  task_schedule?: TaskScheduleStatus[];
+  work_item_counts?: WorkItemCounts | null;
+  current_finish?: string | null;
+  project_delay_days?: number | null;
   progress_to_date?: ProgressItem[];
   upcoming_milestones?: MilestoneItem[];
 };

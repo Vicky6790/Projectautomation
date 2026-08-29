@@ -13,9 +13,11 @@ import type {
   PhaseStatus,
   ProcessingResponse,
   ProgressItem,
+  TaskScheduleStatus,
   WsrPlanFacts,
 } from "./types";
 import {
+  healthLabel,
   personDaysLabel,
   percent,
   phaseState,
@@ -234,7 +236,11 @@ export function WsrDashboardView() {
     window.setTimeout(() => window.print(), 50);
   }
 
-  const deployed = facts.resources_deployed ?? facts.people_planned;
+  const deployed = facts.resources_deployed;
+  const delayedTasks = (facts.task_schedule ?? []).filter(
+    (row: TaskScheduleStatus) => row.delay_status === "Delayed",
+  );
+  const delayedNames = new Set(delayedTasks.map((row) => row.task_name));
   const kpis = [
     {
       label: "Phases to Go-Live",
@@ -244,7 +250,7 @@ export function WsrDashboardView() {
     {
       label: "Resources Deployed",
       value: unavailable(deployed),
-      hint: "From Resource Sheet",
+      hint: "From actual work on assignments",
     },
     {
       label: "Person-Days Planned",
@@ -383,6 +389,12 @@ export function WsrDashboardView() {
             </div>
           </section>
 
+          <p className="wsr-overview-metrics">
+            Health {healthLabel(facts.project_health)} · Planned finish{" "}
+            {shortDate(facts.delay_mapping?.baseline_go_live)} · Current finish{" "}
+            {shortDate(facts.current_finish)} · Delay days {unavailable(facts.project_delay_days)}
+          </p>
+
           <div className="kpi-grid">
             {kpis.map((kpi, index) => (
               <KpiCard
@@ -395,6 +407,16 @@ export function WsrDashboardView() {
               />
             ))}
           </div>
+
+          {facts.work_item_counts ? (
+            <p className="wsr-work-counts">
+              Executable tasks {unavailable(facts.work_item_counts.total)} · Completed{" "}
+              {unavailable(facts.work_item_counts.completed)} · In progress{" "}
+              {unavailable(facts.work_item_counts.in_progress)} · Delayed{" "}
+              {unavailable(facts.work_item_counts.delayed)} · Overdue{" "}
+              {unavailable(facts.work_item_counts.overdue)}
+            </p>
+          ) : null}
 
           <Section n={1} title="Executive Summary" flush>
             <p className="overview-copy">
@@ -452,12 +474,27 @@ export function WsrDashboardView() {
                     const hasDeviation =
                       Boolean(phase.actual_finish) && plannedEnd !== currentFinish;
                     return (
-                      <tr key={`${phase.name}-${index}`} className={active ? "phase-active" : undefined}>
+                      <tr
+                        key={`${phase.name}-${index}`}
+                        className={[
+                          active ? "phase-active" : "",
+                          (phase.delayed_task_count ?? 0) > 0 ? "phase-delayed" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ") || undefined}
+                      >
                         <td className="mono">{phaseWbs(phase, index)}</td>
                         <td>
                           {phase.name}
                           {phase.state === "in_progress" ? (
                             <span className="status-badge">In Progress</span>
+                          ) : null}
+                          {phase.delayed_task_count || phase.overdue_task_count ? (
+                            <p className="phase-health-hint">
+                              Delayed {unavailable(phase.delayed_task_count)} · Overdue{" "}
+                              {unavailable(phase.overdue_task_count)}
+                              {phase.delay_percent != null ? ` · Delay ${phase.delay_percent}%` : ""}
+                            </p>
                           ) : null}
                         </td>
                         <td className="mono">{startDate}</td>
@@ -517,8 +554,47 @@ export function WsrDashboardView() {
             <DelayMappingPanel mapping={facts.delay_mapping ?? {}} asOf={facts.as_of_date} />
           </Section>
 
+          <Section
+            n={5}
+            title="Delayed Tasks"
+            hint="Finish Date versus Baseline Finish Date. Tasks are not marked delayed only because the baseline date has passed."
+          >
+            {delayedTasks.length ? (
+              <table className="milestone-table">
+                <thead>
+                  <tr>
+                    <th>Task</th>
+                    <th>Baseline Finish</th>
+                    <th>Finish</th>
+                    <th>Delay Days</th>
+                    <th>Status</th>
+                    <th>Potential impact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {delayedTasks.map((row) => (
+                    <tr key={row.task_id} className="task-delayed-row">
+                      <td>{row.task_name}</td>
+                      <td className="mono">{shortDate(row.baseline_finish)}</td>
+                      <td className="mono">{shortDate(row.finish)}</td>
+                      <td>{row.delay_days == null ? "Unavailable" : row.delay_days}</td>
+                      <td>Delayed</td>
+                      <td>
+                        {row.successor_names?.length
+                          ? `${row.task_name} → ${row.successor_names.join(" → ")}`
+                          : "No successor chain identified"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p>No tasks delayed against baseline finish</p>
+            )}
+          </Section>
+
           <div className="wsr-paired">
-            <Section n={5} title="Progress of current week">
+            <Section n={6} title="Progress of current week">
               {facts.progress_to_date?.length ? (
                 <table className="milestone-table">
                   <thead>
@@ -531,7 +607,10 @@ export function WsrDashboardView() {
                   </thead>
                   <tbody>
                     {facts.progress_to_date.map((item: ProgressItem, index) => (
-                      <tr key={`${item.name}-${index}`}>
+                      <tr
+                        key={`${item.name}-${index}`}
+                        className={delayedNames.has(item.name) ? "task-delayed-row" : undefined}
+                      >
                         <td>{item.name}</td>
                         <td className="mono">{shortDate(item.scheduled_start)}</td>
                         <td className="mono">{shortDate(item.scheduled_finish || item.date)}</td>
@@ -546,7 +625,7 @@ export function WsrDashboardView() {
             </Section>
 
             <Section
-              n={6}
+              n={7}
               title="Upcoming Milestones Of Next Week"
               hint="Incomplete work overlapping the calendar week after the as-of week."
             >
@@ -583,7 +662,7 @@ export function WsrDashboardView() {
             </Section>
           </div>
 
-          <Section n={7} title="Risks & Focus Areas">
+          <Section n={8} title="Risks & Focus Areas">
             <InsightCards
               items={visibleInsights(report.risks)}
               tone="risk"

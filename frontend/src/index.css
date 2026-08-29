@@ -1974,6 +1974,31 @@ label select {
   background: rgba(255, 251, 235, 0.5);
 }
 
+.phase-delayed,
+.task-delayed-row {
+  background: #fff1f2;
+}
+
+.phase-delayed td:first-child,
+.task-delayed-row td {
+  color: #be123c;
+  font-weight: 700;
+}
+
+.wsr-overview-metrics,
+.wsr-work-counts,
+.phase-health-hint {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.phase-health-hint {
+  margin: 4px 0 0;
+  font-weight: 400;
+  color: #9f1239;
+}
+
 .status-badge {
   margin-left: 8px;
   background: #fef3c7;

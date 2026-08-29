@@ -17,6 +17,7 @@ WSR_SECTIONS = (
     ("timeline", "Project Timeline"),
     ("phase_statuses", "Phase-Wise Status"),
     ("delay_mapping", "Go-Live Delay Mapping"),
+    ("delayed_tasks", "Delayed Tasks"),
     ("progress_to_date", "Progress of current week"),
     ("upcoming_milestones", "Upcoming Milestones Of Next Week"),
     ("risks", "Risks & Focus Areas"),

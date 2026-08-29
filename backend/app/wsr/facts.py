@@ -10,6 +10,8 @@ from app.models import (
     PlanTaskData,
     ProgressItem,
     ProjectPlanData,
+    TaskScheduleStatus,
+    WorkItemCounts,
     WsrPlanFacts,
 )
 from app.plan.library import PHASES
@@ -18,6 +20,11 @@ from app.wsr.detection import (
     go_live_markers,
     sign_off_markers,
     upcoming_horizon_days,
+)
+from app.wsr.schedule_status import (
+    calculate_task_schedule_status,
+    executable_tasks,
+    rollup_schedule,
 )
 _LIBRARY_PHASE_NAMES = frozenset(
     " ".join(str(phase["name"]).casefold().split()) for phase in PHASES
@@ -52,15 +59,18 @@ def derive_wsr_facts(
     as_of_d = date.fromisoformat(as_of)
     now = datetime.now(UTC).replace(microsecond=0).isoformat()
     stamp = generated_at or now.replace("+00:00", "Z")
-    leaves = [task for task in plan.tasks if not task.is_summary]
+    leaves = executable_tasks(plan.tasks)
     go_live = _planned_go_live(plan.tasks, as_of_d)
-    health = _health(leaves, as_of_d, go_live)
+    schedule_audit = _schedule_audit(plan.tasks, as_of_d)
+    counts = WorkItemCounts(**rollup_schedule(plan.tasks, as_of_d))
+    health = _health(leaves, as_of_d, go_live, schedule_audit)
     countdown = None if go_live is None else (go_live - as_of_d).days
     planned_count = len(leaves) if plan.tasks else None
     completed_count = None
     if planned_count is not None:
         completed_count = sum(1 for task in leaves if _complete(task))
-    phases = _phase_statuses(plan)
+    phases = _phase_statuses(plan, as_of_d)
+    project_delay = _project_delay_days(plan.tasks, go_live)
     return WsrPlanFacts(
         project_name=_project_title(plan),
         project_owner=plan.owner,
@@ -79,10 +89,14 @@ def derive_wsr_facts(
         last_signed_off_milestone=_last_signed_off(leaves, as_of_d),
         next_gate=_next_gate(leaves, as_of_d),
         planned_go_live_date=None if go_live is None else go_live.isoformat(),
+        current_finish=_current_project_finish(plan.tasks, go_live),
+        project_delay_days=project_delay,
         executive_overview=None,
         timeline=phases or None,
         phase_statuses=phases,
         delay_mapping=_delay_mapping(plan, as_of_d, phases, go_live),
+        task_schedule=schedule_audit,
+        work_item_counts=counts,
         progress_to_date=_progress_to_date(leaves, as_of_d),
         upcoming_milestones=_next_planned_tasks(leaves, as_of_d),
     )
@@ -131,11 +145,17 @@ def _health(
     tasks: list[PlanTaskData],
     as_of: date,
     go_live: date | None,
+    schedule: list[TaskScheduleStatus] | None = None,
 ) -> str:
+    statuses = schedule or [calculate_task_schedule_status(task, as_of) for task in tasks]
+    delayed = any(item.delay_status == "Delayed" for item in statuses)
+    overdue = any(item.overdue_status == "Overdue" for item in statuses)
+    if go_live is not None and go_live < as_of:
+        return "off_track"
+    if overdue or delayed:
+        return "at_risk"
     if go_live is None:
         return "unavailable"
-    if go_live < as_of:
-        return "off_track"
     dated = [task for task in tasks if _due_date(task) is not None]
     progressed = [
         task
@@ -144,13 +164,64 @@ def _health(
     ]
     if not dated and not progressed:
         return "unavailable"
-    overdue = False
-    for task in dated:
-        due = _due_date(task)
-        if due is not None and not _complete(task) and due < as_of:
-            overdue = True
-            break
-    return "at_risk" if overdue else "on_track"
+    return "on_track"
+
+
+def _schedule_audit(tasks: list[PlanTaskData], as_of: date) -> list[TaskScheduleStatus]:
+    successors: dict[int, list[str]] = {}
+    for task in tasks:
+        for pred in task.predecessor_ids:
+            successors.setdefault(pred, []).append(task.name)
+    rows: list[TaskScheduleStatus] = []
+    for task in executable_tasks(tasks):
+        status = calculate_task_schedule_status(task, as_of)
+        rows.append(
+            TaskScheduleStatus(
+                task_id=status.task_id,
+                task_name=status.task_name,
+                completion_status=status.completion_status,
+                delay_status=status.delay_status,
+                delay_days=status.delay_days,
+                overdue_status=status.overdue_status,
+                baseline_available=status.baseline_available,
+                finish_available=status.finish_available,
+                baseline_finish=task.baseline_finish,
+                finish=task.scheduled_finish,
+                percent_complete=task.percent_complete,
+                successor_names=successors.get(task.id, []),
+            )
+        )
+    return rows
+
+
+def _current_project_finish(tasks: list[PlanTaskData], go_live: date | None) -> str | None:
+    if go_live is not None:
+        return go_live.isoformat()
+    finishes = [parse_date(task.scheduled_finish) for task in executable_tasks(tasks)]
+    ok = [item for item in finishes if item is not None]
+    if not ok:
+        return None
+    return max(ok).isoformat()
+
+
+def _project_delay_days(tasks: list[PlanTaskData], go_live: date | None) -> int | None:
+    named = [
+        task
+        for task in tasks
+        if _contains(task.gate, go_live_markers()) or _contains(task.name, go_live_markers())
+    ]
+    if not named:
+        return None
+    task = named[0]
+    if go_live is not None:
+        for item in named:
+            if parse_date(item.scheduled_finish) == go_live:
+                task = item
+                break
+    status = calculate_task_schedule_status(task, go_live or task.scheduled_finish)
+    if status.delay_status in {"Baseline Unavailable", "Insufficient Data"}:
+        return None
+    return status.delay_days
 
 
 def work_based_progress(tasks: list[PlanTaskData]) -> dict[str, float | str | None]:
@@ -256,16 +327,18 @@ def _person_days(plan: ProjectPlanData) -> float | None:
 
 
 def _people_planned(plan: ProjectPlanData) -> int | None:
-    names = {
-        item.resource_id or item.resource_name
-        for task in plan.tasks
-        for item in task.assignments
-    }
-    return len(names) if names else None
+    """Person-days live on person_days_planned. Unique resource names are not People Planned."""
+
+    return None
 
 
 def _resources_deployed(plan: ProjectPlanData) -> int | None:
-    names = {item.id for item in plan.resources if (item.name or "").strip()}
+    names: set[str | int] = set()
+    for task in plan.tasks:
+        for item in task.assignments:
+            if not item.actual_work_hours or item.actual_work_hours <= 0:
+                continue
+            names.add(item.resource_id or item.resource_name)
     return len(names) if names else None
 
 
@@ -460,14 +533,14 @@ def _descendants(tasks: list[PlanTaskData], parent: PlanTaskData) -> list[PlanTa
     return children
 
 
-def _phase_statuses(plan: ProjectPlanData) -> list[PhaseStatus]:
+def _phase_statuses(plan: ProjectPlanData, as_of: date) -> list[PhaseStatus]:
     rows = select_phase_summaries(plan.tasks, project_name=plan.name)
     if rows:
-        return [_phase_from_task(plan.tasks, row) for row in rows]
+        return [_phase_from_task(plan.tasks, row, as_of) for row in rows]
     return [_phase_status(phase) for phase in plan.phases]
 
 
-def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseStatus:
+def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData, as_of: date) -> PhaseStatus:
     children = _descendants(tasks, phase)
     leaves = [task for task in children if not task.is_summary] or children
     dated = [phase, *leaves]
@@ -488,6 +561,7 @@ def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseSta
             state = "not_started"
     else:
         state = "in_progress"
+    counts = rollup_schedule(leaves, as_of)
     return PhaseStatus(
         name=phase.name,
         wbs=(phase.wbs or "").strip() or None,
@@ -497,6 +571,12 @@ def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseSta
         actual_finish=None if not current_finish_ok else max(current_finish_ok).isoformat(),
         progress=phase.percent_complete,
         state=state,
+        executable_task_count=counts["total"],
+        completed_task_count=counts["completed"],
+        in_progress_task_count=counts["in_progress"],
+        delayed_task_count=counts["delayed"],
+        overdue_task_count=counts["overdue"],
+        delay_percent=counts["delay_percent"],
     )
 
 
