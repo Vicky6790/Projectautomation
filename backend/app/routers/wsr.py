@@ -1,5 +1,6 @@
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import Response
+from starlette.requests import Request
 
 from app import storage as storage_mod
 from app.errors import AppError
@@ -47,9 +48,11 @@ def get_wsr_request(handle: str) -> ProcessingResponse:
 
 
 @router.get("/requests/{handle}/report")
-def download_wsr_report(handle: str) -> Response:
+def download_wsr_report(handle: str, request: Request) -> Response:
     job = storage_mod.store.get_job(handle)
-    filename, media_type, content = export_report("wsr", job)
+    filename, media_type, content = export_report(
+        "wsr", job, scope=request.query_params.get("scope")
+    )
     storage_mod.store.report_path(job.id).write_bytes(content)
     return Response(
         content=content,

@@ -165,6 +165,23 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     assert " ".join(overview.split()) in compact
 
 
+def test_delay_mapping_pdf_is_a_standalone_sheet(client: TestClient, monkeypatch) -> None:
+    handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _empty_ai)
+    generated = client.post(f"/api/v1/wsr/requests/{handle}/generate")
+    assert generated.status_code == 200, generated.text
+    report = client.get(f"/api/v1/wsr/requests/{handle}/report?scope=delay_mapping")
+    assert report.status_code == 200
+    assert report.headers["content-type"].startswith("application/pdf")
+    assert f'delay-mapping-{handle}.pdf' in report.headers["content-disposition"]
+    text = pdf_text(report.content)
+    assert "Go-Live Delay Mapping" in text
+    assert "Baselined Go-Live Date" in text
+    assert "Actual Shift In Working Days" in text
+    assert "Executive Summary" not in text
+    assert "Risks & Focus Areas" not in text
+
+
 def _pending_ai(_data: dict) -> dict:
     empty = _empty_ai(_data)
     empty["risks"] = [

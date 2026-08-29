@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ApiRequestError, generateWsr, getWsrRequest, retryJob } from "./api";
+import { generateWsr, retryJob } from "./api";
 import { DelayMappingPanel } from "./components/DelayMappingPanel";
 import { FileUploader } from "./components/FileUploader";
 import { WsrGantt } from "./components/WsrGantt";
@@ -28,9 +28,8 @@ import {
 import {
   asWsrReport,
   clearWsrSession,
-  readWsrSession,
-  restoredUpload,
   saveWsrSession,
+  WSR_RESET_EVENT,
 } from "./wsrSession";
 
 const GENERATE_STAGES = [
@@ -165,24 +164,15 @@ export function WsrDashboardView() {
   );
 
   useEffect(() => {
-    const session = readWsrSession();
-    if (!session) {
-      return;
-    }
-    setUploaded(restoredUpload(session));
-    getWsrRequest(session.handle)
-      .then((result) => {
-        setJob(result);
-        if (result.status === "succeeded") {
-          setMessage("Status report ready.");
-        }
-      })
-      .catch((error: unknown) => {
-        if (error instanceof ApiRequestError && /NOT_FOUND$/.test(error.code)) {
-          clearWsrSession();
-          setUploaded(null);
-        }
-      });
+    const reset = () => {
+      setUploaded(null);
+      setJob(null);
+      setBusy(false);
+      setStage(0);
+      setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
+    };
+    window.addEventListener(WSR_RESET_EVENT, reset);
+    return () => window.removeEventListener(WSR_RESET_EVENT, reset);
   }, []);
 
   const report = asReport(job?.result ?? null);

@@ -266,6 +266,64 @@ def test_wsr_pending_insights_still_export() -> None:
     assert "Build may slip" in text
 
 
+def test_delay_mapping_pdf_uses_sheet_facts_only() -> None:
+    filename, media, body = export_report(
+        "wsr",
+        _job(
+            "wsr",
+            "succeeded",
+            {
+                "as_of_date": "2026-08-22",
+                "generated_at": "2026-08-22T10:00:00Z",
+                "exportable": True,
+                "project_health": "at_risk",
+                "facts": {
+                    "project_name": "Core Banking",
+                    "as_of_date": "2026-08-22",
+                    "generated_at": "2026-08-22T10:00:00Z",
+                    "project_health": "at_risk",
+                    "delay_mapping": {
+                        "baseline_go_live": "2026-08-20",
+                        "current_go_live": "2026-09-01",
+                        "shift_working_days": 8,
+                        "holidays": 0,
+                        "actual_shift_working_days": 8,
+                        "total_delayed_days": 3,
+                        "rows": [
+                            {
+                                "name": "Delay In Presenting Mobile Wireframes",
+                                "parent_name": "Design",
+                                "task_type": "delay",
+                                "shift_days": 3,
+                                "owner": "Idealake",
+                            }
+                        ],
+                    },
+                },
+                "risks": [
+                    {
+                        "id": "risk-1",
+                        "section": "risk_or_focus_area",
+                        "content": "Build may slip",
+                        "review_status": "pending",
+                        "evidence_references": [{"task_or_milestone_name": "Build"}],
+                    }
+                ],
+            },
+        ),
+        scope="delay_mapping",
+    )
+    assert filename == "delay-mapping-11111111-1111-1111-1111-111111111111.pdf"
+    assert media == "application/pdf"
+    text = " ".join(pdf_text(body).split())
+    assert "Go-Live Delay Mapping" in text
+    assert "Core Banking" in text
+    assert "Delay In Presenting Mobile Wireframes" in text
+    assert "Idealake" in text
+    assert "Build may slip" not in text
+    assert "Executive Summary" not in text
+
+
 def test_wsr_report_omits_removed_items() -> None:
     _filename, _media, body = export_report(
         "wsr",

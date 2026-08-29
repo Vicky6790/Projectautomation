@@ -11,6 +11,7 @@ import { SowAnalyzerView } from "./SowAnalyzerView";
 import { RetrospectiveView } from "./RetrospectiveView";
 import { WsrDashboardView } from "./WsrDashboardView";
 import { ShellMetaContext } from "./shellMeta";
+import { requestWsrReset } from "./wsrSession";
 
 const MODULES: { id: Module; label: string; icon: string }[] = [
   { id: "sow", label: "SOW Analyzer", icon: "analytics" },
@@ -113,6 +114,11 @@ export default function App() {
                 key={module.id}
                 to={`/${module.id}`}
                 className={({ isActive }) => (isActive ? "nav-item active" : "nav-item")}
+                onClick={() => {
+                  if (module.id === "wsr") {
+                    requestWsrReset();
+                  }
+                }}
               >
                 {({ isActive }) => (
                   <>

@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from fastapi.responses import Response
+from starlette.requests import Request
 
 from app.errors import AppError
 from app.models import Module, ProcessingResponse, StartJobRequest
@@ -40,9 +41,11 @@ def _module_router(module: Module) -> APIRouter:
         return queued
 
     @module_router.get("/{job_id}/report")
-    def download_report(job_id: str) -> Response:
+    def download_report(job_id: str, request: Request) -> Response:
         job = store.get_job(job_id)
-        filename, media_type, content = export_report(module, job)
+        filename, media_type, content = export_report(
+            module, job, scope=request.query_params.get("scope")
+        )
         store.report_path(job.id).write_bytes(content)
         return Response(
             content=content,
@@ -90,9 +93,11 @@ def _requests_router(module: Module) -> APIRouter:
         return store.get_job(handle)
 
     @requests_router.get("/{handle}/report")
-    def download_request_report(handle: str) -> Response:
+    def download_request_report(handle: str, request: Request) -> Response:
         job = store.get_job(handle)
-        filename, media_type, content = export_report(module, job)
+        filename, media_type, content = export_report(
+            module, job, scope=request.query_params.get("scope")
+        )
         store.report_path(job.id).write_bytes(content)
         return Response(
             content=content,

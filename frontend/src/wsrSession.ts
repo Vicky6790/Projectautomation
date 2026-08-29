@@ -55,6 +55,12 @@ export function clearWsrSession(): void {
   storage()?.removeItem(WSR_SESSION_KEY);
 }
 
+export const WSR_RESET_EVENT = "pa-wsr-reset";
+
+export function requestWsrReset(): void {
+  window.dispatchEvent(new Event(WSR_RESET_EVENT));
+}
+
 export function restoredUpload(session: StoredWsrSession): FileRecord {
   return {
     id: session.handle,

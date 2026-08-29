@@ -47,7 +47,11 @@ _HEALTH_LABELS = {
 }
 
 
-def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, bytes]:
+def export_report(
+    module: Module,
+    job: ProcessingResponse,
+    scope: str | None = None,
+) -> tuple[str, str, bytes]:
     if module == "plan":
         raise AppError(
             400,
@@ -70,9 +74,15 @@ def export_report(module: Module, job: ProcessingResponse) -> tuple[str, str, by
         body = _render("SOW analysis report", handle, SOW_SECTIONS, payload, extra)
         return f"sow-analysis-{handle}.md", "text/markdown; charset=utf-8", body.encode("utf-8")
     if module == "wsr":
-        from app.wsr.pdf import render_wsr_pdf
+        from app.wsr.pdf import render_delay_mapping_pdf, render_wsr_pdf
 
         payload = StatusReport.model_validate(job.result)
+        if (scope or "").strip().casefold() == "delay_mapping":
+            return (
+                f"delay-mapping-{handle}.pdf",
+                "application/pdf",
+                render_delay_mapping_pdf(handle, payload),
+            )
         return f"wsr-report-{handle}.pdf", "application/pdf", render_wsr_pdf(handle, payload)
     if module == "retrospective":
         payload = RetrospectiveReport.model_validate(job.result)

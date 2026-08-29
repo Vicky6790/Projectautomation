@@ -20,6 +20,35 @@ _PHASE_STATE = {
 }
 
 
+_PDF_CSS = """
+@page { size: A4; margin: 12mm; }
+body { font-family: Helvetica, Arial, sans-serif; color: #334155; font-size: 10px; }
+h1 { font-size: 18px; margin: 0 0 8px; color: #1e293b; }
+h2 { font-size: 13px; margin: 0; color: #1e293b; }
+h3 { font-size: 12px; margin: 0 0 6px; }
+p { margin: 0 0 6px; }
+.muted { color: #64748b; }
+.card { border: 1px solid #e2e8f0; background: #ffffff; padding: 8px; }
+.hero td, .kpis td {
+  border: 1px solid #e2e8f0; background: #f8fafc; padding: 8px; vertical-align: top;
+}
+.label { color: #64748b; font-size: 8px; }
+.value { font-size: 14px; font-weight: bold; color: #1e293b; }
+.countdown { font-size: 28px; font-weight: bold; color: #f43f5e; }
+.ring { font-size: 22px; font-weight: bold; text-align: center; }
+.num { color: #ffffff; background: #4f46e5; padding: 2px 6px; }
+.gantt { width: 100%; border-collapse: collapse; margin: 0 0 6px; }
+.gantt td { border: none; padding: 0; background: #ffffff; }
+.gantt-bar { height: 10px; }
+.badge { color: #4f46e5; font-weight: bold; }
+table { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
+.section { margin: 0 0 12px; }
+.delay-phase { background: #eef2ff; font-weight: bold; color: #1e293b; }
+.delay-type { color: #be123c; font-weight: bold; }
+.additional-type { color: #c2410c; font-weight: bold; }
+"""
+
+
 def render_wsr_html(handle: str, payload: StatusReport) -> str:
     facts = payload.facts or WsrPlanFacts(
         as_of_date=payload.as_of_date or "",
@@ -43,41 +72,38 @@ def render_wsr_html(handle: str, payload: StatusReport) -> str:
             ],
         ]
     )
+    return _html_document("WSR & Insights", body, handle)
+
+
+def render_delay_mapping_html(handle: str, payload: StatusReport) -> str:
+    facts = payload.facts or WsrPlanFacts(
+        as_of_date=payload.as_of_date or "",
+        generated_at=payload.generated_at or "",
+        project_health=payload.project_health or "unavailable",
+    )
+    identity = facts.project_name or "Unavailable"
+    as_of = payload.as_of_date or facts.as_of_date
+    stamp = f"As of {_short_date(as_of)}" if as_of else "As of Unavailable"
+    body = (
+        f"<p class='muted'>{html.escape(identity)} · {html.escape(stamp)}</p>"
+        + _delay_mapping(facts, as_of)
+    )
+    return _html_document("Go-Live Delay Mapping", body, handle)
+
+
+def _html_document(title: str, body: str, handle: str) -> str:
+    heading = html.escape(title)
     return f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
-<title>WSR &amp; Insights</title>
+<title>{heading}</title>
 <style>
-@page {{ size: A4; margin: 12mm; }}
-body {{ font-family: Helvetica, Arial, sans-serif; color: #334155; font-size: 10px; }}
-h1 {{ font-size: 18px; margin: 0 0 8px; color: #1e293b; }}
-h2 {{ font-size: 13px; margin: 0; color: #1e293b; }}
-h3 {{ font-size: 12px; margin: 0 0 6px; }}
-p {{ margin: 0 0 6px; }}
-.muted {{ color: #64748b; }}
-.card {{ border: 1px solid #e2e8f0; background: #ffffff; padding: 8px; }}
-.hero td, .kpis td {{
-  border: 1px solid #e2e8f0; background: #f8fafc; padding: 8px; vertical-align: top;
-}}
-.label {{ color: #64748b; font-size: 8px; }}
-.value {{ font-size: 14px; font-weight: bold; color: #1e293b; }}
-.countdown {{ font-size: 28px; font-weight: bold; color: #f43f5e; }}
-.ring {{ font-size: 22px; font-weight: bold; text-align: center; }}
-.num {{ color: #ffffff; background: #4f46e5; padding: 2px 6px; }}
-.gantt {{ width: 100%; border-collapse: collapse; margin: 0 0 6px; }}
-.gantt td {{ border: none; padding: 0; background: #ffffff; }}
-.gantt-bar {{ height: 10px; }}
-.badge {{ color: #4f46e5; font-weight: bold; }}
-table {{ width: 100%; border-collapse: collapse; margin: 0 0 10px; }}
-.section {{ margin: 0 0 12px; }}
-.delay-phase {{ background: #eef2ff; font-weight: bold; color: #1e293b; }}
-.delay-type {{ color: #be123c; font-weight: bold; }}
-.additional-type {{ color: #c2410c; font-weight: bold; }}
+{_PDF_CSS}
 </style>
 </head>
 <body>
-<h1>WSR &amp; Insights</h1>
+<h1>{heading}</h1>
 {body}
 <p class="muted">Request: {html.escape(handle)}</p>
 </body>
@@ -241,6 +267,8 @@ def _delay_mapping(facts: WsrPlanFacts, as_of: str | None) -> str:
         else mapping.gross_working_day_shift
     )
     total = mapping.total_delayed_days
+    if total is None:
+        total = sum((row.shift_days or row.delay_days or 0) for row in mapping.rows)
     summary = (
         "<p><b>Go-Live Date Shift</b></p><table>"
         + _kv_row("Baselined Go-Live Date", _short_date(mapping.baseline_go_live))

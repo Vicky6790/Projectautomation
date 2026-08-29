@@ -1333,6 +1333,13 @@ label select {
   font-weight: 500;
 }
 
+.delay-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .delay-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2356,6 +2363,7 @@ label select {
   html.wsr-printing .wsr-status-msg,
   html.wsr-printing .wsr-stages,
   html.wsr-printing .delay-mapping-cta,
+  html.wsr-printing .delay-head-actions,
   html.wsr-printing .delay-head .btn {
     display: none !important;
   }

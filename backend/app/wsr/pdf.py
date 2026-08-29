@@ -6,11 +6,18 @@ from xhtml2pdf import pisa
 
 from app.errors import AppError
 from app.models import StatusReport
-from app.wsr.html import render_wsr_html
+from app.wsr.html import render_delay_mapping_html, render_wsr_html
 
 
 def render_wsr_pdf(handle: str, payload: StatusReport) -> bytes:
-    html = render_wsr_html(handle, payload)
+    return _pdf_from_html(render_wsr_html(handle, payload))
+
+
+def render_delay_mapping_pdf(handle: str, payload: StatusReport) -> bytes:
+    return _pdf_from_html(render_delay_mapping_html(handle, payload))
+
+
+def _pdf_from_html(html: str) -> bytes:
     output = BytesIO()
     try:
         result = pisa.CreatePDF(html, dest=output, encoding="utf-8")

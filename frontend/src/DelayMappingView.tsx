@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
-import { getWsrRequest } from "./api";
+import { downloadWsrReport, getWsrRequest } from "./api";
 import { DelayMappingPanel, downloadDelayMappingSheet } from "./components/DelayMappingPanel";
 import { ShellMetaContext } from "./shellMeta";
 import type { DelayMappingSheet, WsrPlanFacts } from "./types";
@@ -14,6 +14,8 @@ export function DelayMappingView() {
     session ? "Loading delay mapping from the generated WSR…" : "Generate a WSR to open the Delay Mapping Sheet.",
   );
   const [facts, setFacts] = useState<WsrPlanFacts | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!handle) {
@@ -56,6 +58,8 @@ export function DelayMappingView() {
     return <Navigate to="/wsr" replace />;
   }
 
+  const requestHandle: string = handle;
+
   if (!facts) {
     return (
       <section className="delay-page">
@@ -68,6 +72,24 @@ export function DelayMappingView() {
         </div>
       </section>
     );
+  }
+
+  async function downloadPdf() {
+    setPdfBusy(true);
+    setPdfError(null);
+    try {
+      const { blob, filename } = await downloadWsrReport(requestHandle, "delay_mapping");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error: unknown) {
+      setPdfError(error instanceof Error ? error.message : "PDF download failed");
+    } finally {
+      setPdfBusy(false);
+    }
   }
 
   return (
@@ -88,17 +110,26 @@ export function DelayMappingView() {
             shown as extra rows.
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => downloadDelayMappingSheet(mapping, asOf)}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            download
-          </span>
-          Download Sheet
-        </button>
+        <div className="delay-head-actions">
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => downloadDelayMappingSheet(mapping, asOf)}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              download
+            </span>
+            Download Sheet
+          </button>
+          <button type="button" className="btn btn-primary" disabled={pdfBusy} onClick={() => void downloadPdf()}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              picture_as_pdf
+            </span>
+            {pdfBusy ? "Preparing PDF…" : "Download PDF"}
+          </button>
+        </div>
       </div>
+      {pdfError ? <p className="error">{pdfError}</p> : null}
       <DelayMappingPanel mapping={mapping} asOf={asOf} />
     </section>
   );

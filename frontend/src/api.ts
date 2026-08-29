@@ -229,8 +229,10 @@ export function getWsrRequest(handle: string): Promise<ProcessingResponse> {
 
 export async function downloadWsrReport(
   handle: string,
+  scope?: "delay_mapping",
 ): Promise<{ blob: Blob; filename: string }> {
-  const response = await fetch(`/api/v1/wsr/requests/${handle}/report`, SESSION);
+  const query = scope ? `?scope=${encodeURIComponent(scope)}` : "";
+  const response = await fetch(`/api/v1/wsr/requests/${handle}/report${query}`, SESSION);
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as
       | {
@@ -254,7 +256,7 @@ export async function downloadWsrReport(
   const match = disposition.match(/filename="([^"]+)"/);
   return {
     blob: await response.blob(),
-    filename: match?.[1] ?? "wsr-report.pdf",
+    filename: match?.[1] ?? (scope === "delay_mapping" ? "delay-mapping.pdf" : "wsr-report.pdf"),
   };
 }
 
