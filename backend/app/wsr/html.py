@@ -46,7 +46,6 @@ table { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
 .delay-phase { background: #eef2ff; font-weight: bold; color: #1e293b; }
 .delay-type { color: #be123c; font-weight: bold; }
 .additional-type { color: #c2410c; font-weight: bold; }
-.task-delayed { color: #be123c; font-weight: bold; }
 """
 
 
@@ -65,11 +64,10 @@ def render_wsr_html(handle: str, payload: StatusReport) -> str:
             _section(2, "Project Timeline", _timeline(facts)),
             _section(3, "Phase-Wise Status", _phases(facts)),
             _section(4, "Go-Live Delay Mapping", _delay_mapping(facts, payload.as_of_date)),
-            _section(5, "Delayed Tasks", _delayed_tasks(facts)),
-            _section(6, "Progress of current week", _progress(facts)),
-            _section(7, "Upcoming Milestones Of Next Week", _milestones(facts, payload.as_of_date)),
+            _section(5, "Progress of current week", _progress(facts)),
+            _section(6, "Upcoming Milestones Of Next Week", _milestones(facts, payload.as_of_date)),
             *[
-                _section(index + 8, label, _insights(getattr(payload, key)))
+                _section(index + 7, label, _insights(getattr(payload, key)))
                 for index, (key, label) in enumerate(_AI_SECTIONS)
             ],
         ]
@@ -138,8 +136,6 @@ def _hero(payload: StatusReport, facts: WsrPlanFacts, _health: str) -> str:
 </td>
 </tr>
 </table>
-{_overview_metrics(facts)}
-{_work_counts(facts)}
 """
 
 
@@ -150,10 +146,10 @@ def _kpi_grid(facts: WsrPlanFacts) -> str:
         if facts.planned_work_items is not None
         else "of planned work items"
     )
-    deployed = facts.resources_deployed
+    deployed = facts.resources_deployed if facts.resources_deployed is not None else facts.people_planned
     cards = [
         ("Phases to Go-Live", _count(facts.phase_count), "Across project lifecycle"),
-        ("Resources Deployed", _count(deployed), "From actual work on assignments"),
+        ("Resources Deployed", _count(deployed), "From Resource Sheet"),
         ("Person-Days Planned", _person_days(facts.person_days_planned), "Total effort estimated"),
         ("Work Items Complete", work, work_hint),
     ]
@@ -164,41 +160,6 @@ def _kpi_grid(facts: WsrPlanFacts) -> str:
         for label, value, hint in cards
     )
     return f'<table class="kpis"><tr>{cells}</tr></table>'
-
-
-_HEALTH_LABELS = {
-    "on_track": "On track",
-    "at_risk": "At risk",
-    "off_track": "Off track",
-    "unavailable": "Unavailable",
-}
-
-
-def _overview_metrics(facts: WsrPlanFacts) -> str:
-    mapping = facts.delay_mapping
-    planned = None if mapping is None else mapping.baseline_go_live
-    delay = "Unavailable" if facts.project_delay_days is None else str(facts.project_delay_days)
-    health = _HEALTH_LABELS.get(facts.project_health or "", facts.project_health or "Unavailable")
-    return (
-        "<p class='muted'>"
-        f"Health {html.escape(health)} · Planned finish {html.escape(_short_date(planned))} · "
-        f"Current finish {html.escape(_short_date(facts.current_finish))} · "
-        f"Delay days {html.escape(delay)}"
-        "</p>"
-    )
-
-
-def _work_counts(facts: WsrPlanFacts) -> str:
-    counts = facts.work_item_counts
-    if counts is None:
-        return ""
-    return (
-        "<p class='muted'>"
-        f"Executable tasks {_count(counts.total)} · Completed {_count(counts.completed)} · "
-        f"In progress {_count(counts.in_progress)} · Delayed {_count(counts.delayed)} · "
-        f"Overdue {_count(counts.overdue)}"
-        "</p>"
-    )
 
 
 def _overview(facts: WsrPlanFacts) -> str:
@@ -278,18 +239,10 @@ def _phases(facts: WsrPlanFacts) -> str:
         current = _short_date(phase.actual_finish)
         if planned == current:
             current = "-"
-        style = " class='task-delayed'" if (phase.delayed_task_count or 0) > 0 else ""
-        delayed_hint = ""
-        if phase.delayed_task_count or phase.overdue_task_count:
-            delay_pct = "" if phase.delay_percent is None else f" · Delay {phase.delay_percent}%"
-            delayed_hint = (
-                f"<br/><span class='muted'>Delayed {_count(phase.delayed_task_count)} · "
-                f"Overdue {_count(phase.overdue_task_count)}{delay_pct}</span>"
-            )
         rows.append(
-            f"<tr{style}>"
+            "<tr>"
             f"<td>{html.escape(_wbs_label(phase, index))}</td>"
-            f"<td>{html.escape(phase.name)}{delayed_hint}</td>"
+            f"<td>{html.escape(phase.name)}</td>"
             f"<td>{html.escape(start)}</td>"
             f"<td>{html.escape(planned)}</td>"
             f"<td>{html.escape(current)}</td>"
@@ -394,39 +347,7 @@ def _count_or_unavailable(value: int | None) -> str:
     return "Unavailable" if value is None else str(value)
 
 
-def _delayed_tasks(facts: WsrPlanFacts) -> str:
-    rows = [item for item in (facts.task_schedule or []) if item.delay_status == "Delayed"]
-    if not rows:
-        return "<p>No tasks delayed against baseline finish</p>"
-    body = [
-        "<tr><td><b>Task</b></td><td><b>Baseline Finish</b></td>"
-        "<td><b>Finish</b></td><td><b>Delay Days</b></td><td><b>Status</b></td>"
-        "<td><b>Potential impact</b></td></tr>"
-    ]
-    for item in rows:
-        days = "Unavailable" if item.delay_days is None else str(item.delay_days)
-        impact = (
-            f"{item.task_name} → {' → '.join(item.successor_names)}"
-            if item.successor_names
-            else "No successor chain identified"
-        )
-        body.append(
-            "<tr class='task-delayed'>"
-            f"<td>{html.escape(item.task_name)}</td>"
-            f"<td>{html.escape(_short_date(item.baseline_finish))}</td>"
-            f"<td>{html.escape(_short_date(item.finish))}</td>"
-            f"<td>{html.escape(days)}</td>"
-            f"<td>Delayed</td>"
-            f"<td>{html.escape(impact)}</td>"
-            "</tr>"
-        )
-    return f"<table>{''.join(body)}</table>"
-
-
 def _progress(facts: WsrPlanFacts) -> str:
-    delayed_names = {
-        item.task_name for item in (facts.task_schedule or []) if item.delay_status == "Delayed"
-    }
     items = facts.progress_to_date or []
     if not items:
         return "<p>No tasks scheduled in the current week</p>"
@@ -435,10 +356,8 @@ def _progress(facts: WsrPlanFacts) -> str:
         "<td><b>Complete</b></td></tr>"
     ]
     for item in items:
-        delayed = item.name in delayed_names
-        style = " class='task-delayed'" if delayed else ""
         rows.append(
-            f"<tr{style}>"
+            "<tr>"
             f"<td>{html.escape(item.name)}</td>"
             f"<td>{html.escape(_short_date(item.scheduled_start))}</td>"
             f"<td>{html.escape(_short_date(item.scheduled_finish or item.date))}</td>"

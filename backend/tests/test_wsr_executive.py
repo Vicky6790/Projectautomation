@@ -163,30 +163,10 @@ def test_upcoming_milestones_use_configured_horizon(monkeypatch) -> None:
 def test_related_overdue_work_is_one_executive_risk() -> None:
     plan = _plan(
         [
-            PlanTaskData(
-                id=1,
-                name="UI screens",
-                baseline_finish="2026-08-01",
-                scheduled_finish="2026-08-01",
-            ),
-            PlanTaskData(
-                id=2,
-                name="HTML build",
-                baseline_finish="2026-08-02",
-                scheduled_finish="2026-08-02",
-            ),
-            PlanTaskData(
-                id=3,
-                name="Frontend integration",
-                baseline_finish="2026-08-03",
-                scheduled_finish="2026-08-03",
-            ),
-            PlanTaskData(
-                id=4,
-                name="QA cycle",
-                baseline_finish="2026-08-04",
-                scheduled_finish="2026-08-04",
-            ),
+            PlanTaskData(id=1, name="UI screens", scheduled_finish="2026-08-01"),
+            PlanTaskData(id=2, name="HTML build", scheduled_finish="2026-08-02"),
+            PlanTaskData(id=3, name="Frontend integration", scheduled_finish="2026-08-03"),
+            PlanTaskData(id=4, name="QA cycle", scheduled_finish="2026-08-04"),
             PlanTaskData(
                 id=5,
                 name="Go-Live",

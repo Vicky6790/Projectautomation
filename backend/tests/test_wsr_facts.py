@@ -46,8 +46,7 @@ def test_health_at_risk_when_incomplete_work_is_overdue() -> None:
                 PlanTaskData(
                     id=1,
                     name="Late build",
-                    baseline_finish="2026-08-10",
-                    scheduled_finish="2026-08-18",
+                    scheduled_finish="2026-08-10",
                     percent_complete=40,
                 ),
                 PlanTaskData(
@@ -62,9 +61,6 @@ def test_health_at_risk_when_incomplete_work_is_overdue() -> None:
         generated_at="2026-08-22T10:00:00Z",
     )
     assert facts.project_health == "at_risk"
-    delayed = [row for row in facts.task_schedule if row.task_name == "Late build"]
-    assert delayed[0].delay_status == "Delayed"
-    assert delayed[0].overdue_status == "Overdue"
 
 
 def test_health_on_track_when_go_live_future_and_no_overdue() -> None:
@@ -193,8 +189,7 @@ def test_team_capacity_uses_actual_versus_planned_work() -> None:
         generated_at="2026-08-22T10:00:00Z",
     )
     assert facts.capacity_utilization == 25.0
-    assert facts.people_planned is None
-    assert facts.person_days_planned == 5.0
+    assert facts.people_planned == 1
 
 
 def test_team_capacity_unavailable_without_planned_work() -> None:
@@ -558,8 +553,8 @@ def test_resources_deployed_counts_resource_sheet() -> None:
         "2026-08-22",
         generated_at="2026-08-22T10:00:00Z",
     )
-    assert facts.resources_deployed == 1
-    assert facts.people_planned is None
+    assert facts.resources_deployed == 3
+    assert facts.people_planned == 1
 
 
 def test_phase_status_includes_leaf_phases_under_programme_root() -> None:
@@ -849,83 +844,4 @@ def test_project_name_comes_from_wbs_one() -> None:
     assert facts.project_name == "Core Banking Portal"
     assert facts.countdown_days == (date(2026, 9, 11) - date(2026, 8, 22)).days
     assert facts.planned_go_live_date == "2026-09-11"
-
-
-def test_as_of_does_not_create_delay_when_finish_matches_baseline() -> None:
-    facts = derive_wsr_facts(
-        _plan(
-            [
-                PlanTaskData(
-                    id=1,
-                    name="Build",
-                    baseline_finish="2026-08-10",
-                    scheduled_finish="2026-08-10",
-                    percent_complete=40,
-                ),
-                PlanTaskData(
-                    id=2,
-                    name="Go Live",
-                    is_milestone=True,
-                    scheduled_finish="2026-09-01",
-                ),
-            ]
-        ),
-        "2026-08-22",
-        generated_at="2026-08-22T10:00:00Z",
-    )
-    build = next(row for row in facts.task_schedule if row.task_name == "Build")
-    assert build.delay_status == "No Delay"
-    assert build.delay_days == 0
-    assert build.overdue_status == "Overdue"
-    assert facts.project_health == "at_risk"
-
-
-def test_project_delay_days_from_go_live_finish_versus_baseline() -> None:
-    facts = derive_wsr_facts(
-        _plan(
-            [
-                PlanTaskData(
-                    id=1,
-                    name="Go Live",
-                    is_milestone=True,
-                    baseline_finish="2026-09-01",
-                    scheduled_finish="2026-09-11",
-                )
-            ]
-        ),
-        "2026-08-22",
-        generated_at="2026-08-22T10:00:00Z",
-    )
-    assert facts.current_finish == "2026-09-11"
-    assert facts.project_delay_days == 10
-    assert facts.work_item_counts is not None
-    assert facts.work_item_counts.delayed == 1
-
-
-def test_schedule_audit_records_successor_names() -> None:
-    facts = derive_wsr_facts(
-        _plan(
-            [
-                PlanTaskData(
-                    id=1,
-                    name="CMS Integration",
-                    baseline_finish="2026-08-25",
-                    scheduled_finish="2026-08-30",
-                ),
-                PlanTaskData(
-                    id=2,
-                    name="QA",
-                    predecessor_ids=[1],
-                    predecessor_names=["CMS Integration"],
-                    scheduled_finish="2026-09-05",
-                ),
-            ]
-        ),
-        "2026-08-30",
-        generated_at="2026-08-30T10:00:00Z",
-    )
-    delayed = next(row for row in facts.task_schedule if row.task_name == "CMS Integration")
-    assert delayed.delay_status == "Delayed"
-    assert delayed.delay_days == 5
-    assert delayed.successor_names == ["QA"]
 

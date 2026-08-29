@@ -13,11 +13,11 @@ from app.wsr.facts import (
     _complete,
     _contains,
     _descendants,
+    _due_date,
     parse_date,
     select_phase_summaries,
     work_based_progress,
 )
-from app.wsr.schedule_status import calculate_task_schedule_status
 
 _HEALTH_HYPHEN = {
     "on_track": "on-track",
@@ -131,17 +131,10 @@ def _phase_status(
     overdue = [
         task
         for task in leaves
-        if calculate_task_schedule_status(task, as_of).overdue_status == "Overdue"
-    ]
-    delayed = [
-        task
-        for task in leaves
-        if calculate_task_schedule_status(task, as_of).delay_status == "Delayed"
+        if not _complete(task) and (_due_date(task) or _candidate_date(task) or date.max) < as_of
     ]
     if overdue:
         return "off-track" if len(overdue) >= max(1, len(leaves) // 2) else "at-risk"
-    if delayed:
-        return "at-risk"
     if work["metric"] == "unavailable" and not any(task.percent_complete or task.actual_start for task in leaves):
         dated = any(_candidate_date(task) for task in leaves)
         return "on-track" if dated else "unavailable"
@@ -176,15 +169,13 @@ def _milestones(
             continue
         if planned is None:
             continue
-        status = calculate_task_schedule_status(task, as_of)
-        if status.overdue_status == "Overdue":
-            baseline = parse_date(task.baseline_finish)
+        if planned < as_of:
             overdue.append(
                 {
                     "id": str(task.id),
                     "name": task.name,
-                    "plannedDate": None if baseline is None else baseline.isoformat(),
-                    "daysOverdue": None if baseline is None else (as_of - baseline).days,
+                    "plannedDate": planned.isoformat(),
+                    "daysOverdue": (as_of - planned).days,
                     "percentComplete": task.percent_complete,
                 }
             )
@@ -266,7 +257,10 @@ def _dependencies(
 
 
 def _is_delayed(task: PlanTaskData, as_of: date) -> bool:
-    return calculate_task_schedule_status(task, as_of).delay_status == "Delayed"
+    if _complete(task):
+        return False
+    due = _due_date(task) or _candidate_date(task)
+    return due is not None and due < as_of
 
 
 def _reaches(successors: dict[int, list[int]], start: int, target: int | None) -> bool:
@@ -303,19 +297,14 @@ def _risks(
     overdue = [
         task
         for task in leaves
-        if calculate_task_schedule_status(task, as_of).overdue_status == "Overdue"
+        if not _complete(task) and (_due_date(task) or date.max) < as_of
     ]
     if overdue:
         names = [task.name for task in overdue[:6]]
         extra = len(overdue) - len(names)
-        evidence = [
-            f"{task.name} is incomplete and as-of {as_of.isoformat()} is after baseline finish {task.baseline_finish}"
-            for task in overdue[:5]
-        ]
+        evidence = [f"{task.name} is incomplete with finish before {as_of.isoformat()}" for task in overdue[:5]]
         if extra > 0:
-            evidence.append(
-                f"{extra} additional incomplete items with as-of after baseline finish"
-            )
+            evidence.append(f"{extra} additional incomplete items finished before the as-of date")
         phase = _affected_phase(overdue[0], phases, plan.tasks)
         risks.append(
             {
@@ -327,31 +316,6 @@ def _risks(
                 "affectedPhase": phase,
                 "goLiveImpact": _tasks_affect_go_live(overdue, go_live, plan.tasks),
                 "recommendedMitigation": "Recover overdue incomplete work before successor activities proceed.",
-            }
-        )
-    delayed = [
-        task
-        for task in leaves
-        if calculate_task_schedule_status(task, as_of).delay_status == "Delayed"
-    ]
-    if delayed:
-        evidence = []
-        for task in delayed[:5]:
-            status = calculate_task_schedule_status(task, as_of)
-            days = "Unavailable" if status.delay_days is None else str(status.delay_days)
-            evidence.append(
-                f"Task {task.id} – {task.name}: baseline {task.baseline_finish or 'Unavailable'}, "
-                f"finish {task.scheduled_finish or 'Unavailable'}, delay {days} day(s)"
-            )
-        risks.append(
-            {
-                "id": "r1b-delayed",
-                "title": "Tasks delayed against baseline finish",
-                "severity": "high" if len(delayed) > 2 else "medium",
-                "evidence": evidence,
-                "affectedTasks": [task.name for task in delayed[:6]],
-                "goLiveImpact": _tasks_affect_go_live(delayed, go_live, plan.tasks),
-                "recommendedMitigation": "Use Finish versus Baseline Finish evidence to recover delayed work.",
             }
         )
     upcoming_ms = milestones.get("upcoming") or []
@@ -408,9 +372,7 @@ def _risks(
         if slipped:
             evidence.append("Phases with schedule pressure: " + ", ".join(slipped[:5]))
         if overdue:
-            evidence.append(
-                f"{len(overdue)} incomplete items have as-of after baseline finish"
-            )
+            evidence.append(f"{len(overdue)} incomplete items have finish dates before the as-of date")
         risks.append(
             {
                 "id": "r4-schedule",
@@ -452,7 +414,7 @@ def _risks(
     resource = _resource_health(plan, progress, go_live_date, as_of, facts)
     if resource in {"at-risk", "off-track"} and progress["metric"] == "work":
         remaining = progress["remaining"]
-        people = facts.resources_deployed
+        people = facts.people_planned or facts.resources_deployed
         if isinstance(remaining, (int, float)) and remaining > 0 and people:
             evidence = [
                 f"Remaining work is {remaining} hours across leaf tasks",
@@ -528,14 +490,13 @@ def _max_date(tasks: list[PlanTaskData], field: str) -> str | None:
 
 def _schedule_health(tasks: list[PlanTaskData], as_of: date) -> str:
     leaves = [task for task in tasks if not task.is_summary]
-    statuses = [calculate_task_schedule_status(task, as_of) for task in leaves]
-    if not statuses:
+    overdue = any(
+        not _complete(task) and (_due_date(task) or date.max) < as_of for task in leaves
+    )
+    dated = any(_due_date(task) for task in leaves)
+    if not dated:
         return "unavailable"
-    if any(item.overdue_status == "Overdue" or item.delay_status == "Delayed" for item in statuses):
-        return "at-risk"
-    if not any(item.baseline_available and item.finish_available for item in statuses):
-        return "unavailable"
-    return "on-track"
+    return "at-risk" if overdue else "on-track"
 
 
 def _progress_health(progress: dict[str, float | str | None]) -> str:
@@ -589,7 +550,7 @@ def _resource_health(
     if progress["metric"] != "work":
         return "unavailable"
     remaining = progress["remaining"]
-    people = facts.resources_deployed
+    people = facts.people_planned or facts.resources_deployed
     if remaining is None or people is None or people <= 0:
         return "unavailable"
     if go_live_date is None:

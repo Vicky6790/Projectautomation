@@ -228,7 +228,6 @@ class PhaseStatus(BaseModel):
 
     planned_* comes from Baseline Start/Finish (planned end).
     actual_* holds the current Finish window used as the deviation date.
-    Delay counts come from executable child tasks via calculate_task_schedule_status.
     """
 
     name: str
@@ -239,39 +238,6 @@ class PhaseStatus(BaseModel):
     actual_finish: str | None = None
     progress: float | None = None
     state: Literal["not_started", "in_progress", "complete"]
-    executable_task_count: int | None = None
-    completed_task_count: int | None = None
-    in_progress_task_count: int | None = None
-    delayed_task_count: int | None = None
-    overdue_task_count: int | None = None
-    delay_percent: float | None = None
-
-
-class TaskScheduleStatus(BaseModel):
-    """Audit row from calculate_task_schedule_status. Dates are copied, never invented."""
-
-    task_id: str
-    task_name: str
-    completion_status: str
-    delay_status: str
-    delay_days: int | None = None
-    overdue_status: str
-    baseline_available: bool
-    finish_available: bool
-    baseline_finish: str | None = None
-    finish: str | None = None
-    percent_complete: float | None = None
-    successor_names: list[str] = Field(default_factory=list)
-
-
-class WorkItemCounts(BaseModel):
-    total: int = 0
-    completed: int = 0
-    in_progress: int = 0
-    not_started: int = 0
-    delayed: int = 0
-    overdue: int = 0
-    delay_percent: float | None = None
 
 
 class DelayAttributionBucket(BaseModel):
@@ -430,10 +396,6 @@ class WsrPlanFacts(BaseModel):
     timeline: list[PhaseStatus] | None = None
     phase_statuses: list[PhaseStatus] = Field(default_factory=list)
     delay_mapping: DelayMappingSheet | None = None
-    task_schedule: list[TaskScheduleStatus] = Field(default_factory=list)
-    work_item_counts: WorkItemCounts | None = None
-    current_finish: str | None = None
-    project_delay_days: int | None = None
     progress_to_date: list[ProgressItem] = Field(default_factory=list)
     upcoming_milestones: list[MilestoneItem] = Field(default_factory=list)
 
