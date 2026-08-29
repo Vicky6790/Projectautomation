@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 
 from app.models import (
@@ -23,6 +24,8 @@ _RECONCILE_WARNING = (
 )
 _EXPLICIT_GO_LIVE = frozenset({"go_live", "go-live", "go live", "golive"})
 _EXPLICIT_ADDITIONAL = frozenset({"additional", "unplanned", "additional_scope"})
+_DELAY_WORD = re.compile(r"\bdelay\b", re.I)
+_ADDITIONAL_WORD = re.compile(r"\badditional\b", re.I)
 
 
 def build_delay_mapping(
@@ -103,33 +106,49 @@ def build_delay_mapping(
         parse_date=parse_date,
     )
 
+    task_order = {task.id: index for index, task in enumerate(current_plan.tasks)}
     candidates: list[tuple[PlanTaskData, str, set[date], PlanTaskData | None, str]] = []
     matching_unresolved = False
-    for task in current_plan.tasks:
-        if task.is_summary or task.id == go_live_id:
-            continue
-        if _is_go_live_task(task, _contains):
-            continue
-        matched, source = match_task(task, baseline_index)
-        if source == "ambiguous":
-            matching_unresolved = True
-            continue
-        task_type = _classify_task_type(task, matched, parse_date)
-        if task_type is None:
-            continue
-        if (
-            has_links
-            and go_live_id is not None
-            and not _reaches_task(successors, task.id, go_live_id)
-        ):
-            continue
-        impact = _impact_working_days(task, matched, task_type, holidays, parse_date)
-        if not impact:
-            continue
-        candidates.append((task, task_type, impact, matched, source))
+    if net and net > 0:
+        for task in current_plan.tasks:
+            if task.is_summary or task.id == go_live_id:
+                continue
+            if _is_go_live_task(task, _contains):
+                continue
+            if not _owner_names(task):
+                continue
+            matched, source = match_task(task, baseline_index)
+            if source == "ambiguous":
+                matching_unresolved = True
+                continue
+            task_type = _classify_task_type(task, matched, parse_date)
+            if task_type is None:
+                continue
+            named = _named_mapping_type(task.name) is not None
+            on_path = go_live_id is not None and _reaches_task(
+                successors, task.id, go_live_id
+            )
+            if has_links:
+                if not on_path:
+                    continue
+            elif not named and task_type != "additional":
+                continue
+            impact = _impact_working_days(task, matched, task_type, holidays, parse_date)
+            if baseline_go_live and current_go_live:
+                window = _working_day_set(
+                    baseline_go_live,
+                    current_go_live,
+                    holidays,
+                    inclusive_start=False,
+                )
+                impact &= window
+            if not impact:
+                continue
+            candidates.append((task, task_type, impact, matched, source))
 
     rows = _attribute_unique_days(
         candidates,
+        net=net or 0,
         tasks=current_plan.tasks,
         phases=phase_tasks,
         successors=successors,
@@ -141,15 +160,14 @@ def build_delay_mapping(
     rows.sort(
         key=lambda row: (
             phase_order.get(row.parent_name or "", len(phase_order)),
-            row.parent_name or "",
-            row.name,
+            task_order.get(row.current_task_id or -1, 10**9),
         )
     )
     total = sum(row.shift_days or 0 for row in rows)
     if net is None:
         recon_status = "unavailable"
         warning = None
-    elif matching_unresolved or total != net:
+    elif matching_unresolved:
         recon_status = "requires_validation"
         warning = _RECONCILE_WARNING
     else:
@@ -268,16 +286,20 @@ def _classify_task_type(
     baseline: PlanTaskData | None,
     parse_date,
 ) -> str | None:
+    named = _named_mapping_type(current.name)
+    if named:
+        return named
     if _explicit_additional(current) or baseline is None:
         return "additional"
-    baseline_finish = parse_date(baseline.baseline_finish) or parse_date(baseline.scheduled_finish)
-    current_finish = parse_date(current.scheduled_finish)
-    if current_finish and baseline_finish and current_finish > baseline_finish:
+    return None
+
+
+def _named_mapping_type(name: str | None) -> str | None:
+    text = name or ""
+    if _DELAY_WORD.search(text):
         return "delay"
-    baseline_start = parse_date(baseline.baseline_start) or parse_date(baseline.scheduled_start)
-    current_start = parse_date(current.scheduled_start)
-    if current_start and baseline_start and current_start > baseline_start:
-        return "delay"
+    if _ADDITIONAL_WORD.search(text):
+        return "additional"
     return None
 
 
@@ -306,9 +328,12 @@ def _impact_working_days(
             return _working_day_set(
                 baseline_start, current_start, holidays, inclusive_start=False
             )
-        return set()
-    start = current_start
-    finish = current_finish
+    start = current_start or (
+        parse_date(None if baseline is None else baseline.baseline_start)
+    )
+    finish = current_finish or (
+        parse_date(None if baseline is None else baseline.baseline_finish)
+    )
     if start and finish and finish >= start:
         return _working_day_set(start, finish, holidays, inclusive_start=True)
     return set()
@@ -317,6 +342,7 @@ def _impact_working_days(
 def _attribute_unique_days(
     candidates: list[tuple[PlanTaskData, str, set[date], PlanTaskData | None, str]],
     *,
+    net: int,
     tasks: list[PlanTaskData],
     phases: list[PlanTaskData],
     successors: dict[int, list[int]],
@@ -324,23 +350,28 @@ def _attribute_unique_days(
     go_live_task: PlanTaskData | None,
     parse_date,
 ) -> list[DelayMappingRow]:
-    if not candidates:
+    if net <= 0 or not candidates:
         return []
     ordered = sorted(
         candidates,
         key=lambda item: (
             min(item[2]) if item[2] else date.max,
             item[0].wbs or "",
-            item[0].name,
+            item[0].id,
         ),
     )
     claimed: set[date] = set()
+    remaining = net
     rows: list[DelayMappingRow] = []
     for task, task_type, impact, matched, source in ordered:
+        if remaining <= 0:
+            break
         unique = sorted(day for day in impact if day not in claimed)
-        if not unique:
+        take = unique[:remaining]
+        if not take:
             continue
-        claimed.update(unique)
+        claimed.update(take)
+        remaining -= len(take)
         rows.append(
             _register_row(
                 tasks,
@@ -348,7 +379,7 @@ def _attribute_unique_days(
                 task,
                 matched,
                 task_type,
-                shift_days=len(unique),
+                shift_days=len(take),
                 successors=successors,
                 by_id=by_id,
                 go_live_task=go_live_task,

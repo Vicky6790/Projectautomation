@@ -18,7 +18,7 @@ export function DelayMappingPanel({
     mapping.total_delayed_days ??
     rows.reduce((sum, row) => sum + (row.shift_days ?? row.delay_days ?? 0), 0);
   const warning =
-    mapping.reconciliation_status === "requires_validation"
+    mapping.matching_requires_validation
       ? mapping.reconciliation_warning || RECONCILE_WARNING
       : null;
 

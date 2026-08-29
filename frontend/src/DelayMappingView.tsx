@@ -79,9 +79,9 @@ export function DelayMappingView() {
           </div>
           <h1>Go-Live Delay Mapping</h1>
           <p>
-            Working-day Go-Live shift from the baseline MPP versus the current MPP. Delay and
-            Additional rows are compared from those schedules. Total Count is the sum of displayed
-            shift days and is not forced to equal Actual Shift.
+            Working-day Go-Live shift from the baseline versus current MPP. The register lists
+            Delay and Additional tasks that have an owner. Unattributed leftover days are not
+            shown as extra rows.
           </p>
         </div>
         <button

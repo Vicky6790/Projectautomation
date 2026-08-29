@@ -255,7 +255,7 @@ def _delay_mapping(facts: WsrPlanFacts, as_of: str | None) -> str:
             "<p class='muted'>Working days use the system weekday calendar "
             "(project calendar unavailable).</p>"
         )
-    if mapping.reconciliation_status == "requires_validation" and mapping.reconciliation_warning:
+    if mapping.matching_requires_validation and mapping.reconciliation_warning:
         summary += f"<p><b>{html.escape(mapping.reconciliation_warning)}</b></p>"
     return summary + _register_table(mapping.rows, total)
 
