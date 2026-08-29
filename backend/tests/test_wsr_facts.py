@@ -846,7 +846,7 @@ def test_project_name_comes_from_wbs_one() -> None:
     assert facts.planned_go_live_date == "2026-09-11"
 
 
-def test_delay_mapping_uses_phase_deviation_and_delayed_mpp_tasks() -> None:
+def test_delay_mapping_uses_working_days_and_excludes_phase_rows() -> None:
     facts = derive_wsr_facts(
         _plan(
             [
@@ -857,33 +857,23 @@ def test_delay_mapping_uses_phase_deviation_and_delayed_mpp_tasks() -> None:
                     wbs="1.1",
                     is_summary=True,
                     outline_level=2,
-                    baseline_start="2026-08-01",
-                    baseline_finish="2026-08-10",
-                    scheduled_start="2026-08-01",
-                    scheduled_finish="2026-08-20",
-                    percent_complete=40,
                 ),
                 PlanTaskData(
                     id=3,
-                    name="Design Sign-off",
+                    name="Delay In Presenting Mobile Wireframes",
                     wbs="1.1.1",
                     outline_level=3,
-                    baseline_start="2026-08-01",
                     baseline_finish="2026-08-10",
-                    scheduled_start="2026-08-01",
                     scheduled_finish="2026-08-20",
-                    percent_complete=40,
-                    assignments=[PlanAssignmentData(resource_name="Jaya Desai")],
+                    assignments=[PlanAssignmentData(resource_name="Idealake")],
                 ),
                 PlanTaskData(
                     id=4,
-                    name="On-time build",
+                    name="Design Sign-off",
                     wbs="1.1.2",
                     outline_level=3,
-                    baseline_finish="2026-08-08",
-                    scheduled_finish="2026-08-08",
-                    percent_complete=100,
-                    actual_finish="2026-08-08",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-20",
                 ),
                 PlanTaskData(
                     id=5,
@@ -891,8 +881,8 @@ def test_delay_mapping_uses_phase_deviation_and_delayed_mpp_tasks() -> None:
                     wbs="1.2",
                     outline_level=2,
                     is_milestone=True,
+                    baseline_finish="2026-08-20",
                     scheduled_finish="2026-09-01",
-                    predecessor_ids=[3],
                 ),
             ]
         ),
@@ -902,19 +892,74 @@ def test_delay_mapping_uses_phase_deviation_and_delayed_mpp_tasks() -> None:
     mapping = facts.delay_mapping
     assert mapping is not None
     names = [row.name for row in mapping.rows]
-    assert "UX Phase" in names
-    assert "Design Sign-off" in names
-    assert "On-time build" not in names
-    design = next(row for row in mapping.rows if row.name == "Design Sign-off")
-    assert design.kind == "task"
-    assert design.parent_name == "UX Phase"
-    assert design.delay_days == 10
-    assert design.owner == "Jaya Desai"
-    assert design.primary_reason is None
-    assert design.mitigation_plan is None
-    assert design.go_live_impact == "high"
+    assert names == ["Delay In Presenting Mobile Wireframes"]
+    delay = mapping.rows[0]
+    assert delay.task_type == "delay"
+    assert delay.parent_name == "UX Phase"
+    assert delay.shift_days == 8
+    assert delay.owner == "Idealake"
     assert mapping.delayed_task_count == 1
-    assert mapping.total_delayed_days == 10
+    assert mapping.baseline_go_live == "2026-08-20"
+    assert mapping.current_go_live == "2026-09-01"
+    assert mapping.shift_working_days == 8
+    assert mapping.holidays is None
+    assert mapping.actual_shift_working_days == 8
+
+
+def test_delay_mapping_marks_unbaselined_work_as_additional() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Wireframe Phase",
+                    wbs="1.1",
+                    is_summary=True,
+                    outline_level=1,
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Additional Days Due To Unplanned Round 2 Feedback",
+                    wbs="1.1.1",
+                    outline_level=2,
+                    scheduled_start="2026-08-03",
+                    scheduled_finish="2026-08-07",
+                    assignments=[
+                        PlanAssignmentData(resource_name="Idealake"),
+                        PlanAssignmentData(resource_name="PNB MetLife"),
+                    ],
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Competitive Analysis Step",
+                    wbs="1.1.2",
+                    outline_level=2,
+                    scheduled_start="2026-08-03",
+                    scheduled_finish="2026-08-07",
+                ),
+                PlanTaskData(
+                    id=4,
+                    name="Go Live",
+                    is_milestone=True,
+                    baseline_finish="2026-09-01",
+                    scheduled_finish="2026-09-01",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    assert [row.name for row in mapping.rows] == [
+        "Additional Days Due To Unplanned Round 2 Feedback"
+    ]
+    extra = mapping.rows[0]
+    assert extra.task_type == "additional"
+    assert extra.shift_days == 5
+    assert extra.owner == "Idealake & PNB MetLife"
+    assert extra.parent_name == "Wireframe Phase"
+    assert mapping.delayed_task_count == 0
 
 
 def test_delay_mapping_counts_overdue_task_without_baseline() -> None:
@@ -923,12 +968,19 @@ def test_delay_mapping_counts_overdue_task_without_baseline() -> None:
             [
                 PlanTaskData(
                     id=1,
+                    name="Delay Due To Unavailability Of PNB MetLife Team",
+                    scheduled_finish="2026-08-10",
+                    percent_complete=20,
+                    assignments=[PlanAssignmentData(resource_name="PNB MetLife")],
+                ),
+                PlanTaskData(
+                    id=2,
                     name="Late API",
                     scheduled_finish="2026-08-10",
                     percent_complete=20,
                 ),
                 PlanTaskData(
-                    id=2,
+                    id=3,
                     name="Go Live",
                     is_milestone=True,
                     scheduled_finish="2026-09-01",
@@ -940,7 +992,35 @@ def test_delay_mapping_counts_overdue_task_without_baseline() -> None:
     )
     mapping = facts.delay_mapping
     assert mapping is not None
-    assert mapping.delayed_task_count == 1
-    assert mapping.rows[0].name == "Late API"
-    assert mapping.rows[0].delay_days == 12
-    assert mapping.rows[0].go_live_impact == "medium"
+    assert [row.name for row in mapping.rows] == [
+        "Delay Due To Unavailability Of PNB MetLife Team"
+    ]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].shift_days == 9
+    assert mapping.rows[0].owner == "PNB MetLife"
+
+
+def test_delay_mapping_subtracts_weekday_holidays_from_go_live_shift() -> None:
+    facts = derive_wsr_facts(
+        ProjectPlanData(
+            name="Core Banking",
+            calendar_available=True,
+            holiday_dates=["2026-08-26"],
+            tasks=[
+                PlanTaskData(
+                    id=1,
+                    name="Go Live",
+                    is_milestone=True,
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-09-01",
+                ),
+            ],
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    mapping = facts.delay_mapping
+    assert mapping is not None
+    assert mapping.shift_working_days == 8
+    assert mapping.holidays == 1
+    assert mapping.actual_shift_working_days == 7

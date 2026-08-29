@@ -939,6 +939,50 @@ label select {
   margin-bottom: 32px;
 }
 
+.delay-summary-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  margin-bottom: 32px;
+  max-width: 720px;
+}
+
+.delay-summary {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.delay-summary th,
+.delay-summary td {
+  padding: 12px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: left;
+}
+
+.delay-summary th {
+  width: 62%;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+  background: #f8fafc;
+}
+
+.delay-summary td {
+  font-weight: 600;
+  color: #334155;
+}
+
+.delay-summary tr:last-child th,
+.delay-summary tr:last-child td {
+  border-bottom: none;
+}
+
+.delay-actual {
+  color: #be123c;
+}
+
 .delay-metric {
   background: var(--card);
   border: 1px solid var(--line);
@@ -1062,6 +1106,39 @@ label select {
 
 .delay-table tbody tr:hover {
   background: #f8fafc;
+}
+
+.delay-sheet .delay-phase-row td {
+  background: #eef2ff;
+  color: var(--navy);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.delay-sheet .delay-phase-row:hover td {
+  background: #eef2ff;
+}
+
+.delay-type-delay td:first-child,
+.delay-type-delay td:nth-child(2) {
+  color: #be123c;
+  font-weight: 600;
+}
+
+.delay-type-additional td:first-child,
+.delay-type-additional td:nth-child(2) {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.delay-total-row td {
+  background: #f8fafc;
+  font-weight: 700;
+  border-top: 2px solid var(--line);
+}
+
+.delay-total-row td:nth-child(3) {
+  color: var(--navy);
 }
 
 .delay-name {

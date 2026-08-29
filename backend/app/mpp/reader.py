@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
 
 from app.errors import AppError
@@ -130,6 +131,7 @@ def project_from_mpxj(project) -> ProjectPlanData:
                 assignments=assignments,
             )
         )
+    holidays = _holiday_dates(calendar)
     return ProjectPlanData(
         name=name,
         owner=owner,
@@ -139,7 +141,69 @@ def project_from_mpxj(project) -> ProjectPlanData:
         tasks=tasks,
         resources=resources,
         phases=[_phase(task) for task in select_phase_summaries(tasks, project_name=name)],
+        calendar_available=holidays is not None,
+        holiday_dates=holidays or [],
     )
+
+
+def _holiday_dates(calendar) -> list[str] | None:
+    if calendar is None:
+        return None
+    exceptions = _java_items(calendar, "getCalendarExceptions", "getExceptions")
+    if exceptions is None:
+        return None
+    days: set[str] = set()
+    for item in exceptions:
+        if _call(item, "getWorking") is True:
+            continue
+        start = iso_date(_call(item, "getFromDate") or _call(item, "getFrom"))
+        finish = iso_date(_call(item, "getToDate") or _call(item, "getTo") or start)
+        if not start:
+            continue
+        try:
+            cursor = date.fromisoformat(start[:10])
+            last = date.fromisoformat((finish or start)[:10])
+        except ValueError:
+            continue
+        while cursor <= last:
+            days.add(cursor.isoformat())
+            cursor += timedelta(days=1)
+    return sorted(days)
+
+
+def _java_items(source, *methods: str) -> list | None:
+    for method in methods:
+        getter = getattr(source, method, None)
+        if getter is None:
+            continue
+        try:
+            raw = getter()
+        except Exception:  # noqa: BLE001 - optional MPXJ calendar API
+            continue
+        if raw is None:
+            return []
+        try:
+            return list(raw)
+        except TypeError:
+            items: list = []
+            try:
+                iterator = raw.iterator()
+                while iterator.hasNext():
+                    items.append(iterator.next())
+                return items
+            except Exception:  # noqa: BLE001
+                continue
+    return None
+
+
+def _call(source, method: str):
+    getter = getattr(source, method, None)
+    if getter is None:
+        return None
+    try:
+        return getter()
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def iso_date(value) -> str | None:

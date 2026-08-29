@@ -107,22 +107,29 @@ export type PhaseStatus = {
 };
 
 export type DelayMappingRow = {
-  kind: "phase" | "task";
+  kind?: "phase" | "task";
   name: string;
   parent_name?: string | null;
   wbs?: string | null;
+  task_type?: "delay" | "additional" | null;
+  shift_days?: number | null;
+  delay_days?: number | null;
+  owner?: string | null;
   planned_start?: string | null;
   planned_finish?: string | null;
   revised_start?: string | null;
   revised_finish?: string | null;
-  delay_days?: number | null;
   primary_reason?: string | null;
   go_live_impact?: "high" | "medium" | null;
   mitigation_plan?: string | null;
-  owner?: string | null;
 };
 
 export type DelayMappingSheet = {
+  baseline_go_live?: string | null;
+  current_go_live?: string | null;
+  shift_working_days?: number | null;
+  holidays?: number | null;
+  actual_shift_working_days?: number | null;
   total_delayed_days?: number;
   delayed_task_count?: number;
   rows?: DelayMappingRow[];

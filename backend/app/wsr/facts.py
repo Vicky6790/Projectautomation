@@ -25,6 +25,8 @@ _LIBRARY_PHASE_NAMES = frozenset(
     " ".join(str(phase["name"]).casefold().split()) for phase in PHASES
 )
 _PHASE_WBS = re.compile(r"^1\.\d+$")
+_DELAY_WORD = re.compile(r"\bdelay\b", re.I)
+_ADDITIONAL_WORD = re.compile(r"\badditional\b", re.I)
 
 
 def parse_date(value: str | None) -> date | None:
@@ -84,7 +86,7 @@ def derive_wsr_facts(
         executive_overview=None,
         timeline=phases or None,
         phase_statuses=phases,
-        delay_mapping=_delay_mapping(plan, as_of_d, phases),
+        delay_mapping=_delay_mapping(plan, as_of_d, phases, go_live),
         progress_to_date=_progress_to_date(leaves, as_of_d),
         upcoming_milestones=_next_planned_tasks(leaves, as_of_d),
     )
@@ -525,107 +527,195 @@ def _delay_mapping(
     plan: ProjectPlanData,
     as_of: date,
     phases: list[PhaseStatus],
+    go_live_date: date | None,
 ) -> DelayMappingSheet:
-    """Build delay rows from Phase-Wise Status dates and incomplete delayed MPP tasks."""
+    """Map named Delay/Additional MPP tasks into the sample sheet, grouped by phase."""
+
+    holidays = _holiday_set(plan)
+    go_live_task = _named_go_live_task(plan.tasks, as_of)
+    baseline_go_live = parse_date(None if go_live_task is None else go_live_task.baseline_finish)
+    current_go_live = go_live_date or parse_date(None if go_live_task is None else go_live_task.scheduled_finish)
+    shift_weekdays = None
+    holiday_count = None
+    actual_shift = None
+    if baseline_go_live and current_go_live and current_go_live > baseline_go_live:
+        shift_weekdays = _weekdays_after(baseline_go_live, current_go_live)
+        if plan.calendar_available or plan.holiday_dates:
+            holiday_count = _holiday_weekdays_after(baseline_go_live, current_go_live, holidays)
+            actual_shift = shift_weekdays - holiday_count
+        else:
+            actual_shift = shift_weekdays
+    elif baseline_go_live and current_go_live:
+        shift_weekdays = 0
+        holiday_count = 0 if (plan.calendar_available or plan.holiday_dates) else None
+        actual_shift = 0
 
     phase_tasks = select_phase_summaries(plan.tasks, project_name=plan.name)
-    go_live = _named_go_live_task(plan.tasks, as_of)
-    successors = _successor_map(plan.tasks)
+    go_live_id = None if go_live_task is None else go_live_task.id
     rows: list[DelayMappingRow] = []
-    for index, status in enumerate(phases):
-        delay = _positive_delay(status.planned_finish, status.actual_finish, as_of, complete=False)
-        if delay is None:
-            continue
-        phase_task = phase_tasks[index] if index < len(phase_tasks) else None
-        rows.append(
-            DelayMappingRow(
-                kind="phase",
-                name=status.name,
-                wbs=status.wbs,
-                planned_start=status.planned_start,
-                planned_finish=status.planned_finish,
-                revised_start=status.actual_start,
-                revised_finish=status.actual_finish,
-                delay_days=delay,
-                go_live_impact=_go_live_impact(phase_task, go_live, successors, plan.tasks),
-                owner=_owner_for_task(plan.tasks, phase_task) if phase_task else None,
-            )
-        )
     for task in plan.tasks:
-        if task.is_summary or _complete(task):
+        if task.is_summary or task.id == go_live_id:
             continue
-        delay = _positive_delay(task.baseline_finish, task.scheduled_finish, as_of, complete=False)
-        if delay is None:
+        if _contains(task.name, go_live_markers()) or _contains(task.gate, go_live_markers()):
             continue
-        parent = _containing_phase(plan.tasks, phase_tasks, task)
-        rows.append(
-            DelayMappingRow(
-                kind="task",
-                name=task.name,
-                parent_name=None if parent is None else parent.name,
-                wbs=(task.wbs or "").strip() or None,
-                planned_start=task.baseline_start,
-                planned_finish=task.baseline_finish,
-                revised_start=task.scheduled_start,
-                revised_finish=task.scheduled_finish,
-                delay_days=delay,
-                go_live_impact=_go_live_impact(task, go_live, successors, plan.tasks),
-                owner=_task_owner(task),
-            )
+        mapped = _delay_row(plan.tasks, phase_tasks, task, as_of, holidays)
+        if mapped is not None:
+            rows.append(mapped)
+    phase_order = {phase.name: index for index, phase in enumerate(phases)}
+    rows.sort(
+        key=lambda row: (
+            phase_order.get(row.parent_name or "", len(phase_order)),
+            row.parent_name or "",
+            -(row.shift_days or 0),
+            row.name,
         )
-    task_rows = [row for row in rows if row.kind == "task"]
-    counted = task_rows or [row for row in rows if row.kind == "phase"]
+    )
     return DelayMappingSheet(
-        total_delayed_days=sum(row.delay_days or 0 for row in counted),
-        delayed_task_count=len(task_rows),
+        baseline_go_live=None if baseline_go_live is None else baseline_go_live.isoformat(),
+        current_go_live=None if current_go_live is None else current_go_live.isoformat(),
+        shift_working_days=shift_weekdays,
+        holidays=holiday_count,
+        actual_shift_working_days=actual_shift,
+        total_delayed_days=sum(row.shift_days or 0 for row in rows),
+        delayed_task_count=sum(1 for row in rows if row.task_type == "delay"),
         rows=rows,
     )
 
 
-def _positive_delay(
-    planned_finish: str | None,
-    current_finish: str | None,
+def _delay_row(
+    tasks: list[PlanTaskData],
+    phases: list[PlanTaskData],
+    task: PlanTaskData,
     as_of: date,
-    *,
-    complete: bool,
-) -> int | None:
-    planned = parse_date(planned_finish)
-    current = parse_date(current_finish)
-    if planned and current:
-        slipped = (current - planned).days
-        if slipped > 0:
-            return slipped
-    if complete:
+    holidays: set[date],
+) -> DelayMappingRow | None:
+    task_type = _named_mapping_type(task.name)
+    if task_type is None:
         return None
-    if current is not None and current < as_of:
-        return (as_of - current).days
+    planned_finish = parse_date(task.baseline_finish)
+    current_finish = parse_date(task.scheduled_finish)
+    planned_start = parse_date(task.baseline_start)
+    current_start = parse_date(task.scheduled_start)
+    shift = _named_row_shift_days(
+        task_type,
+        planned_start=planned_start,
+        planned_finish=planned_finish,
+        current_start=current_start,
+        current_finish=current_finish,
+        as_of=as_of,
+        complete=_complete(task),
+        holidays=holidays,
+    )
+    parent = _containing_phase(tasks, phases, task)
+    return DelayMappingRow(
+        name=task.name,
+        parent_name=None if parent is None else parent.name,
+        wbs=(task.wbs or "").strip() or None,
+        task_type=task_type,
+        shift_days=shift,
+        delay_days=shift,
+        owner=_owners_for_task(task),
+        planned_start=None if planned_start is None else planned_start.isoformat(),
+        planned_finish=None if planned_finish is None else planned_finish.isoformat(),
+        revised_start=None if current_start is None else current_start.isoformat(),
+        revised_finish=None if current_finish is None else current_finish.isoformat(),
+    )
+
+
+def _named_mapping_type(name: str | None) -> str | None:
+    text = name or ""
+    if _DELAY_WORD.search(text):
+        return "delay"
+    if _ADDITIONAL_WORD.search(text):
+        return "additional"
     return None
 
 
-def _successor_map(tasks: list[PlanTaskData]) -> dict[int, list[int]]:
-    successors: dict[int, list[int]] = {}
-    for task in tasks:
-        for pred in task.predecessor_ids:
-            successors.setdefault(pred, []).append(task.id)
-    return successors
+def _named_row_shift_days(
+    task_type: str,
+    *,
+    planned_start: date | None,
+    planned_finish: date | None,
+    current_start: date | None,
+    current_finish: date | None,
+    as_of: date,
+    complete: bool,
+    holidays: set[date],
+) -> int | None:
+    if planned_finish and current_finish and current_finish > planned_finish:
+        days = _working_days_after(planned_finish, current_finish, holidays)
+        return days or None
+    start = current_start or planned_start
+    finish = current_finish or planned_finish
+    if start and finish and finish >= start:
+        days = _working_days_inclusive(start, finish, holidays)
+        return days or None
+    if task_type == "delay" and current_finish and not complete and current_finish < as_of:
+        days = _working_days_after(current_finish, as_of, holidays)
+        return days or None
+    return None
 
 
-def _reaches_target(successors: dict[int, list[int]], start: int, target: int | None) -> bool:
-    if target is None:
-        return False
-    if start == target:
-        return True
-    seen = {start}
-    queue = [start]
-    while queue:
-        current = queue.pop(0)
-        for nxt in successors.get(current, []):
-            if nxt == target:
-                return True
-            if nxt not in seen:
-                seen.add(nxt)
-                queue.append(nxt)
-    return False
+def _holiday_set(plan: ProjectPlanData) -> set[date]:
+    days: set[date] = set()
+    for raw in plan.holiday_dates:
+        parsed = parse_date(raw)
+        if parsed is not None:
+            days.add(parsed)
+    return days
+
+
+def _weekdays_after(start: date, end: date) -> int:
+    return _count_days(start, end, holidays=set(), skip_holidays=False, inclusive_start=False)
+
+
+def _holiday_weekdays_after(start: date, end: date, holidays: set[date]) -> int:
+    count = 0
+    cursor = start + timedelta(days=1)
+    while cursor <= end:
+        if cursor.weekday() < 5 and cursor in holidays:
+            count += 1
+        cursor += timedelta(days=1)
+    return count
+
+
+def _working_days_after(start: date, end: date, holidays: set[date]) -> int:
+    return _count_days(start, end, holidays, skip_holidays=True, inclusive_start=False)
+
+
+def _working_days_inclusive(start: date, end: date, holidays: set[date]) -> int:
+    return _count_days(start, end, holidays, skip_holidays=True, inclusive_start=True)
+
+
+def _count_days(
+    start: date,
+    end: date,
+    holidays: set[date],
+    *,
+    skip_holidays: bool,
+    inclusive_start: bool,
+) -> int:
+    if end < start:
+        return 0
+    cursor = start if inclusive_start else start + timedelta(days=1)
+    count = 0
+    while cursor <= end:
+        if cursor.weekday() < 5 and not (skip_holidays and cursor in holidays):
+            count += 1
+        cursor += timedelta(days=1)
+    return count
+
+
+def _owners_for_task(task: PlanTaskData) -> str | None:
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in task.assignments:
+        name = (item.resource_name or "").strip()
+        key = name.casefold()
+        if name and key not in seen:
+            seen.add(key)
+            names.append(name)
+    return " & ".join(names) if names else None
 
 
 def _named_go_live_task(tasks: list[PlanTaskData], as_of: date) -> PlanTaskData | None:
@@ -645,20 +735,6 @@ def _named_go_live_task(tasks: list[PlanTaskData], as_of: date) -> PlanTaskData 
     return max(dated, key=lambda item: item[1])[0]
 
 
-def _go_live_impact(
-    task: PlanTaskData | None,
-    go_live: PlanTaskData | None,
-    successors: dict[int, list[int]],
-    tasks: list[PlanTaskData],
-) -> str | None:
-    if task is None or go_live is None:
-        return None
-    ids = [task.id, *[child.id for child in _descendants(tasks, task)]]
-    if any(_reaches_target(successors, item, go_live.id) for item in ids):
-        return "high"
-    return "medium"
-
-
 def _containing_phase(
     tasks: list[PlanTaskData],
     phases: list[PlanTaskData],
@@ -672,25 +748,6 @@ def _containing_phase(
     if not matches:
         return None
     return max(matches, key=lambda item: item.outline_level)
-
-
-def _task_owner(task: PlanTaskData) -> str | None:
-    for item in task.assignments:
-        name = (item.resource_name or "").strip()
-        if name:
-            return name
-    return None
-
-
-def _owner_for_task(tasks: list[PlanTaskData], task: PlanTaskData) -> str | None:
-    owner = _task_owner(task)
-    if owner:
-        return owner
-    for child in _descendants(tasks, task):
-        owner = _task_owner(child)
-        if owner:
-            return owner
-    return None
 
 
 def _week_bounds(as_of: date) -> tuple[date, date]:

@@ -101,6 +101,8 @@ class ProjectPlanData(BaseModel):
     status_date: str | None = None
     has_actuals: bool = False
     planned_only: bool = True
+    calendar_available: bool = False
+    holiday_dates: list[str] = Field(default_factory=list)
     tasks: list[PlanTaskData] = Field(default_factory=list)
     resources: list[PlanResourceData] = Field(default_factory=list)
     phases: list[PlanPhaseData] = Field(default_factory=list)
@@ -239,24 +241,31 @@ class PhaseStatus(BaseModel):
 
 
 class DelayMappingRow(BaseModel):
-    """One delayed phase or leaf task. Reason and mitigation stay empty unless present in the plan."""
+    """One MPP leaf task that slipped or was added after baseline. Causes are not invented."""
 
-    kind: Literal["phase", "task"]
+    kind: Literal["task"] = "task"
     name: str
     parent_name: str | None = None
     wbs: str | None = None
+    task_type: Literal["delay", "additional"]
+    shift_days: int | None = None
+    delay_days: int | None = None
+    owner: str | None = None
     planned_start: str | None = None
     planned_finish: str | None = None
     revised_start: str | None = None
     revised_finish: str | None = None
-    delay_days: int | None = None
     primary_reason: str | None = None
     go_live_impact: Literal["high", "medium"] | None = None
     mitigation_plan: str | None = None
-    owner: str | None = None
 
 
 class DelayMappingSheet(BaseModel):
+    baseline_go_live: str | None = None
+    current_go_live: str | None = None
+    shift_working_days: int | None = None
+    holidays: int | None = None
+    actual_shift_working_days: int | None = None
     total_delayed_days: int = 0
     delayed_task_count: int = 0
     rows: list[DelayMappingRow] = Field(default_factory=list)
