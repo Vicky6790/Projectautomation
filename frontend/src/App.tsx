@@ -1,8 +1,9 @@
-import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { AUTH_LOST_EVENT, getCurrentOperator, getHealth, signOut } from "./api";
 import type { HealthResponse, Module, Operator } from "./types";
 import { DelayMappingView } from "./DelayMappingView";
+import { HomeDashboardView } from "./HomeDashboardView";
 import { LoginView } from "./LoginView";
 import { OperatorsView } from "./OperatorsView";
 import { PlanGeneratorView } from "./PlanGeneratorView";
@@ -19,6 +20,7 @@ const MODULES: { id: Module; label: string; icon: string }[] = [
 ];
 
 const TITLES: Record<string, string> = {
+  "/": "Dashboard",
   "/wsr": "Generate WSR",
   "/wsr/delay-mapping": "Go-Live Delay Mapping",
   "/sow": "SOW Analyzer",
@@ -98,13 +100,13 @@ export default function App() {
     <ShellMetaContext.Provider value={setPageMeta}>
       <div className="shell">
         <aside className="sidebar">
-          <div className="brand">
+          <Link to="/" className="brand" aria-label="Project Management Dashboard">
             <span className="brand-mark">P</span>
             <div>
               <strong>Project Automation</strong>
               <p>Project Intelligence Platform</p>
             </div>
-          </div>
+          </Link>
           <nav>
             {MODULES.map((module) => (
               <NavLink
@@ -160,13 +162,18 @@ export default function App() {
         </aside>
         <div className="shell-main">
           <header className="shell-top">
-            <span className="shell-tab">{title}</span>
+            <div className="shell-top-lead">
+              <Link to="/" className="shell-home" aria-label="Project Management Dashboard">
+                <span className="material-symbols-outlined">dashboard</span>
+              </Link>
+              <span className="shell-tab">{title}</span>
+            </div>
             <p className="status">{pageMeta || sessionLabel}</p>
           </header>
           <main className="shell-content">
             {health?.auth_required && !sessionChecked ? <p>Checking session…</p> : null}
             <Routes>
-              <Route path="/" element={<Navigate to="/wsr" replace />} />
+              <Route path="/" element={<HomeDashboardView />} />
               <Route path="/sow" element={<SowAnalyzerView />} />
               <Route path="/plan" element={<PlanGeneratorView />} />
               <Route path="/wsr" element={<WsrDashboardView />} />
@@ -174,9 +181,9 @@ export default function App() {
               <Route path="/retrospective" element={<RetrospectiveView />} />
               <Route
                 path="/operators"
-                element={operator?.role === "admin" ? <OperatorsView /> : <Navigate to="/wsr" replace />}
+                element={operator?.role === "admin" ? <OperatorsView /> : <Navigate to="/" replace />}
               />
-              <Route path="*" element={<Navigate to="/wsr" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
         </div>
