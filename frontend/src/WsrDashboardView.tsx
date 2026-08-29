@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { generateWsr, getWsrRequest, retryJob } from "./api";
+import { ApiRequestError, generateWsr, getWsrRequest, retryJob } from "./api";
 import { DelayMappingPanel } from "./components/DelayMappingPanel";
 import { FileUploader } from "./components/FileUploader";
 import { WsrGantt } from "./components/WsrGantt";
@@ -177,8 +177,11 @@ export function WsrDashboardView() {
           setMessage("Status report ready.");
         }
       })
-      .catch(() => {
-        clearWsrSession();
+      .catch((error: unknown) => {
+        if (error instanceof ApiRequestError && /NOT_FOUND$/.test(error.code)) {
+          clearWsrSession();
+          setUploaded(null);
+        }
       });
   }, []);
 

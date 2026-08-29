@@ -7,13 +7,36 @@ type StoredWsrSession = {
   filename: string;
 };
 
+function storage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function saveWsrSession(handle: string, filename: string): void {
   const payload: StoredWsrSession = { handle, filename };
-  sessionStorage.setItem(WSR_SESSION_KEY, JSON.stringify(payload));
+  storage()?.setItem(WSR_SESSION_KEY, JSON.stringify(payload));
 }
 
 export function readWsrSession(): StoredWsrSession | null {
-  const raw = sessionStorage.getItem(WSR_SESSION_KEY);
+  const store = storage();
+  if (!store) {
+    return null;
+  }
+  let raw = store.getItem(WSR_SESSION_KEY);
+  if (!raw) {
+    try {
+      raw = window.sessionStorage.getItem(WSR_SESSION_KEY);
+      if (raw) {
+        store.setItem(WSR_SESSION_KEY, raw);
+        window.sessionStorage.removeItem(WSR_SESSION_KEY);
+      }
+    } catch {
+      raw = null;
+    }
+  }
   if (!raw) {
     return null;
   }
@@ -29,7 +52,7 @@ export function readWsrSession(): StoredWsrSession | null {
 }
 
 export function clearWsrSession(): void {
-  sessionStorage.removeItem(WSR_SESSION_KEY);
+  storage()?.removeItem(WSR_SESSION_KEY);
 }
 
 export function restoredUpload(session: StoredWsrSession): FileRecord {

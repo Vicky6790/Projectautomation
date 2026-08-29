@@ -132,7 +132,7 @@ def test_generic_slipped_task_is_not_listed() -> None:
     assert mapping.unattributed_shift_days == 0
 
 
-def test_ownerless_named_delay_is_not_listed() -> None:
+def test_ownerless_named_delay_is_listed() -> None:
     mapping = derive_wsr_facts(
         _plan(
             [
@@ -148,8 +148,29 @@ def test_ownerless_named_delay_is_not_listed() -> None:
         "2026-08-22",
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
-    assert mapping.rows == []
-    assert mapping.unattributed_shift_days == 0
+    assert [row.name for row in mapping.rows] == ["Delay In Presenting Mobile Wireframes"]
+    assert mapping.rows[0].owner is None
+
+
+def test_named_delay_before_go_live_window_is_still_listed() -> None:
+    mapping = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Delay In Presenting Mobile Wireframes",
+                    scheduled_start="2026-08-03",
+                    scheduled_finish="2026-08-05",
+                    assignments=_owners("Idealake"),
+                ),
+                _go_live(),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    ).delay_mapping
+    assert [row.name for row in mapping.rows] == ["Delay In Presenting Mobile Wireframes"]
+    assert mapping.rows[0].shift_days == 3
 
 
 def test_named_additional_with_shared_owner() -> None:
@@ -326,8 +347,6 @@ def test_duplicate_task_names_match_by_id_not_name() -> None:
                     id=2,
                     name="Delay In Sharing Sign-Off",
                     wbs="1.2.1",
-                    scheduled_start="2026-08-10",
-                    scheduled_finish="2026-08-10",
                     assignments=_owners("PNB MetLife"),
                 ),
                 _go_live(id=3),

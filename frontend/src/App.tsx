@@ -176,6 +176,7 @@ export default function App() {
                 path="/operators"
                 element={operator?.role === "admin" ? <OperatorsView /> : <Navigate to="/wsr" replace />}
               />
+              <Route path="*" element={<Navigate to="/wsr" replace />} />
             </Routes>
           </main>
         </div>

@@ -115,8 +115,6 @@ def build_delay_mapping(
                 continue
             if _is_go_live_task(task, _contains):
                 continue
-            if not _owner_names(task):
-                continue
             matched, source = match_task(task, baseline_index)
             if source == "ambiguous":
                 matching_unresolved = True
@@ -128,13 +126,10 @@ def build_delay_mapping(
             on_path = go_live_id is not None and _reaches_task(
                 successors, task.id, go_live_id
             )
-            if has_links:
-                if not on_path:
-                    continue
-            elif not named and task_type != "additional":
+            if has_links and not named and not on_path:
                 continue
             impact = _impact_working_days(task, matched, task_type, holidays, parse_date)
-            if baseline_go_live and current_go_live:
+            if not named and baseline_go_live and current_go_live:
                 window = _working_day_set(
                     baseline_go_live,
                     current_go_live,
@@ -416,7 +411,7 @@ def _register_row(
         planned_finish = parse_date(baseline.baseline_finish)
     current_start = parse_date(task.scheduled_start)
     current_finish = parse_date(task.scheduled_finish)
-    names = _owner_names(task)
+    names = _resolved_owner_names(task, tasks)
     successor_ids = list(successors.get(task.id, []))
     successor_names, milestone_names = _impacted_names(task.id, successors, by_id, go_live_task)
     parent = _containing_phase(tasks, phases, task)
@@ -464,6 +459,22 @@ def _owner_names(task: PlanTaskData) -> list[str]:
             seen.add(key)
             names.append(name)
     return names
+
+
+def _resolved_owner_names(task: PlanTaskData, tasks: list[PlanTaskData]) -> list[str]:
+    names = _owner_names(task)
+    if names:
+        return names
+    wbs = (task.wbs or "").strip()
+    while "." in wbs:
+        wbs = wbs.rsplit(".", 1)[0]
+        parent = next((item for item in tasks if (item.wbs or "").strip() == wbs), None)
+        if parent is None:
+            continue
+        names = _owner_names(parent)
+        if names:
+            return names
+    return []
 
 
 def _owner_class(names: list[str]) -> str:

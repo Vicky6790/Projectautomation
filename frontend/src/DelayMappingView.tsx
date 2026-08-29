@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import { getWsrRequest } from "./api";
 import { DelayMappingPanel, downloadDelayMappingSheet } from "./components/DelayMappingPanel";
 import { ShellMetaContext } from "./shellMeta";
@@ -51,6 +51,10 @@ export function DelayMappingView() {
 
   const mapping: DelayMappingSheet = facts?.delay_mapping ?? {};
   const asOf = facts?.as_of_date;
+
+  if (!handle) {
+    return <Navigate to="/wsr" replace />;
+  }
 
   if (!facts) {
     return (
