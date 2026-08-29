@@ -79,9 +79,9 @@ export function DelayMappingView() {
           </div>
           <h1>Go-Live Delay Mapping</h1>
           <p>
-            Schedule variance versus the baseline Go-Live date, attributed only from Delay and
-            Additional tasks on the Go-Live path. Overlapping days are counted once. Remaining
-            days stay unattributed until a PM validates them.
+            Working-day Go-Live shift from the baseline MPP versus the current MPP. Delay and
+            Additional rows are compared from those schedules. Total Count is the sum of displayed
+            shift days and is not forced to equal Actual Shift.
           </p>
         </div>
         <button

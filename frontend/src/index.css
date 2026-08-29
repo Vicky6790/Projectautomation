@@ -987,6 +987,12 @@ label select {
   font-weight: 600;
 }
 
+.delay-calendar-note {
+  margin: 8px 16px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .delay-unattributed {
   margin: 0 0 20px;
   padding: 12px 16px;
@@ -1183,14 +1189,12 @@ label select {
   background: #eef2ff;
 }
 
-.delay-type-delay td:first-child,
-.delay-type-delay td:nth-child(2) {
+.delay-type-delay td {
   color: #be123c;
   font-weight: 600;
 }
 
-.delay-type-additional td:first-child,
-.delay-type-additional td:nth-child(2) {
+.delay-type-additional td {
   color: #c2410c;
   font-weight: 600;
 }

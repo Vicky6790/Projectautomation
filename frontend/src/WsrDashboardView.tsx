@@ -506,7 +506,7 @@ export function WsrDashboardView() {
           <Section
             n={4}
             title="Go-Live Delay Mapping"
-            hint="Working-calendar Go-Live shift, attributed from Delay and Additional tasks on the Go-Live path. AI does not calculate these days."
+            hint="Working-calendar Go-Live shift with Delay and Additional tasks. Total Count is not forced to equal Actual Shift."
             action={
               <button
                 type="button"

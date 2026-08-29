@@ -1,77 +1,67 @@
 import { useMemo } from "react";
-import type { DelayAttributionBucket, DelayMappingRow, DelayMappingSheet } from "../types";
+import type { DelayMappingRow, DelayMappingSheet } from "../types";
 import { shortDate, unavailable } from "../wsrFormat";
+
+const RECONCILE_WARNING =
+  "Delay mapping total does not reconcile with the calculated Go-Live shift. PM validation required.";
 
 export function DelayMappingPanel({
   mapping,
-  asOf,
 }: {
   mapping: DelayMappingSheet;
   asOf?: string;
 }) {
   const rows = mapping.rows ?? [];
-  const groups = useMemo(() => groupByPhase(rows), [rows]);
-  const net = mapping.net_working_day_shift ?? mapping.actual_shift_working_days;
-  const attributed = mapping.attributed_shift_days ?? mapping.total_delayed_days ?? 0;
-  const unattributed = mapping.unattributed_shift_days ?? 0;
-  const asOfLabel = asOf ? ` (As On ${shortDate(asOf)})` : "";
+  const groups = useMemo(() => groupByPhase(mapping.rows ?? []), [mapping.rows]);
+  const actual = mapping.actual_shift_working_days ?? mapping.net_working_day_shift;
+  const total =
+    mapping.total_delayed_days ??
+    rows.reduce((sum, row) => sum + (row.shift_days ?? row.delay_days ?? 0), 0);
+  const warning =
+    mapping.reconciliation_status === "requires_validation"
+      ? mapping.reconciliation_warning || RECONCILE_WARNING
+      : null;
 
   return (
     <div className="delay-engine">
       <div className="delay-summary-card">
+        <h2 className="delay-block-title">Go-Live Date Shift</h2>
         <table className="delay-summary">
           <tbody>
             <tr>
-              <th>Baseline Go-Live Date</th>
+              <th>Baselined Go-Live Date</th>
               <td>{shortDate(mapping.baseline_go_live)}</td>
             </tr>
             <tr>
-              <th>Current/Forecast Go-Live Date{asOfLabel}</th>
+              <th>Current Go-Live Date</th>
               <td>{shortDate(mapping.current_go_live)}</td>
             </tr>
             <tr>
-              <th>Gross Working-Day Shift{asOfLabel}</th>
-              <td>{shiftLabel(mapping.gross_working_day_shift ?? mapping.shift_working_days)}</td>
+              <th>Shift In Working Days</th>
+              <td>{unavailableCount(mapping.shift_working_days ?? mapping.gross_working_day_shift)}</td>
             </tr>
             <tr>
-              <th>Holidays/Non-working Days</th>
+              <th>Holidays In Above Duration</th>
               <td>{unavailableCount(mapping.holidays)}</td>
             </tr>
             <tr>
-              <th>Net Working-Day Shift{asOfLabel}</th>
-              <td className="delay-actual">{shiftLabel(net)}</td>
-            </tr>
-            <tr>
-              <th>Attributed Shift</th>
-              <td>{shiftLabel(attributed)}</td>
-            </tr>
-            <tr>
-              <th>Unattributed Shift</th>
-              <td>{unattributedLabel(unattributed, mapping.unattributed_status)}</td>
+              <th>Actual Shift In Working Days</th>
+              <td className="delay-actual">{unavailableCount(actual)}</td>
             </tr>
           </tbody>
         </table>
-        {net != null ? (
-          <p className="delay-reconcile">
-            Net Working-Day Shift ({net}) = Attributed Shift ({attributed}) + Unattributed Shift (
-            {unattributed})
+        {mapping.calendar_source === "weekdays_fallback" ? (
+          <p className="delay-calendar-note">
+            Working days use the system weekday calendar (project calendar unavailable).
           </p>
         ) : null}
       </div>
 
-      {mapping.unattributed_status === "requires_pm_validation" ? (
+      {warning ? (
         <p className="delay-unattributed" role="status">
-          UNATTRIBUTED / REQUIRES PM VALIDATION — {unattributed} working day
-          {unattributed === 1 ? "" : "s"} of the Go-Live shift are not explained by Delay or
-          Additional tasks on the Go-Live path.
+          {warning}
         </p>
       ) : null}
-
-      <div className="delay-attr-grid">
-        <AttributionTable title="Phase-wise attribution" buckets={mapping.phase_attribution ?? []} />
-        <AttributionTable title="Owner-wise attribution" buckets={mapping.owner_attribution ?? []} />
-        <AttributionTable title="Delay vs Additional" buckets={mapping.type_attribution ?? []} />
-      </div>
 
       <div className="delay-table-card">
         <div className="delay-table-head">
@@ -79,114 +69,62 @@ export function DelayMappingPanel({
             <span className="wsr-num" aria-hidden="true">
               <span className="material-symbols-outlined">table_rows</span>
             </span>
-            <h2>Delay Mapping Register</h2>
+            <h2>Delay Mapping</h2>
           </div>
         </div>
         {rows.length ? (
           <div className="delay-table-wrap">
-            <table className="delay-table delay-sheet delay-register">
+            <table className="delay-table delay-sheet">
               <thead>
                 <tr>
-                  <th>Phase</th>
-                  <th>Task</th>
+                  <th>Task Name</th>
                   <th>Task Type</th>
+                  <th>Shift Days Count</th>
                   <th>Owner</th>
-                  <th>Owner Class</th>
-                  <th>Shift Days</th>
-                  <th>Reason</th>
-                  <th>Baseline Dates</th>
-                  <th>Actual/Current Dates</th>
-                  <th>Impacted Successors/Milestones</th>
-                  <th>Go-Live Impact</th>
                 </tr>
               </thead>
               <tbody>
-                {groups.map((group) =>
-                  group.rows.map((row, index) => {
-                    const days = row.shift_days ?? row.delay_days;
-                    const type = row.task_type;
-                    return (
-                      <tr
-                        key={`${group.name}-${row.wbs || row.name}-${index}`}
-                        className={type ? `delay-type-${type}` : undefined}
-                      >
-                        <td>{group.name}</td>
-                        <td>{row.name}</td>
-                        <td>{type ? type.toUpperCase() : "Unavailable"}</td>
-                        <td>{unavailable(row.owner)}</td>
-                        <td>{ownerClassLabel(row.owner_class)}</td>
-                        <td>{days == null ? "Unavailable" : days}</td>
-                        <td>{unavailable(row.primary_reason)}</td>
-                        <td>{dateWindow(row.planned_start, row.planned_finish)}</td>
-                        <td>{dateWindow(row.revised_start, row.revised_finish)}</td>
-                        <td>{impactedLabel(row)}</td>
-                        <td>{row.go_live_impact ? row.go_live_impact.toUpperCase() : "Unavailable"}</td>
-                      </tr>
-                    );
-                  }),
-                )}
+                {groups.map((group) => (
+                  <PhaseGroup key={group.name} group={group} />
+                ))}
                 <tr className="delay-total-row">
-                  <td colSpan={5}>Attributed Total</td>
+                  <td>Total Count</td>
+                  <td />
                   <td>
-                    <strong>{attributed}</strong>
+                    <strong>{total}</strong>
                   </td>
-                  <td colSpan={5} />
+                  <td />
                 </tr>
-                {unattributed > 0 ? (
-                  <tr className="delay-unattr-row">
-                    <td colSpan={5}>Unattributed Shift</td>
-                    <td>
-                      <strong>{unattributed}</strong>
-                    </td>
-                    <td colSpan={5}>UNATTRIBUTED / REQUIRES PM VALIDATION</td>
-                  </tr>
-                ) : null}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="delay-empty-rows">
-            No Delay or Additional tasks on the Go-Live path contributing to the shift
-          </p>
+          <p className="delay-empty-rows">No Delay or Additional tasks contributing to the Go-Live shift</p>
         )}
       </div>
     </div>
   );
 }
 
-function AttributionTable({
-  title,
-  buckets,
-}: {
-  title: string;
-  buckets: DelayAttributionBucket[];
-}) {
+function PhaseGroup({ group }: { group: { name: string; rows: DelayMappingRow[] } }) {
   return (
-    <div className="delay-attr-card">
-      <h3>{title}</h3>
-      {buckets.length ? (
-        <table className="delay-attr-table">
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>Shift Days</th>
-              <th>Tasks</th>
-            </tr>
-          </thead>
-          <tbody>
-            {buckets.map((bucket) => (
-              <tr key={bucket.key}>
-                <td>{bucket.label}</td>
-                <td>{bucket.shift_days}</td>
-                <td>{bucket.task_count ?? "Unavailable"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <p className="muted">Unavailable</p>
-      )}
-    </div>
+    <>
+      <tr className="delay-phase-row">
+        <td colSpan={4}>{group.name}</td>
+      </tr>
+      {group.rows.map((row, index) => {
+        const days = row.shift_days ?? row.delay_days ?? 0;
+        const type = row.task_type;
+        return (
+          <tr key={`${group.name}-${row.wbs || row.name}-${index}`} className={type ? `delay-type-${type}` : undefined}>
+            <td>{row.name}</td>
+            <td>{type ? capitalize(type) : "Unavailable"}</td>
+            <td>{days}</td>
+            <td>{unavailable(row.owner)}</td>
+          </tr>
+        );
+      })}
+    </>
   );
 }
 
@@ -206,131 +144,47 @@ function groupByPhase(rows: DelayMappingRow[]): { name: string; rows: DelayMappi
   return groups;
 }
 
-function shiftLabel(value: number | null | undefined): string {
-  if (value == null) {
-    return "Unavailable";
-  }
-  return value === 1 ? "1 day shift" : `${value} days shift`;
-}
-
 function unavailableCount(value: number | null | undefined): string {
   return value == null ? "Unavailable" : String(value);
 }
 
-function unattributedLabel(
-  value: number,
-  status: DelayMappingSheet["unattributed_status"],
-): string {
-  if (status === "requires_pm_validation") {
-    return `${value} — UNATTRIBUTED / REQUIRES PM VALIDATION`;
-  }
-  return shiftLabel(value);
-}
-
-function ownerClassLabel(value: DelayMappingRow["owner_class"]): string {
-  if (value === "internal") {
-    return "INTERNAL";
-  }
-  if (value === "client") {
-    return "CLIENT";
-  }
-  if (value === "shared") {
-    return "SHARED";
-  }
-  return "UNKNOWN";
-}
-
-function dateWindow(start?: string | null, finish?: string | null): string {
-  if (!start && !finish) {
-    return "Unavailable";
-  }
-  if (start && finish) {
-    return `${shortDate(start)} – ${shortDate(finish)}`;
-  }
-  return shortDate(start || finish);
-}
-
-function impactedLabel(row: DelayMappingRow): string {
-  const names = [...(row.impacted_milestones ?? []), ...(row.impacted_successors ?? [])];
-  const unique = [...new Set(names.filter(Boolean))];
-  return unique.length ? unique.join(", ") : "Unavailable";
+function capitalize(value: string): string {
+  return value ? value[0].toUpperCase() + value.slice(1) : value;
 }
 
 export function downloadDelayMappingSheet(mapping: DelayMappingSheet, asOf?: string) {
   const rows = mapping.rows ?? [];
-  const net = mapping.net_working_day_shift ?? mapping.actual_shift_working_days;
-  const attributed = mapping.attributed_shift_days ?? mapping.total_delayed_days ?? 0;
-  const unattributed = mapping.unattributed_shift_days ?? 0;
+  const actual = mapping.actual_shift_working_days ?? mapping.net_working_day_shift;
+  const total =
+    mapping.total_delayed_days ??
+    rows.reduce((sum, row) => sum + (row.shift_days ?? row.delay_days ?? 0), 0);
+  const shift = mapping.shift_working_days ?? mapping.gross_working_day_shift;
   const summary = [
-    ["Baseline Go-Live Date", mapping.baseline_go_live?.slice(0, 10) || ""],
-    ["Current/Forecast Go-Live Date", mapping.current_go_live?.slice(0, 10) || ""],
-    ["As Of", asOf?.slice(0, 10) || ""],
-    [
-      "Gross Working-Day Shift",
-      String(mapping.gross_working_day_shift ?? mapping.shift_working_days ?? ""),
-    ],
-    ["Holidays/Non-working Days", mapping.holidays == null ? "" : String(mapping.holidays)],
-    ["Net Working-Day Shift", net == null ? "" : String(net)],
-    ["Attributed Shift", String(attributed)],
-    ["Unattributed Shift", String(unattributed)],
-    [
-      "Unattributed Status",
-      mapping.unattributed_status === "requires_pm_validation"
-        ? "UNATTRIBUTED / REQUIRES PM VALIDATION"
-        : mapping.unattributed_status || "",
-    ],
+    ["GO-LIVE DATE SHIFT"],
+    ["Baselined Go-Live Date", mapping.baseline_go_live?.slice(0, 10) || ""],
+    ["Current Go-Live Date", mapping.current_go_live?.slice(0, 10) || ""],
+    asOf ? ["As Of", asOf.slice(0, 10)] : [],
+    ["Shift In Working Days", shift == null ? "" : String(shift)],
+    ["Holidays In Above Duration", mapping.holidays == null ? "" : String(mapping.holidays)],
+    ["Actual Shift In Working Days", actual == null ? "" : String(actual)],
+    mapping.reconciliation_warning ? ["Warning", mapping.reconciliation_warning] : [],
     [],
-    [
-      "Phase",
-      "Task",
-      "Task Type",
-      "Owner",
-      "Owner Class",
-      "Shift Days",
-      "Reason",
-      "Baseline Start",
-      "Baseline Finish",
-      "Current Start",
-      "Current Finish",
-      "Impacted Successors/Milestones",
-      "Go-Live Impact",
-    ],
-  ];
-  const body = rows.map((row) => [
-    row.parent_name || "",
-    row.name,
-    row.task_type ? row.task_type.toUpperCase() : "",
-    row.owner || "",
-    ownerClassLabel(row.owner_class),
-    row.shift_days == null && row.delay_days == null ? "" : String(row.shift_days ?? row.delay_days),
-    row.primary_reason || "",
-    row.planned_start?.slice(0, 10) || "",
-    row.planned_finish?.slice(0, 10) || "",
-    row.revised_start?.slice(0, 10) || "",
-    row.revised_finish?.slice(0, 10) || "",
-    impactedLabel(row) === "Unavailable" ? "" : impactedLabel(row),
-    row.go_live_impact ? row.go_live_impact.toUpperCase() : "",
-  ]);
-  const csv = [
-    ...summary,
-    ...body,
-    ["", "Attributed Total", "", "", "", String(attributed), "", "", "", "", "", "", ""],
-    [
-      "",
-      "Unattributed Shift",
-      "",
-      "",
-      "",
-      String(unattributed),
-      unattributed ? "UNATTRIBUTED / REQUIRES PM VALIDATION" : "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-    ],
-  ]
+    ["DELAY MAPPING"],
+    ["Task Name", "Task Type", "Shift Days Count", "Owner"],
+  ].filter((line) => line.length > 0);
+  const body: string[][] = [];
+  for (const group of groupByPhase(rows)) {
+    body.push([group.name, "", "", ""]);
+    for (const row of group.rows) {
+      body.push([
+        row.name,
+        row.task_type ? capitalize(row.task_type) : "",
+        String(row.shift_days ?? row.delay_days ?? 0),
+        row.owner || "",
+      ]);
+    }
+  }
+  const csv = [...summary, ...body, ["Total Count", "", String(total), ""]]
     .map((line) => line.map(csvCell).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });

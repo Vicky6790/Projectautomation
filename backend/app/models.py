@@ -268,6 +268,13 @@ class DelayMappingRow(BaseModel):
     mitigation_plan: str | None = None
     impacted_successors: list[str] = Field(default_factory=list)
     impacted_milestones: list[str] = Field(default_factory=list)
+    baseline_task_id: int | None = None
+    current_task_id: int | None = None
+    outline_number: str | None = None
+    predecessor_ids: list[int] = Field(default_factory=list)
+    successor_ids: list[int] = Field(default_factory=list)
+    go_live_path_impact: bool = False
+    calculation_source: str | None = None
 
 
 class DelayMappingSheet(BaseModel):
@@ -285,6 +292,10 @@ class DelayMappingSheet(BaseModel):
     additional_shift_days: int = 0
     total_delayed_days: int = 0
     delayed_task_count: int = 0
+    matching_requires_validation: bool = False
+    reconciliation_status: Literal["reconciled", "requires_validation", "unavailable"] | None = None
+    reconciliation_warning: str | None = None
+    calendar_source: Literal["project", "weekdays_fallback"] | None = None
     phase_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
     owner_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
     type_attribution: list[DelayAttributionBucket] = Field(default_factory=list)

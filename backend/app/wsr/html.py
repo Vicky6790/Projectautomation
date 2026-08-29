@@ -71,6 +71,9 @@ p {{ margin: 0 0 6px; }}
 .badge {{ color: #4f46e5; font-weight: bold; }}
 table {{ width: 100%; border-collapse: collapse; margin: 0 0 10px; }}
 .section {{ margin: 0 0 12px; }}
+.delay-phase {{ background: #eef2ff; font-weight: bold; color: #1e293b; }}
+.delay-type {{ color: #be123c; font-weight: bold; }}
+.additional-type {{ color: #c2410c; font-weight: bold; }}
 </style>
 </head>
 <body>
@@ -227,138 +230,93 @@ def _delay_mapping(facts: WsrPlanFacts, as_of: str | None) -> str:
     mapping = facts.delay_mapping
     if mapping is None:
         return "<p>Unavailable</p>"
-    as_of_label = f" (As On {_short_date(as_of)})" if as_of else ""
-    net = mapping.net_working_day_shift if mapping.net_working_day_shift is not None else mapping.actual_shift_working_days
-    attributed = mapping.attributed_shift_days
-    unattributed = mapping.unattributed_shift_days
-    gross = mapping.gross_working_day_shift if mapping.gross_working_day_shift is not None else mapping.shift_working_days
-    summary = (
-        "<table>"
-        f"<tr><td><b>Baseline Go-Live Date</b></td><td>{html.escape(_short_date(mapping.baseline_go_live))}</td></tr>"
-        f"<tr><td><b>Current/Forecast Go-Live Date{html.escape(as_of_label)}</b></td>"
-        f"<td>{html.escape(_short_date(mapping.current_go_live))}</td></tr>"
-        f"<tr><td><b>Gross Working-Day Shift{html.escape(as_of_label)}</b></td>"
-        f"<td>{html.escape(_shift_label(gross))}</td></tr>"
-        f"<tr><td><b>Holidays/Non-working Days</b></td><td>{html.escape(_count_or_unavailable(mapping.holidays))}</td></tr>"
-        f"<tr><td><b>Net Working-Day Shift{html.escape(as_of_label)}</b></td>"
-        f"<td>{html.escape(_shift_label(net))}</td></tr>"
-        f"<tr><td><b>Attributed Shift</b></td><td>{html.escape(_shift_label(attributed))}</td></tr>"
-        f"<tr><td><b>Unattributed Shift</b></td>"
-        f"<td>{html.escape(_unattributed_label(unattributed, mapping.unattributed_status))}</td></tr>"
-        "</table>"
+    actual = (
+        mapping.actual_shift_working_days
+        if mapping.actual_shift_working_days is not None
+        else mapping.net_working_day_shift
     )
-    if net is not None:
+    gross = (
+        mapping.shift_working_days
+        if mapping.shift_working_days is not None
+        else mapping.gross_working_day_shift
+    )
+    total = mapping.total_delayed_days
+    summary = (
+        "<p><b>Go-Live Date Shift</b></p><table>"
+        + _kv_row("Baselined Go-Live Date", _short_date(mapping.baseline_go_live))
+        + _kv_row("Current Go-Live Date", _short_date(mapping.current_go_live))
+        + _kv_row("Shift In Working Days", _count_or_unavailable(gross))
+        + _kv_row("Holidays In Above Duration", _count_or_unavailable(mapping.holidays))
+        + _kv_row("Actual Shift In Working Days", _count_or_unavailable(actual))
+        + "</table>"
+    )
+    if mapping.calendar_source == "weekdays_fallback":
         summary += (
-            f"<p>Net Working-Day Shift ({net}) = Attributed Shift ({attributed}) "
-            f"+ Unattributed Shift ({unattributed})</p>"
+            "<p class='muted'>Working days use the system weekday calendar "
+            "(project calendar unavailable).</p>"
         )
-    if mapping.unattributed_status == "requires_pm_validation":
-        summary += (
-            "<p><b>UNATTRIBUTED / REQUIRES PM VALIDATION</b> — "
-            f"{unattributed} working day{'s' if unattributed != 1 else ''} of the Go-Live shift "
-            "are not explained by Delay or Additional tasks on the Go-Live path.</p>"
-        )
-    parts = [
-        summary,
-        _attr_table("Phase-wise attribution", mapping.phase_attribution),
-        _attr_table("Owner-wise attribution", mapping.owner_attribution),
-        _attr_table("Delay vs Additional", mapping.type_attribution),
-        _register_table(mapping.rows, attributed, unattributed),
-    ]
-    return "".join(parts)
+    if mapping.reconciliation_status == "requires_validation" and mapping.reconciliation_warning:
+        summary += f"<p><b>{html.escape(mapping.reconciliation_warning)}</b></p>"
+    return summary + _register_table(mapping.rows, total)
 
 
-def _attr_table(title: str, buckets) -> str:
-    heading = f"<p><b>{html.escape(title)}</b></p>"
-    if not buckets:
-        return heading + "<p>Unavailable</p>"
-    rows = ["<tr><td><b>Category</b></td><td><b>Shift Days</b></td><td><b>Tasks</b></td></tr>"]
-    for item in buckets:
-        rows.append(
-            "<tr>"
-            f"<td>{html.escape(item.label)}</td>"
-            f"<td>{item.shift_days}</td>"
-            f"<td>{item.task_count}</td>"
-            "</tr>"
-        )
-    return heading + f"<table>{''.join(rows)}</table>"
-
-
-def _register_table(rows, attributed: int, unattributed: int) -> str:
-    heading = "<p><b>Delay Mapping Register</b></p>"
+def _register_table(rows, total: int) -> str:
+    heading = "<p><b>Delay Mapping</b></p>"
     if not rows:
-        return (
-            heading
-            + "<p>No Delay or Additional tasks on the Go-Live path contributing to the shift</p>"
-        )
+        return heading + "<p>No Delay or Additional tasks contributing to the Go-Live shift</p>"
     header = (
-        "<tr><td><b>Phase</b></td><td><b>Task</b></td><td><b>Task Type</b></td>"
-        "<td><b>Owner</b></td><td><b>Owner Class</b></td><td><b>Shift Days</b></td>"
-        "<td><b>Reason</b></td><td><b>Baseline Dates</b></td>"
-        "<td><b>Actual/Current Dates</b></td>"
-        "<td><b>Impacted Successors/Milestones</b></td>"
-        "<td><b>Go-Live Impact</b></td></tr>"
+        "<tr><td><b>Task Name</b></td><td><b>Task Type</b></td>"
+        "<td><b>Shift Days Count</b></td><td><b>Owner</b></td></tr>"
     )
     body = [header]
+    last_phase = object()
     for row in rows:
-        task_type = (row.task_type or "").upper() or "Unavailable"
-        owner_class = (row.owner_class or "unknown").upper()
+        phase = row.parent_name or "Other"
+        if phase != last_phase:
+            body.append(
+                f"<tr class='delay-phase'><td colspan='4'>{html.escape(phase)}</td></tr>"
+            )
+            last_phase = phase
+        task_type = (row.task_type or "").capitalize() or "Unavailable"
+        type_class = (
+            "delay-type"
+            if row.task_type == "delay"
+            else "additional-type"
+            if row.task_type == "additional"
+            else ""
+        )
+        color = (
+            "#be123c"
+            if row.task_type == "delay"
+            else "#c2410c"
+            if row.task_type == "additional"
+            else ""
+        )
+        style = f"color:{color};font-weight:bold;" if color else ""
         days = row.shift_days if row.shift_days is not None else row.delay_days
-        impact = (row.go_live_impact or "").upper() or "Unavailable"
-        successors = list(row.impacted_milestones or []) + list(row.impacted_successors or [])
-        unique = []
-        for name in successors:
-            if name and name not in unique:
-                unique.append(name)
         body.append(
-            "<tr>"
-            f"<td>{html.escape(row.parent_name or 'Other')}</td>"
-            f"<td>{html.escape(row.name)}</td>"
-            f"<td>{html.escape(task_type)}</td>"
+            f"<tr class='{type_class}'>"
+            f"<td style='{style}'>{html.escape(row.name)}</td>"
+            f"<td style='{style}'>{html.escape(task_type)}</td>"
+            f"<td>{0 if days is None else days}</td>"
             f"<td>{html.escape(row.owner or 'Unavailable')}</td>"
-            f"<td>{html.escape(owner_class)}</td>"
-            f"<td>{'Unavailable' if days is None else days}</td>"
-            f"<td>{html.escape(row.primary_reason or 'Unavailable')}</td>"
-            f"<td>{html.escape(_date_window(row.planned_start, row.planned_finish))}</td>"
-            f"<td>{html.escape(_date_window(row.revised_start, row.revised_finish))}</td>"
-            f"<td>{html.escape(', '.join(unique) if unique else 'Unavailable')}</td>"
-            f"<td>{html.escape(impact)}</td>"
             "</tr>"
         )
     body.append(
-        f"<tr><td colspan='5'><b>Attributed Total</b></td><td><b>{attributed}</b></td>"
-        "<td colspan='5'></td></tr>"
+        f"<tr><td><b>Total Count</b></td><td></td><td><b>{total}</b></td><td></td></tr>"
     )
-    if unattributed:
-        body.append(
-            f"<tr><td colspan='5'><b>Unattributed Shift</b></td><td><b>{unattributed}</b></td>"
-            "<td colspan='5'>UNATTRIBUTED / REQUIRES PM VALIDATION</td></tr>"
-        )
     return heading + f"<table>{''.join(body)}</table>"
 
 
-def _shift_label(value: int | None) -> str:
-    if value is None:
-        return "Unavailable"
-    return "1 day shift" if value == 1 else f"{value} days shift"
+def _kv_row(label: str, value: str) -> str:
+    return (
+        f"<tr><td><b>{html.escape(label)}</b></td>"
+        f"<td>{html.escape(value)}</td></tr>"
+    )
 
 
 def _count_or_unavailable(value: int | None) -> str:
     return "Unavailable" if value is None else str(value)
-
-
-def _unattributed_label(value: int, status: str | None) -> str:
-    if status == "requires_pm_validation":
-        return f"{value} — UNATTRIBUTED / REQUIRES PM VALIDATION"
-    return _shift_label(value)
-
-
-def _date_window(start: str | None, finish: str | None) -> str:
-    if not start and not finish:
-        return "Unavailable"
-    if start and finish:
-        return f"{_short_date(start)} - {_short_date(finish)}"
-    return _short_date(start or finish)
 
 
 def _progress(facts: WsrPlanFacts) -> str:

@@ -132,6 +132,13 @@ export type DelayMappingRow = {
   mitigation_plan?: string | null;
   impacted_successors?: string[];
   impacted_milestones?: string[];
+  baseline_task_id?: number | null;
+  current_task_id?: number | null;
+  outline_number?: string | null;
+  predecessor_ids?: number[];
+  successor_ids?: number[];
+  go_live_path_impact?: boolean;
+  calculation_source?: string | null;
 };
 
 export type DelayMappingSheet = {
@@ -149,6 +156,10 @@ export type DelayMappingSheet = {
   additional_shift_days?: number;
   total_delayed_days?: number;
   delayed_task_count?: number;
+  matching_requires_validation?: boolean;
+  reconciliation_status?: "reconciled" | "requires_validation" | "unavailable" | null;
+  reconciliation_warning?: string | null;
+  calendar_source?: "project" | "weekdays_fallback" | null;
   phase_attribution?: DelayAttributionBucket[];
   owner_attribution?: DelayAttributionBucket[];
   type_attribution?: DelayAttributionBucket[];

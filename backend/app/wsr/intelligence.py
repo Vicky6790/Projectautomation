@@ -573,32 +573,17 @@ def _delay_mapping_snapshot(mapping) -> dict[str, Any] | None:
         "grossWorkingDayShift": mapping.gross_working_day_shift,
         "holidays": mapping.holidays,
         "netWorkingDayShift": mapping.net_working_day_shift,
-        "attributedShiftDays": mapping.attributed_shift_days,
-        "unattributedShiftDays": mapping.unattributed_shift_days,
-        "unattributedStatus": mapping.unattributed_status,
-        "delayShiftDays": mapping.delay_shift_days,
-        "additionalShiftDays": mapping.additional_shift_days,
-        "phaseAttribution": [
-            {"label": item.label, "shiftDays": item.shift_days, "taskCount": item.task_count}
-            for item in mapping.phase_attribution
-        ],
-        "ownerAttribution": [
-            {"label": item.label, "shiftDays": item.shift_days, "taskCount": item.task_count}
-            for item in mapping.owner_attribution
-        ],
-        "typeAttribution": [
-            {"label": item.label, "shiftDays": item.shift_days, "taskCount": item.task_count}
-            for item in mapping.type_attribution
-        ],
-        "register": [
+        "actualShiftWorkingDays": mapping.actual_shift_working_days,
+        "totalCount": mapping.total_delayed_days,
+        "reconciliationStatus": mapping.reconciliation_status,
+        "reconciliationWarning": mapping.reconciliation_warning,
+        "rows": [
             {
                 "phase": row.parent_name,
                 "task": row.name,
                 "taskType": row.task_type,
                 "owner": row.owner,
-                "ownerClass": row.owner_class,
                 "shiftDays": row.shift_days,
-                "reason": row.primary_reason,
             }
             for row in mapping.rows
         ],
