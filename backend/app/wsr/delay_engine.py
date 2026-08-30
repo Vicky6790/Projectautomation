@@ -98,7 +98,6 @@ def build_delay_mapping(
     phase_tasks = select_phase_summaries(current_plan.tasks, project_name=current_plan.name)
     go_live_id = None if go_live_task is None else go_live_task.id
     successors = _successor_map(current_plan.tasks)
-    has_links = any(task.predecessor_ids for task in current_plan.tasks)
     by_id = {task.id: task for task in current_plan.tasks}
     baseline_index = _baseline_index(
         baseline_plan.tasks if baseline_plan is not None else current_plan.tasks,
@@ -107,50 +106,45 @@ def build_delay_mapping(
     )
 
     task_order = {task.id: index for index, task in enumerate(current_plan.tasks)}
-    candidates: list[tuple[PlanTaskData, str, set[date], PlanTaskData | None, str]] = []
+    rows: list[DelayMappingRow] = []
     matching_unresolved = False
-    if net and net > 0:
-        for task in current_plan.tasks:
-            if task.is_summary or task.id == go_live_id:
-                continue
-            if _is_go_live_task(task, _contains):
-                continue
+    for task in current_plan.tasks:
+        if task.is_summary or (go_live_id is not None and task.id == go_live_id):
+            continue
+        if _is_go_live_task(task, _contains):
+            continue
+        matched = None
+        source = "embedded"
+        baseline_finish = parse_date(task.baseline_finish)
+        if baseline_plan is not None:
             matched, source = match_task(task, baseline_index)
             if source == "ambiguous":
                 matching_unresolved = True
                 continue
-            task_type = _classify_task_type(task, matched, parse_date)
-            if task_type is None:
-                continue
-            named = _named_mapping_type(task.name) is not None
-            on_path = go_live_id is not None and _reaches_task(
-                successors, task.id, go_live_id
+            baseline_finish = parse_date(
+                None if matched is None else matched.baseline_finish
             )
-            if has_links and not named and not on_path:
-                continue
-            impact = _impact_working_days(task, matched, task_type, holidays, parse_date)
-            if not named and baseline_go_live and current_go_live:
-                window = _working_day_set(
-                    baseline_go_live,
-                    current_go_live,
-                    holidays,
-                    inclusive_start=False,
-                )
-                impact &= window
-            if not impact:
-                continue
-            candidates.append((task, task_type, impact, matched, source))
-
-    rows = _attribute_unique_days(
-        candidates,
-        net=net or 0,
-        tasks=current_plan.tasks,
-        phases=phase_tasks,
-        successors=successors,
-        by_id=by_id,
-        go_live_task=go_live_task,
-        parse_date=parse_date,
-    )
+        elif baseline_finish is not None:
+            matched = task
+        mapped = _map_task_from_dates(task, baseline_finish, holidays, parse_date)
+        if mapped is None:
+            continue
+        task_type, shift_days = mapped
+        rows.append(
+            _register_row(
+                current_plan.tasks,
+                phase_tasks,
+                task,
+                matched,
+                task_type,
+                shift_days=shift_days,
+                successors=successors,
+                by_id=by_id,
+                go_live_task=go_live_task,
+                parse_date=parse_date,
+                calculation_source=source,
+            )
+        )
     phase_order = {phase.name: index for index, phase in enumerate(phases)}
     rows.sort(
         key=lambda row: (
@@ -276,6 +270,32 @@ def _in_baseline(task: PlanTaskData, parse_date) -> bool:
     )
 
 
+def _map_task_from_dates(
+    task: PlanTaskData,
+    baseline_finish,
+    holidays: set[date],
+    parse_date,
+) -> tuple[str, int | None] | None:
+    """Delay = Finish after Baseline Finish. No baseline finish = Additional."""
+
+    finish = parse_date(task.actual_finish) or parse_date(task.scheduled_finish)
+    start = parse_date(task.actual_start) or parse_date(task.scheduled_start)
+    if baseline_finish is None:
+        if start is None and finish is None:
+            return None
+        if start and finish and finish >= start:
+            days = len(_working_day_set(start, finish, holidays, inclusive_start=True))
+        else:
+            days = None
+        return "additional", days
+    if finish is None or finish <= baseline_finish:
+        return None
+    days = len(
+        _working_day_set(baseline_finish, finish, holidays, inclusive_start=False)
+    )
+    return "delay", days
+
+
 def _classify_task_type(
     current: PlanTaskData,
     baseline: PlanTaskData | None,
@@ -392,25 +412,17 @@ def _register_row(
     baseline: PlanTaskData | None,
     task_type: str,
     *,
-    shift_days: int,
+    shift_days: int | None,
     successors: dict[int, list[int]],
     by_id: dict[int, PlanTaskData],
     go_live_task: PlanTaskData | None,
     parse_date,
     calculation_source: str,
 ) -> DelayMappingRow:
-    if baseline is None:
-        planned_start = None
-        planned_finish = None
-    else:
-        planned_start = parse_date(baseline.baseline_start or baseline.scheduled_start)
-        planned_finish = parse_date(baseline.baseline_finish or baseline.scheduled_finish)
-    if baseline is not None and baseline.baseline_start:
-        planned_start = parse_date(baseline.baseline_start)
-    if baseline is not None and baseline.baseline_finish:
-        planned_finish = parse_date(baseline.baseline_finish)
-    current_start = parse_date(task.scheduled_start)
-    current_finish = parse_date(task.scheduled_finish)
+    planned_start = parse_date(None if baseline is None else baseline.baseline_start)
+    planned_finish = parse_date(None if baseline is None else baseline.baseline_finish)
+    current_start = parse_date(task.actual_start) or parse_date(task.scheduled_start)
+    current_finish = parse_date(task.actual_finish) or parse_date(task.scheduled_finish)
     names = _resolved_owner_names(task, tasks)
     successor_ids = list(successors.get(task.id, []))
     successor_names, milestone_names = _impacted_names(task.id, successors, by_id, go_live_task)

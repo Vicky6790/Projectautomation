@@ -79,6 +79,8 @@ export function DelayMappingPanel({
                 <tr>
                   <th>Task Name</th>
                   <th>Task Type</th>
+                  <th>Baseline Finish</th>
+                  <th>Finish</th>
                   <th>Shift Days Count</th>
                   <th>Owner</th>
                 </tr>
@@ -90,6 +92,8 @@ export function DelayMappingPanel({
                 <tr className="delay-total-row">
                   <td>Total Count</td>
                   <td />
+                  <td />
+                  <td />
                   <td>
                     <strong>{total}</strong>
                   </td>
@@ -99,7 +103,7 @@ export function DelayMappingPanel({
             </table>
           </div>
         ) : (
-          <p className="delay-empty-rows">No Delay or Additional tasks contributing to the Go-Live shift</p>
+          <p className="delay-empty-rows">No Delay or Additional tasks from Baseline Finish versus Finish</p>
         )}
       </div>
     </div>
@@ -110,16 +114,18 @@ function PhaseGroup({ group }: { group: { name: string; rows: DelayMappingRow[] 
   return (
     <>
       <tr className="delay-phase-row">
-        <td colSpan={4}>{group.name}</td>
+        <td colSpan={6}>{group.name}</td>
       </tr>
       {group.rows.map((row, index) => {
-        const days = row.shift_days ?? row.delay_days ?? 0;
+        const days = row.shift_days ?? row.delay_days;
         const type = row.task_type;
         return (
           <tr key={`${group.name}-${row.wbs || row.name}-${index}`} className={type ? `delay-type-${type}` : undefined}>
             <td>{row.name}</td>
             <td>{type ? capitalize(type) : "Unavailable"}</td>
-            <td>{days}</td>
+            <td>{shortDate(row.planned_finish)}</td>
+            <td>{shortDate(row.revised_finish)}</td>
+            <td>{days == null ? "Unavailable" : days}</td>
             <td>{unavailable(row.owner)}</td>
           </tr>
         );
@@ -170,21 +176,24 @@ export function downloadDelayMappingSheet(mapping: DelayMappingSheet, asOf?: str
     mapping.reconciliation_warning ? ["Warning", mapping.reconciliation_warning] : [],
     [],
     ["DELAY MAPPING"],
-    ["Task Name", "Task Type", "Shift Days Count", "Owner"],
+    ["Task Name", "Task Type", "Baseline Finish", "Finish", "Shift Days Count", "Owner"],
   ].filter((line) => line.length > 0);
   const body: string[][] = [];
   for (const group of groupByPhase(rows)) {
-    body.push([group.name, "", "", ""]);
+    body.push([group.name, "", "", "", "", ""]);
     for (const row of group.rows) {
+      const days = row.shift_days ?? row.delay_days;
       body.push([
         row.name,
         row.task_type ? capitalize(row.task_type) : "",
-        String(row.shift_days ?? row.delay_days ?? 0),
+        row.planned_finish?.slice(0, 10) || "",
+        row.revised_finish?.slice(0, 10) || "",
+        days == null ? "" : String(days),
         row.owner || "",
       ]);
     }
   }
-  const csv = [...summary, ...body, ["Total Count", "", String(total), ""]]
+  const csv = [...summary, ...body, ["Total Count", "", "", "", String(total), ""]]
     .map((line) => line.map(csvCell).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });

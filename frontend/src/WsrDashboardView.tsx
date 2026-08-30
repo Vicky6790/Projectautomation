@@ -499,7 +499,7 @@ export function WsrDashboardView() {
           <Section
             n={4}
             title="Go-Live Delay Mapping"
-            hint="Named Delay and Additional tasks with owners. Leftover unattributed days are not shown."
+            hint="Delay is Finish versus Baseline Finish. Tasks with no Baseline Finish are Additional."
             action={
               <button
                 type="button"

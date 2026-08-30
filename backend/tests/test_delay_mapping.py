@@ -43,7 +43,9 @@ def test_no_go_live_shift() -> None:
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
     assert mapping.actual_shift_working_days == 0
-    assert mapping.rows == []
+    assert [row.name for row in mapping.rows] == ["Delay In Presenting Mobile Wireframes"]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].shift_days == 3
     assert mapping.unattributed_shift_days == 0
 
 
@@ -104,13 +106,13 @@ def test_named_delay_with_owner_is_listed() -> None:
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
     assert [row.name for row in mapping.rows] == ["Delay In Presenting Mobile Wireframes"]
-    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].task_type == "additional"
     assert mapping.rows[0].shift_days == 3
     assert mapping.rows[0].owner == "Idealake"
     assert mapping.unattributed_shift_days == 0
 
 
-def test_generic_slipped_task_is_not_listed() -> None:
+def test_finish_after_baseline_is_delay() -> None:
     mapping = derive_wsr_facts(
         _plan(
             [
@@ -127,7 +129,11 @@ def test_generic_slipped_task_is_not_listed() -> None:
         "2026-08-22",
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
-    assert mapping.rows == []
+    assert [row.name for row in mapping.rows] == ["Design Sign-off"]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].planned_finish == "2026-08-10"
+    assert mapping.rows[0].revised_finish == "2026-08-20"
+    assert mapping.rows[0].shift_days == 8
     assert mapping.actual_shift_working_days == 8
     assert mapping.unattributed_shift_days == 0
 
@@ -247,8 +253,11 @@ def test_additional_task_running_in_parallel_is_not_counted() -> None:
         "2026-08-22",
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
-    assert [row.name for row in mapping.rows] == ["Delay In Completion Of Designs"]
-    assert mapping.rows[0].task_type == "delay"
+    assert [row.name for row in mapping.rows] == [
+        "Delay In Completion Of Designs",
+        "Side analysis",
+    ]
+    assert [row.task_type for row in mapping.rows] == ["additional", "additional"]
 
 
 def test_additional_task_extending_go_live() -> None:
@@ -579,7 +588,8 @@ def test_missing_baseline_go_live() -> None:
     ).delay_mapping
     assert mapping.baseline_go_live is None
     assert mapping.actual_shift_working_days is None
-    assert mapping.rows == []
+    assert [row.name for row in mapping.rows] == ["Delay In Presenting Mobile Wireframes"]
+    assert mapping.rows[0].task_type == "additional"
 
 
 def test_missing_current_go_live() -> None:
@@ -600,3 +610,72 @@ def test_missing_current_go_live() -> None:
     assert mapping.current_go_live is None
     assert mapping.actual_shift_working_days is None
     assert mapping.rows == []
+
+
+def test_task_without_baseline_finish_is_additional() -> None:
+    mapping = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Competitive Analysis Step",
+                    scheduled_start="2026-08-21",
+                    scheduled_finish="2026-08-27",
+                    assignments=_owners("Idealake"),
+                ),
+                _go_live(baseline_finish="2026-09-01", scheduled_finish="2026-09-01"),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    ).delay_mapping
+    assert mapping.actual_shift_working_days == 0
+    assert [row.name for row in mapping.rows] == ["Competitive Analysis Step"]
+    assert mapping.rows[0].task_type == "additional"
+    assert mapping.rows[0].planned_finish is None
+    assert mapping.rows[0].revised_finish == "2026-08-27"
+    assert mapping.rows[0].shift_days == 5
+
+
+def test_on_time_task_is_not_listed() -> None:
+    mapping = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Kickoff",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-10",
+                    actual_finish="2026-08-10",
+                ),
+                _go_live(),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    ).delay_mapping
+    assert mapping.rows == []
+
+
+def test_actual_finish_is_used_when_present() -> None:
+    mapping = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="CMS Integration",
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-08-20",
+                    actual_finish="2026-08-25",
+                    assignments=_owners("Idealake"),
+                ),
+                _go_live(),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    ).delay_mapping
+    assert [row.name for row in mapping.rows] == ["CMS Integration"]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].revised_finish == "2026-08-25"
+    assert mapping.rows[0].shift_days == 3

@@ -291,9 +291,10 @@ def _delay_mapping(facts: WsrPlanFacts, as_of: str | None) -> str:
 def _register_table(rows, total: int) -> str:
     heading = "<p><b>Delay Mapping</b></p>"
     if not rows:
-        return heading + "<p>No Delay or Additional tasks contributing to the Go-Live shift</p>"
+        return heading + "<p>No Delay or Additional tasks from Baseline Finish versus Finish</p>"
     header = (
         "<tr><td><b>Task Name</b></td><td><b>Task Type</b></td>"
+        "<td><b>Baseline Finish</b></td><td><b>Finish</b></td>"
         "<td><b>Shift Days Count</b></td><td><b>Owner</b></td></tr>"
     )
     body = [header]
@@ -302,7 +303,7 @@ def _register_table(rows, total: int) -> str:
         phase = row.parent_name or "Other"
         if phase != last_phase:
             body.append(
-                f"<tr class='delay-phase'><td colspan='4'>{html.escape(phase)}</td></tr>"
+                f"<tr class='delay-phase'><td colspan='6'>{html.escape(phase)}</td></tr>"
             )
             last_phase = phase
         task_type = (row.task_type or "").capitalize() or "Unavailable"
@@ -322,16 +323,20 @@ def _register_table(rows, total: int) -> str:
         )
         style = f"color:{color};font-weight:bold;" if color else ""
         days = row.shift_days if row.shift_days is not None else row.delay_days
+        day_label = "Unavailable" if days is None else str(days)
         body.append(
             f"<tr class='{type_class}'>"
             f"<td style='{style}'>{html.escape(row.name)}</td>"
             f"<td style='{style}'>{html.escape(task_type)}</td>"
-            f"<td>{0 if days is None else days}</td>"
+            f"<td>{html.escape(_short_date(row.planned_finish))}</td>"
+            f"<td>{html.escape(_short_date(row.revised_finish))}</td>"
+            f"<td>{html.escape(day_label)}</td>"
             f"<td>{html.escape(row.owner or 'Unavailable')}</td>"
             "</tr>"
         )
     body.append(
-        f"<tr><td><b>Total Count</b></td><td></td><td><b>{total}</b></td><td></td></tr>"
+        f"<tr><td><b>Total Count</b></td><td></td><td></td><td></td>"
+        f"<td><b>{total}</b></td><td></td></tr>"
     )
     return heading + f"<table>{''.join(body)}</table>"
 

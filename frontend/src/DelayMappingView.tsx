@@ -105,9 +105,8 @@ export function DelayMappingView() {
           </div>
           <h1>Go-Live Delay Mapping</h1>
           <p>
-            Working-day Go-Live shift from the baseline versus current MPP. The register lists
-            Delay and Additional tasks that have an owner. Unattributed leftover days are not
-            shown as extra rows.
+            Delay is Finish versus Baseline Finish. Tasks with no Baseline Finish were added after
+            the plan was baselined and are mapped as Additional. Dates are taken from the MPP only.
           </p>
         </div>
         <div className="delay-head-actions">
