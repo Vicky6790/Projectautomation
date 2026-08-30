@@ -39,9 +39,12 @@ def build_delay_mapping(
 
     Rule:
     - No Baseline Finish → Additional (task added after the plan was baselined).
-    - Finish after Baseline Finish → Delay.
-    - Only working days inside the Go-Live shift are counted, uniquely, so Total Count
-      matches Actual Shift when these tasks cover the shift.
+      These new tasks consume project delay even when their dates sit outside the
+      Go-Live shift window, so they are always candidates for the remaining shift.
+    - Finish after Baseline Finish → Delay. Delay days stay inside the Go-Live
+      window so already-correct Delay rows are not rewritten.
+    - Delay is attributed first. Additional then uniquely fills what remains, so
+      Total Count matches Actual Shift when new work covers the leftover days.
     """
 
     from app.wsr.facts import (
@@ -144,9 +147,12 @@ def build_delay_mapping(
             impact = _impact_from_dates(
                 task, baseline_finish, holidays, parse_date, window=window
             )
-            if window:
-                impact &= window
-            if not impact:
+            if task_type == "delay":
+                if window:
+                    impact &= window
+                if not impact:
+                    continue
+            elif not impact:
                 continue
             candidates.append((task, task_type, impact, matched, source))
 
@@ -403,18 +409,52 @@ def _attribute_unique_days(
 ) -> list[DelayMappingRow]:
     if net <= 0 or not candidates:
         return []
+    delay_rows, remaining = _take_unique_days(
+        [item for item in candidates if item[1] == "delay"],
+        remaining=net,
+        claimed=set(),
+        tasks=tasks,
+        phases=phases,
+        successors=successors,
+        by_id=by_id,
+        go_live_task=go_live_task,
+        parse_date=parse_date,
+    )
+    additional_rows, _remaining = _take_unique_days(
+        [item for item in candidates if item[1] == "additional"],
+        remaining=remaining,
+        claimed=set(),
+        tasks=tasks,
+        phases=phases,
+        successors=successors,
+        by_id=by_id,
+        go_live_task=go_live_task,
+        parse_date=parse_date,
+    )
+    return delay_rows + additional_rows
+
+
+def _take_unique_days(
+    candidates: list[tuple[PlanTaskData, str, set[date], PlanTaskData | None, str]],
+    *,
+    remaining: int,
+    claimed: set[date],
+    tasks: list[PlanTaskData],
+    phases: list[PlanTaskData],
+    successors: dict[int, list[int]],
+    by_id: dict[int, PlanTaskData],
+    go_live_task: PlanTaskData | None,
+    parse_date,
+) -> tuple[list[DelayMappingRow], int]:
     ordered = sorted(
         candidates,
         key=lambda item: (
-            0 if item[1] == "additional" else 1,
             len(item[2]),
             min(item[2]) if item[2] else date.max,
             item[0].wbs or "",
             item[0].id,
         ),
     )
-    claimed: set[date] = set()
-    remaining = net
     rows: list[DelayMappingRow] = []
     for task, task_type, impact, matched, source in ordered:
         if remaining <= 0:
@@ -440,7 +480,7 @@ def _attribute_unique_days(
                 calculation_source=source,
             )
         )
-    return rows
+    return rows, remaining
 
 
 def _register_row(

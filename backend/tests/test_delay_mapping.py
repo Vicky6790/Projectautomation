@@ -157,13 +157,13 @@ def test_ownerless_named_delay_is_listed() -> None:
     assert mapping.rows[0].owner is None
 
 
-def test_work_before_go_live_window_is_not_listed() -> None:
+def test_new_task_before_go_live_window_is_listed_as_additional() -> None:
     mapping = derive_wsr_facts(
         _plan(
             [
                 PlanTaskData(
                     id=1,
-                    name="Delay In Presenting Mobile Wireframes",
+                    name="Unplanned security review",
                     scheduled_start="2026-08-03",
                     scheduled_finish="2026-08-05",
                     assignments=_owners("Idealake"),
@@ -174,7 +174,10 @@ def test_work_before_go_live_window_is_not_listed() -> None:
         "2026-08-22",
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
-    assert mapping.rows == []
+    assert [row.name for row in mapping.rows] == ["Unplanned security review"]
+    assert mapping.rows[0].task_type == "additional"
+    assert mapping.rows[0].planned_finish is None
+    assert mapping.rows[0].shift_days == 3
     assert mapping.actual_shift_working_days == 8
 
 
@@ -344,6 +347,40 @@ def test_sequential_named_delays_are_not_double_counted() -> None:
     assert by_name["Delay In Sharing Sign-Off"] == 5
     assert mapping.total_delayed_days == 8
     assert mapping.actual_shift_working_days == 8
+    assert mapping.unattributed_shift_days == 0
+
+
+def test_new_task_without_baseline_fills_remaining_go_live_shift() -> None:
+    mapping = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Design Sign-off",
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-08-25",
+                    assignments=_owners("Idealake"),
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Unplanned security review",
+                    scheduled_start="2026-08-03",
+                    scheduled_finish="2026-08-14",
+                    assignments=_owners("PNB MetLife"),
+                ),
+                _go_live(id=3, predecessor_ids=[1]),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    ).delay_mapping
+    by_name = {row.name: row for row in mapping.rows}
+    assert by_name["Design Sign-off"].task_type == "delay"
+    assert by_name["Design Sign-off"].shift_days == 3
+    assert by_name["Unplanned security review"].task_type == "additional"
+    assert by_name["Unplanned security review"].planned_finish is None
+    assert by_name["Unplanned security review"].shift_days == 5
+    assert mapping.total_delayed_days == mapping.actual_shift_working_days == 8
     assert mapping.unattributed_shift_days == 0
 
 
