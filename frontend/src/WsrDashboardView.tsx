@@ -1,5 +1,4 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
 import { generateWsr, retryJob } from "./api";
 import { FileUploader } from "./components/FileUploader";
 import { WsrGantt } from "./components/WsrGantt";
@@ -153,7 +152,6 @@ function InsightCards({
 
 export function WsrDashboardView() {
   const setPageMeta = useContext(ShellMetaContext);
-  const navigate = useNavigate();
   const [uploaded, setUploaded] = useState<FileRecord | null>(null);
   const [job, setJob] = useState<ProcessingResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -413,23 +411,7 @@ export function WsrDashboardView() {
             )}
           </Section>
 
-          <Section
-            n={3}
-            title="Phase-Wise Status"
-            action={
-              <button
-                type="button"
-                className="btn btn-outline delay-mapping-cta"
-                disabled={!report}
-                onClick={() => navigate("/delay-mapping")}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  table_view
-                </span>
-                Go-Live Delay Mapping
-              </button>
-            }
-          >
+          <Section n={3} title="Phase-Wise Status">
             {facts.phase_statuses?.length ? (
               <table className="phase-table">
                 <thead>

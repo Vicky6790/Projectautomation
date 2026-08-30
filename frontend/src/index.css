@@ -1266,17 +1266,6 @@ label select {
   gap: 16px;
 }
 
-.delay-mapping-cta {
-  flex-shrink: 0;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: 13px;
-}
-
-.delay-mapping-cta .material-symbols-outlined {
-  font-size: 18px;
-}
-
 .delay-page {
   max-width: 1600px;
   margin: 0 auto;
@@ -2362,7 +2351,6 @@ label select {
   html.wsr-printing .wsr-upload-card,
   html.wsr-printing .wsr-status-msg,
   html.wsr-printing .wsr-stages,
-  html.wsr-printing .delay-mapping-cta,
   html.wsr-printing .delay-head-actions,
   html.wsr-printing .delay-head .btn {
     display: none !important;
