@@ -98,6 +98,29 @@ export function listedItems(result: CompareMppResult): DelayMappingItem[] {
   return [...result.delayedTasks, ...result.additionalTasks];
 }
 
+export function emptyComparison(): CompareMppResult {
+  return {
+    delayedTasks: [],
+    additionalTasks: [],
+    unchangedTasks: [],
+    goLiveImpact: {
+      baselineGoLive: null,
+      currentGoLive: null,
+      totalShift: null,
+    },
+    summary: {
+      baselineGoLive: null,
+      currentGoLive: null,
+      goLiveShift: null,
+      delayedTaskCount: 0,
+      additionalTaskCount: 0,
+      holidays: null,
+      calendarNote: null,
+    },
+    source: "live",
+  };
+}
+
 export function contributingItems(result: CompareMppResult): DelayMappingItem[] {
   return listedItems(result)
     .filter((item) => item.goLiveImpact > 0)

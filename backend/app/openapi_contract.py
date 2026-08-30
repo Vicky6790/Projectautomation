@@ -21,6 +21,7 @@ FROZEN_PATHS = (
     "/api/v1/plan/requests/{handle}/approve",
     "/api/v1/plan/requests/{handle}/mpp",
     "/api/v1/wsr/uploads",
+    "/api/v1/wsr/delay-mapping",
     "/api/v1/wsr/jobs",
     "/api/v1/wsr/jobs/{job_id}",
     "/api/v1/wsr/jobs/{job_id}/retry",

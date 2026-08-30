@@ -519,15 +519,26 @@ def _phase_status(phase) -> PhaseStatus:
     )
 
 
+def delay_mapping_from_plans(
+    current: ProjectPlanData,
+    baseline: ProjectPlanData | None = None,
+):
+    as_of_d = date.fromisoformat(resolve_as_of(current))
+    phases = _phase_statuses(current)
+    go_live = _planned_go_live(current.tasks, as_of_d)
+    return _delay_mapping(current, as_of_d, phases, go_live, baseline_plan=baseline)
+
+
 def _delay_mapping(
     plan: ProjectPlanData,
     as_of: date,
     phases: list[PhaseStatus],
     go_live_date: date | None,
+    baseline_plan: ProjectPlanData | None = None,
 ):
     from app.wsr.delay_engine import build_delay_mapping
 
-    return build_delay_mapping(plan, as_of, phases, go_live_date)
+    return build_delay_mapping(plan, as_of, phases, go_live_date, baseline_plan=baseline_plan)
 
 
 def _week_bounds(as_of: date) -> tuple[date, date]:

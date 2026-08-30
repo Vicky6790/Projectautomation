@@ -5,7 +5,14 @@ from starlette.requests import Request
 from app import storage as storage_mod
 from app.errors import AppError
 from app.ingestion import validate_upload
-from app.models import FileRecord, ProcessingResponse, WsrEvidenceResponse, WsrItemDecision
+from app.models import (
+    DelayMappingCompareRequest,
+    DelayMappingSheet,
+    FileRecord,
+    ProcessingResponse,
+    WsrEvidenceResponse,
+    WsrItemDecision,
+)
 from app.mpp import read_mpp_bytes
 from app.orchestration.wsr import run_wsr_generation
 from app.reports import export_report
@@ -27,6 +34,21 @@ async def upload_wsr(file: UploadFile = File(...)) -> FileRecord:
         "wsr",
         plan_data=plan.model_dump(),
     )
+
+
+@router.post("/delay-mapping", response_model=DelayMappingSheet)
+def compare_delay_mapping(body: DelayMappingCompareRequest) -> DelayMappingSheet:
+    current_id = body.current_file_id.strip()
+    if not current_id:
+        raise AppError(400, "CURRENT_MPP_REQUIRED", "Insert a Current MPP to compare.")
+    current = storage_mod.store.get_plan(current_id)
+    baseline = None
+    baseline_id = (body.baseline_file_id or "").strip()
+    if baseline_id:
+        baseline = storage_mod.store.get_plan(baseline_id)
+    from app.wsr.facts import delay_mapping_from_plans
+
+    return delay_mapping_from_plans(current, baseline)
 
 
 @router.post("/requests/{handle}/generate", response_model=ProcessingResponse)

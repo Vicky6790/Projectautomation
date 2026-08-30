@@ -1,12 +1,17 @@
 import { useContext, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { downloadWsrReport, getWsrRequest } from "./api";
-import { compareMPP, contributingItems, fromWsrDelayMapping, listedItems } from "./delayMapping/service";
+import { compareDelayMapping } from "./api";
+import { FileUploader } from "./components/FileUploader";
+import {
+  contributingItems,
+  emptyComparison,
+  fromWsrDelayMapping,
+  listedItems,
+} from "./delayMapping/service";
 import { exportDelayMappingExcel, printDelayMappingSheet } from "./delayMapping/exportSheet";
 import type { CompareMppResult, DelayMappingItem, DelayTaskType } from "./delayMapping/types";
 import { ShellMetaContext } from "./shellMeta";
+import type { FileRecord } from "./types";
 import { shortDate, unavailable } from "./wsrFormat";
-import { asWsrReport, readWsrSession } from "./wsrSession";
 
 type SortKey = "taskName" | "taskType" | "shiftDays" | "owner";
 type DrawerState =
@@ -14,14 +19,13 @@ type DrawerState =
   | { kind: "goLive" }
   | null;
 
-const EMPTY_RESULT = compareMPP();
-
 export function DelayMappingView() {
   const setPageMeta = useContext(ShellMetaContext);
-  const session = readWsrSession();
-  const handle = session?.handle ?? null;
-  const [result, setResult] = useState<CompareMppResult>(EMPTY_RESULT);
-  const [loading, setLoading] = useState(Boolean(handle));
+  const [baselineFile, setBaselineFile] = useState<FileRecord | null>(null);
+  const [currentFile, setCurrentFile] = useState<FileRecord | null>(null);
+  const [result, setResult] = useState<CompareMppResult>(emptyComparison());
+  const [loading, setLoading] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<"All" | DelayTaskType>("All");
   const [ownerFilter, setOwnerFilter] = useState("All");
   const [phaseFilter, setPhaseFilter] = useState("All");
@@ -29,35 +33,35 @@ export function DelayMappingView() {
   const [sortKey, setSortKey] = useState<SortKey>("shiftDays");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
   const [drawer, setDrawer] = useState<DrawerState>(null);
-  const [pdfBusy, setPdfBusy] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!handle) {
-      setResult(compareMPP());
+    setPageMeta(
+      [baselineFile?.filename, currentFile?.filename].filter(Boolean).join(" → ") || "",
+    );
+    return () => setPageMeta("");
+  }, [baselineFile?.filename, currentFile?.filename, setPageMeta]);
+
+  useEffect(() => {
+    if (!currentFile) {
+      setResult(emptyComparison());
       setLoading(false);
+      setCompareError(null);
       return;
     }
     let cancelled = false;
-    getWsrRequest(handle)
-      .then((job) => {
+    setLoading(true);
+    compareDelayMapping(currentFile.id, baselineFile?.id)
+      .then((mapping) => {
         if (cancelled) {
           return;
         }
-        const report = asWsrReport(job.result ?? null);
-        if (job.status === "succeeded" && report?.facts?.delay_mapping) {
-          setResult(fromWsrDelayMapping(report.facts.delay_mapping));
-          const identity = [report.facts.project_name, report.facts.project_owner]
-            .filter(Boolean)
-            .join(" · ");
-          setPageMeta(identity);
-        } else {
-          setResult(compareMPP());
-        }
+        setResult(fromWsrDelayMapping(mapping));
+        setCompareError(null);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setResult(compareMPP());
+          setResult(emptyComparison());
+          setCompareError(error instanceof Error ? error.message : "Could not compare the MPP files.");
         }
       })
       .finally(() => {
@@ -68,7 +72,7 @@ export function DelayMappingView() {
     return () => {
       cancelled = true;
     };
-  }, [handle, setPageMeta]);
+  }, [baselineFile?.id, currentFile?.id]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -129,29 +133,8 @@ export function DelayMappingView() {
     setSortDir(key === "taskName" || key === "owner" || key === "taskType" ? "asc" : "desc");
   }
 
-  async function downloadPdf() {
-    setPdfError(null);
-    if (!handle || result.source !== "live") {
-      printDelayMappingSheet();
-      return;
-    }
-    setPdfBusy(true);
-    try {
-      const { blob, filename } = await downloadWsrReport(handle, "delay_mapping");
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error: unknown) {
-      setPdfError(error instanceof Error ? error.message : "PDF download failed");
-    } finally {
-      setPdfBusy(false);
-    }
-  }
-
   const shift = result.summary.goLiveShift;
+  const canExport = Boolean(currentFile);
 
   return (
     <section className="dms-page">
@@ -165,27 +148,54 @@ export function DelayMappingView() {
           <button type="button" className="btn btn-outline" onClick={() => setDrawer({ kind: "goLive" })}>
             Why did Go-Live move?
           </button>
-          <button type="button" className="btn btn-outline" onClick={() => exportDelayMappingExcel(result, rows)}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            disabled={!canExport}
+            onClick={() => exportDelayMappingExcel(result, rows)}
+          >
             Export Excel
           </button>
-          <button type="button" className="btn btn-outline" disabled={pdfBusy} onClick={() => void downloadPdf()}>
-            {pdfBusy ? "Preparing PDF…" : "Export PDF"}
+          <button type="button" className="btn btn-outline" disabled={!canExport} onClick={() => printDelayMappingSheet()}>
+            Export PDF
           </button>
-          <button type="button" className="btn btn-primary" onClick={() => printDelayMappingSheet()}>
+          <button type="button" className="btn btn-primary" disabled={!canExport} onClick={() => printDelayMappingSheet()}>
             Print
           </button>
         </div>
       </div>
 
-      {!loading && result.source === "sample" ? (
+      <div className="dms-uploads dms-no-print">
+        <MppSlot
+          title="Baseline MPP"
+          hint="Original approved plan"
+          file={baselineFile}
+          onUploaded={setBaselineFile}
+          onClear={() => setBaselineFile(null)}
+          onError={setCompareError}
+        />
+        <MppSlot
+          title="Current MPP"
+          hint="Latest project plan"
+          file={currentFile}
+          onUploaded={setCurrentFile}
+          onClear={() => setCurrentFile(null)}
+          onError={setCompareError}
+        />
+      </div>
+      {!currentFile ? (
         <p className="dms-sample dms-no-print" role="status">
-          Sample comparison for the sheet layout.{" "}
-          <Link to="/wsr">Generate a WSR from the current MPP</Link> to replace this with Baseline vs Current
-          from the plan. Missing MPP values stay Unavailable.
+          Insert the Current MPP to map Delay and Additional tasks. Insert a Baseline MPP to compare two
+          files; otherwise Baseline Finish inside the Current MPP is used. Missing values stay Unavailable.
+        </p>
+      ) : !baselineFile ? (
+        <p className="dms-note dms-no-print">
+          Comparing against Baseline Finish stored in the Current MPP. Insert a Baseline MPP to compare two
+          versions.
         </p>
       ) : null}
-      {pdfError ? <p className="error">{pdfError}</p> : null}
-      {loading ? <p className="dms-loading dms-no-print">Loading delay mapping…</p> : null}
+      {compareError ? <p className="error">{compareError}</p> : null}
+      {loading ? <p className="dms-loading dms-no-print">Comparing Baseline vs Current…</p> : null}
 
       <div className="dms-kpis">
         <Kpi label="Baseline Go-Live" value={shortDate(result.summary.baselineGoLive)} />
@@ -302,6 +312,52 @@ export function DelayMappingView() {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function MppSlot({
+  title,
+  hint,
+  file,
+  onUploaded,
+  onClear,
+  onError,
+}: {
+  title: string;
+  hint: string;
+  file: FileRecord | null;
+  onUploaded: (file: FileRecord) => void;
+  onClear: () => void;
+  onError: (message: string) => void;
+}) {
+  return (
+    <article className="dms-upload-slot">
+      <p className="dms-kicker">{title}</p>
+      {file ? (
+        <div className="dms-file">
+          <span className="material-symbols-outlined" aria-hidden="true">
+            draft
+          </span>
+          <div>
+            <strong>{file.filename}</strong>
+            <em>{hint}</em>
+          </div>
+          <button type="button" className="chip-clear" aria-label={`Remove ${title}`} onClick={onClear}>
+            ×
+          </button>
+        </div>
+      ) : (
+        <FileUploader
+          variant="card"
+          accept=".mpp,application/vnd.ms-project"
+          label={`Insert ${title}`}
+          hint="Microsoft Project (.mpp)"
+          endpoint="/api/v1/wsr/uploads"
+          onUploaded={onUploaded}
+          onError={onError}
+        />
+      )}
+    </article>
   );
 }
 

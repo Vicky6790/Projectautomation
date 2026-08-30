@@ -405,6 +405,11 @@ class WsrItemDecision(BaseModel):
     content: str | None = None
 
 
+class DelayMappingCompareRequest(BaseModel):
+    current_file_id: str = Field(min_length=1)
+    baseline_file_id: str | None = None
+
+
 class WsrEvidenceResponse(BaseModel):
     item_id: str
     content: str

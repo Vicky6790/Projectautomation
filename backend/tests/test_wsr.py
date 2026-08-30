@@ -337,3 +337,83 @@ def test_evidence_is_isolated_to_the_request(client: TestClient, monkeypatch) ->
         json={"decision": "kept"},
     )
     assert patched.status_code == 404
+
+
+def test_delay_mapping_compares_baseline_and_current_mpp(client: TestClient, monkeypatch) -> None:
+    as_of = date.fromisoformat("2026-08-22")
+    baseline = _plan(status_date="2026-08-22")
+    current = ProjectPlanData(
+        name="Demo",
+        owner="Alex PM",
+        status_date="2026-08-22",
+        has_actuals=True,
+        planned_only=False,
+        tasks=[
+            PlanTaskData(
+                id=1,
+                name="Kickoff",
+                scheduled_finish=(as_of - timedelta(days=10)).isoformat(),
+                baseline_finish=(as_of - timedelta(days=10)).isoformat(),
+                percent_complete=100,
+                actual_finish="2026-08-10",
+            ),
+            PlanTaskData(
+                id=2,
+                name="Build",
+                scheduled_finish=(as_of + timedelta(days=3)).isoformat(),
+                baseline_finish=(as_of + timedelta(days=3)).isoformat(),
+            ),
+            PlanTaskData(
+                id=4,
+                name="Unplanned review round",
+                scheduled_start="2026-08-24",
+                scheduled_finish="2026-08-28",
+                assignments=[],
+            ),
+            PlanTaskData(
+                id=3,
+                name="Go Live",
+                is_milestone=True,
+                scheduled_finish="2026-09-22",
+                baseline_finish="2026-09-11",
+            ),
+        ],
+    )
+    queued = [baseline, current]
+    monkeypatch.setattr(
+        "app.routers.wsr.read_mpp_bytes",
+        lambda _content, _name: queued.pop(0),
+    )
+    baseline_id = client.post(
+        "/api/v1/wsr/uploads",
+        files={"file": ("baseline.mpp", mpp_stub_bytes(), "application/vnd.ms-project")},
+    ).json()["id"]
+    current_id = client.post(
+        "/api/v1/wsr/uploads",
+        files={"file": ("current.mpp", mpp_stub_bytes(), "application/vnd.ms-project")},
+    ).json()["id"]
+    response = client.post(
+        "/api/v1/wsr/delay-mapping",
+        json={"baseline_file_id": baseline_id, "current_file_id": current_id},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["baseline_go_live"] == "2026-09-11"
+    assert body["current_go_live"] == "2026-09-22"
+    names = [row["name"] for row in body["rows"]]
+    assert "Unplanned review round" in names
+    assert {row["task_type"] for row in body["rows"] if row["name"] == "Unplanned review round"} == {
+        "additional"
+    }
+
+
+def test_delay_mapping_current_mpp_without_baseline_file(client: TestClient, monkeypatch) -> None:
+    handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    response = client.post("/api/v1/wsr/delay-mapping", json={"current_file_id": handle})
+    assert response.status_code == 200, response.text
+    assert response.json()["current_go_live"] == "2026-09-11"
+
+
+def test_delay_mapping_compare_requires_current_mpp(client: TestClient) -> None:
+    response = client.post("/api/v1/wsr/delay-mapping", json={"current_file_id": ""})
+    assert response.status_code in {400, 422}

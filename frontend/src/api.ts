@@ -1,4 +1,5 @@
 import type {
+  DelayMappingSheet,
   FileRecord,
   HealthResponse,
   Module,
@@ -220,6 +221,20 @@ export async function downloadPlanMpp(handle: string): Promise<Blob> {
 export function generateWsr(handle: string): Promise<ProcessingResponse> {
   return request<ProcessingResponse>(`/api/v1/wsr/requests/${handle}/generate`, {
     method: "POST",
+  });
+}
+
+export function compareDelayMapping(
+  currentFileId: string,
+  baselineFileId?: string | null,
+): Promise<DelayMappingSheet> {
+  return request(`/api/v1/wsr/delay-mapping`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      current_file_id: currentFileId,
+      baseline_file_id: baselineFileId || null,
+    }),
   });
 }
 

@@ -120,6 +120,515 @@
         "title": "CreateOperatorRequest",
         "type": "object"
       },
+      "DelayAttributionBucket": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "shift_days": {
+            "title": "Shift Days",
+            "type": "integer"
+          },
+          "task_count": {
+            "default": 0,
+            "title": "Task Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "shift_days"
+        ],
+        "title": "DelayAttributionBucket",
+        "type": "object"
+      },
+      "DelayMappingCompareRequest": {
+        "properties": {
+          "baseline_file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline File Id"
+          },
+          "current_file_id": {
+            "minLength": 1,
+            "title": "Current File Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_file_id"
+        ],
+        "title": "DelayMappingCompareRequest",
+        "type": "object"
+      },
+      "DelayMappingRow": {
+        "description": "One attributed DELAY or ADDITIONAL leaf on the Go-Live path. Causes are not invented.",
+        "properties": {
+          "baseline_task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Task Id"
+          },
+          "calculation_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Source"
+          },
+          "current_task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Task Id"
+          },
+          "delay_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delay Days"
+          },
+          "go_live_impact": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Go Live Impact"
+          },
+          "go_live_path_impact": {
+            "default": false,
+            "title": "Go Live Path Impact",
+            "type": "boolean"
+          },
+          "impacted_milestones": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Impacted Milestones",
+            "type": "array"
+          },
+          "impacted_successors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Impacted Successors",
+            "type": "array"
+          },
+          "kind": {
+            "const": "task",
+            "default": "task",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mitigation_plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mitigation Plan"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "outline_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outline Number"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "owner_class": {
+            "default": "unknown",
+            "enum": [
+              "internal",
+              "client",
+              "shared",
+              "unknown"
+            ],
+            "title": "Owner Class",
+            "type": "string"
+          },
+          "parent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Name"
+          },
+          "planned_finish": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Finish"
+          },
+          "planned_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Start"
+          },
+          "predecessor_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Predecessor Ids",
+            "type": "array"
+          },
+          "primary_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Reason"
+          },
+          "revised_finish": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revised Finish"
+          },
+          "revised_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revised Start"
+          },
+          "shift_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Days"
+          },
+          "successor_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Successor Ids",
+            "type": "array"
+          },
+          "task_type": {
+            "enum": [
+              "delay",
+              "additional"
+            ],
+            "title": "Task Type",
+            "type": "string"
+          },
+          "wbs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs"
+          }
+        },
+        "required": [
+          "name",
+          "task_type"
+        ],
+        "title": "DelayMappingRow",
+        "type": "object"
+      },
+      "DelayMappingSheet": {
+        "properties": {
+          "actual_shift_working_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Shift Working Days"
+          },
+          "additional_shift_days": {
+            "default": 0,
+            "title": "Additional Shift Days",
+            "type": "integer"
+          },
+          "attributed_shift_days": {
+            "default": 0,
+            "title": "Attributed Shift Days",
+            "type": "integer"
+          },
+          "baseline_go_live": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Go Live"
+          },
+          "calendar_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "project",
+                  "weekdays_fallback"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calendar Source"
+          },
+          "current_go_live": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Go Live"
+          },
+          "delay_shift_days": {
+            "default": 0,
+            "title": "Delay Shift Days",
+            "type": "integer"
+          },
+          "delayed_task_count": {
+            "default": 0,
+            "title": "Delayed Task Count",
+            "type": "integer"
+          },
+          "gross_working_day_shift": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gross Working Day Shift"
+          },
+          "holidays": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holidays"
+          },
+          "matching_requires_validation": {
+            "default": false,
+            "title": "Matching Requires Validation",
+            "type": "boolean"
+          },
+          "net_working_day_shift": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Working Day Shift"
+          },
+          "owner_attribution": {
+            "items": {
+              "$ref": "#/components/schemas/DelayAttributionBucket"
+            },
+            "title": "Owner Attribution",
+            "type": "array"
+          },
+          "phase_attribution": {
+            "items": {
+              "$ref": "#/components/schemas/DelayAttributionBucket"
+            },
+            "title": "Phase Attribution",
+            "type": "array"
+          },
+          "reconciliation_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reconciled",
+                  "requires_validation",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciliation Status"
+          },
+          "reconciliation_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciliation Warning"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DelayMappingRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "shift_working_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Working Days"
+          },
+          "total_delayed_days": {
+            "default": 0,
+            "title": "Total Delayed Days",
+            "type": "integer"
+          },
+          "type_attribution": {
+            "items": {
+              "$ref": "#/components/schemas/DelayAttributionBucket"
+            },
+            "title": "Type Attribution",
+            "type": "array"
+          },
+          "unattributed_shift_days": {
+            "default": 0,
+            "title": "Unattributed Shift Days",
+            "type": "integer"
+          },
+          "unattributed_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "explained",
+                  "requires_pm_validation"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unattributed Status"
+          }
+        },
+        "title": "DelayMappingSheet",
+        "type": "object"
+      },
       "EvidenceReference": {
         "properties": {
           "date": {
@@ -2282,6 +2791,47 @@
         "summary": "Upload Sow",
         "tags": [
           "sow"
+        ]
+      }
+    },
+    "/api/v1/wsr/delay-mapping": {
+      "post": {
+        "operationId": "compare_delay_mapping_api_v1_wsr_delay_mapping_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelayMappingCompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelayMappingSheet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare Delay Mapping",
+        "tags": [
+          "wsr"
         ]
       }
     },
