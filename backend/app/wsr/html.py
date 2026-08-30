@@ -63,11 +63,10 @@ def render_wsr_html(handle: str, payload: StatusReport) -> str:
             _section(1, "Executive Summary", _overview(facts)),
             _section(2, "Project Timeline", _timeline(facts)),
             _section(3, "Phase-Wise Status", _phases(facts)),
-            _section(4, "Go-Live Delay Mapping", _delay_mapping(facts, payload.as_of_date)),
-            _section(5, "Progress of current week", _progress(facts)),
-            _section(6, "Upcoming Milestones Of Next Week", _milestones(facts, payload.as_of_date)),
+            _section(4, "Progress of current week", _progress(facts)),
+            _section(5, "Upcoming Milestones Of Next Week", _milestones(facts, payload.as_of_date)),
             *[
-                _section(index + 7, label, _insights(getattr(payload, key)))
+                _section(index + 6, label, _insights(getattr(payload, key)))
                 for index, (key, label) in enumerate(_AI_SECTIONS)
             ],
         ]

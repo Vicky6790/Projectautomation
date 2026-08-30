@@ -105,8 +105,9 @@ export function DelayMappingView() {
           </div>
           <h1>Go-Live Delay Mapping</h1>
           <p>
-            Delay is Finish versus Baseline Finish. Tasks with no Baseline Finish were added after
-            the plan was baselined and are mapped as Additional. Dates are taken from the MPP only.
+            Only tasks that move the Go-Live date are listed. Delay is Finish versus Baseline
+            Finish. Tasks with no Baseline Finish are Additional. Total Count matches Actual
+            Shift in Working Days when those tasks cover the shift.
           </p>
         </div>
         <div className="delay-head-actions">

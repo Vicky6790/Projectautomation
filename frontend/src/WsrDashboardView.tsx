@@ -1,7 +1,6 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { generateWsr, retryJob } from "./api";
-import { DelayMappingPanel } from "./components/DelayMappingPanel";
 import { FileUploader } from "./components/FileUploader";
 import { WsrGantt } from "./components/WsrGantt";
 import { WsrProgressRing } from "./components/WsrProgressRing";
@@ -496,29 +495,8 @@ export function WsrDashboardView() {
             )}
           </Section>
 
-          <Section
-            n={4}
-            title="Go-Live Delay Mapping"
-            hint="Delay is Finish versus Baseline Finish. Tasks with no Baseline Finish are Additional."
-            action={
-              <button
-                type="button"
-                className="btn btn-outline delay-mapping-cta"
-                disabled={!report}
-                onClick={() => navigate("/wsr/delay-mapping")}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  open_in_new
-                </span>
-                Open full sheet
-              </button>
-            }
-          >
-            <DelayMappingPanel mapping={facts.delay_mapping ?? {}} asOf={facts.as_of_date} />
-          </Section>
-
           <div className="wsr-paired">
-            <Section n={5} title="Progress of current week">
+            <Section n={4} title="Progress of current week">
               {facts.progress_to_date?.length ? (
                 <table className="milestone-table">
                   <thead>
@@ -546,7 +524,7 @@ export function WsrDashboardView() {
             </Section>
 
             <Section
-              n={6}
+              n={5}
               title="Upcoming Milestones Of Next Week"
               hint="Incomplete work overlapping the calendar week after the as-of week."
             >
@@ -583,7 +561,7 @@ export function WsrDashboardView() {
             </Section>
           </div>
 
-          <Section n={7} title="Risks & Focus Areas">
+          <Section n={6} title="Risks & Focus Areas">
             <InsightCards
               items={visibleInsights(report.risks)}
               tone="risk"
