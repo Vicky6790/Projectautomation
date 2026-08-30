@@ -142,7 +142,7 @@ export function DelayMappingView() {
         <div>
           <p className="dms-kicker">Delay Mapping</p>
           <h1>DELAY MAPPING</h1>
-          <p className="dms-sub">Baseline vs Current Schedule Variance</p>
+          <p className="dms-sub">Tasks that drive the Go-Live delay</p>
         </div>
         <div className="dms-actions dms-no-print">
           <button type="button" className="btn btn-outline" onClick={() => setDrawer({ kind: "goLive" })}>
@@ -185,7 +185,7 @@ export function DelayMappingView() {
       </div>
       {!currentFile ? (
         <p className="dms-sample dms-no-print" role="status">
-          Insert the Current MPP to map Delay and Additional tasks. Insert a Baseline MPP to compare two
+          Insert the Current MPP to map only the tasks that drive the Go-Live delay. Insert a Baseline MPP to compare two
           files; otherwise Baseline Finish inside the Current MPP is used. Missing values stay Unavailable.
         </p>
       ) : !baselineFile ? (
@@ -285,7 +285,9 @@ export function DelayMappingView() {
               ) : (
                 <tr>
                   <td colSpan={4} className="dms-empty">
-                    No Delay or Additional tasks match the current filters.
+                    {allRows.length === 0
+                      ? "No driving Delay or Additional tasks caused this Go-Live shift."
+                      : "No driving Delay or Additional tasks match the current filters."}
                   </td>
                 </tr>
               )}

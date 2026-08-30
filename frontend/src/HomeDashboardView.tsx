@@ -26,8 +26,8 @@ const STEPS = [
     to: "/delay-mapping",
     icon: "table_view",
     title: "Delay Mapping",
-    hint: "Baseline vs current variance",
-    detail: "See delayed work, newly added tasks, and what actually moved Go-Live.",
+    hint: "What actually moved Go-Live",
+    detail: "Compare tasks, dates, and dependencies, then list only the driving Delay and Additional work.",
   },
   {
     to: "/retrospective",

@@ -103,7 +103,7 @@ export function DelayMappingPanel({
             </table>
           </div>
         ) : (
-          <p className="delay-empty-rows">No Delay or Additional tasks from Baseline Finish versus Finish</p>
+          <p className="delay-empty-rows">No driving Delay or Additional tasks from dates and dependencies</p>
         )}
       </div>
     </div>

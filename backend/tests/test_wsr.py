@@ -366,8 +366,9 @@ def test_delay_mapping_compares_baseline_and_current_mpp(client: TestClient, mon
             PlanTaskData(
                 id=4,
                 name="Unplanned review round",
-                scheduled_start="2026-08-24",
-                scheduled_finish="2026-08-28",
+                scheduled_start="2026-09-14",
+                scheduled_finish="2026-09-18",
+                predecessor_ids=[2],
                 assignments=[],
             ),
             PlanTaskData(
@@ -376,6 +377,7 @@ def test_delay_mapping_compares_baseline_and_current_mpp(client: TestClient, mon
                 is_milestone=True,
                 scheduled_finish="2026-09-22",
                 baseline_finish="2026-09-11",
+                predecessor_ids=[4],
             ),
         ],
     )
