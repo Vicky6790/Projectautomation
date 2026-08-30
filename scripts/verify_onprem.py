@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from client_session import DEFAULT_BASE, ensure_session
 
-PAGES = ("/sow", "/plan", "/wsr", "/retrospective")
+PAGES = ("/sow", "/plan", "/wsr", "/delay-mapping", "/retrospective")
 
 
 def _port_closed(port: int) -> bool:

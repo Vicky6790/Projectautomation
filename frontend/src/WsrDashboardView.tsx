@@ -421,7 +421,7 @@ export function WsrDashboardView() {
                 type="button"
                 className="btn btn-outline delay-mapping-cta"
                 disabled={!report}
-                onClick={() => navigate("/wsr/delay-mapping")}
+                onClick={() => navigate("/delay-mapping")}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   table_view

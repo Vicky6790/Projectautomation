@@ -2434,3 +2434,402 @@ label select {
     grid-template-columns: 1fr;
   }
 }
+
+.dms-page {
+  max-width: 1280px;
+}
+
+.dms-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.dms-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.dms-head h1,
+.dms-drawer h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #0f172a;
+}
+
+.dms-sub {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dms-sample,
+.dms-note,
+.dms-loading {
+  margin: 0 0 16px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dms-sample {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+}
+
+.dms-sample a {
+  color: #4338ca;
+  font-weight: 600;
+}
+
+.dms-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.dms-kpi {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  padding: 14px 16px;
+}
+
+.dms-kpi p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.dms-kpi strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.dms-kpi-delay {
+  border-left: 3px solid #dc2626;
+}
+
+.dms-kpi-additional {
+  border-left: 3px solid #ea580c;
+}
+
+.dms-sheet {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.dms-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: end;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dms-toolbar label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.dms-toolbar select,
+.dms-toolbar input {
+  min-width: 140px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+  font-weight: 500;
+}
+
+.dms-search {
+  flex: 1;
+  min-width: 200px;
+}
+
+.dms-search input {
+  width: 100%;
+}
+
+.dms-table-wrap {
+  overflow-x: auto;
+}
+
+.dms-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.dms-table th,
+.dms-table td {
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap;
+}
+
+.dms-table th {
+  background: #f8fafc;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.dms-table th button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dms-table th button.is-active {
+  color: #0f172a;
+}
+
+.dms-table tbody tr {
+  cursor: pointer;
+}
+
+.dms-table tbody tr:hover td {
+  background: #f8fafc;
+}
+
+.dms-row-delay td:first-child {
+  box-shadow: inset 3px 0 0 #dc2626;
+}
+
+.dms-row-additional td:first-child {
+  box-shadow: inset 3px 0 0 #ea580c;
+}
+
+.dms-badge {
+  display: inline-flex;
+  align-items: center;
+  min-width: 4.5rem;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dms-badge-delay {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.dms-badge-additional {
+  color: #c2410c;
+  background: #fff7ed;
+}
+
+.dms-empty {
+  color: #64748b;
+  font-weight: 500;
+  cursor: default;
+}
+
+.dms-drawer-root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.dms-drawer-mask {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.28);
+  cursor: pointer;
+}
+
+.dms-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(420px, 100%);
+  height: 100%;
+  background: #fff;
+  border-left: 1px solid #e2e8f0;
+  overflow: auto;
+  padding: 24px;
+}
+
+.dms-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.dms-drawer h2 {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.dms-icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.dms-facts {
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.dms-facts dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.dms-facts dd {
+  margin: 4px 0 0;
+  color: #0f172a;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.dms-drawer-title {
+  margin: 24px 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.dms-contrib {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.dms-contrib button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.dms-contrib button:hover {
+  background: #f8fafc;
+}
+
+.dms-contrib button span:nth-child(2) {
+  flex: 1;
+}
+
+.dms-contrib strong {
+  font-size: 13px;
+  color: #334155;
+}
+
+.dms-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dms-dot-delay {
+  background: #dc2626;
+}
+
+.dms-dot-additional {
+  background: #ea580c;
+}
+
+.dms-total {
+  margin: 20px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .dms-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media print {
+  html.dms-printing {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  html.dms-printing .sidebar,
+  html.dms-printing .shell-top,
+  html.dms-printing .dms-no-print {
+    display: none !important;
+  }
+
+  html.dms-printing .shell,
+  html.dms-printing .shell-main,
+  html.dms-printing .shell-content,
+  html.dms-printing .dms-page {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+}

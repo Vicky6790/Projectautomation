@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from client_session import ensure_session
 
 BASE = "http://localhost:8080"
-PAGES = ("/sow", "/plan", "/wsr", "/retrospective")
+PAGES = ("/sow", "/plan", "/wsr", "/delay-mapping", "/retrospective")
 
 
 def _port_closed(port: int) -> bool:

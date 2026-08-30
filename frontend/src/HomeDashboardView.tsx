@@ -20,7 +20,14 @@ const STEPS = [
     icon: "insights",
     title: "WSR & Insights",
     hint: "Report from the live plan",
-    detail: "Upload the current MPP to produce the weekly status, Go-Live shift, and Delay Mapping sheet.",
+    detail: "Upload the current MPP to produce the weekly status and Go-Live shift.",
+  },
+  {
+    to: "/delay-mapping",
+    icon: "table_view",
+    title: "Delay Mapping",
+    hint: "Baseline vs current variance",
+    detail: "See delayed work, newly added tasks, and what actually moved Go-Live.",
   },
   {
     to: "/retrospective",

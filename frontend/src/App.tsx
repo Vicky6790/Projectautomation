@@ -1,7 +1,7 @@
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { AUTH_LOST_EVENT, getCurrentOperator, getHealth, signOut } from "./api";
-import type { HealthResponse, Module, Operator } from "./types";
+import type { HealthResponse, Operator } from "./types";
 import { DelayMappingView } from "./DelayMappingView";
 import { HomeDashboardView } from "./HomeDashboardView";
 import { LoginView } from "./LoginView";
@@ -13,17 +13,19 @@ import { WsrDashboardView } from "./WsrDashboardView";
 import { ShellMetaContext } from "./shellMeta";
 import { requestWsrReset } from "./wsrSession";
 
-const MODULES: { id: Module; label: string; icon: string }[] = [
-  { id: "sow", label: "SOW Analyzer", icon: "analytics" },
-  { id: "plan", label: "Project Plan Builder", icon: "format_list_bulleted" },
-  { id: "wsr", label: "WSR & Insights", icon: "insights" },
-  { id: "retrospective", label: "Retrospective", icon: "history" },
+const MODULES: { path: string; label: string; icon: string; resetWsr?: boolean }[] = [
+  { path: "/sow", label: "SOW Analyzer", icon: "analytics" },
+  { path: "/plan", label: "Project Plan Builder", icon: "format_list_bulleted" },
+  { path: "/wsr", label: "WSR & Insights", icon: "insights", resetWsr: true },
+  { path: "/delay-mapping", label: "Delay Mapping", icon: "table_view" },
+  { path: "/retrospective", label: "Retrospective", icon: "history" },
 ];
 
 const TITLES: Record<string, string> = {
   "/": "Dashboard",
   "/wsr": "Generate WSR",
-  "/wsr/delay-mapping": "Go-Live Delay Mapping",
+  "/delay-mapping": "Delay Mapping",
+  "/wsr/delay-mapping": "Delay Mapping",
   "/sow": "SOW Analyzer",
   "/plan": "Project Plan Builder",
   "/retrospective": "Retrospective",
@@ -111,18 +113,19 @@ export default function App() {
           <nav>
             {MODULES.map((module) => (
               <NavLink
-                key={module.id}
-                to={`/${module.id}`}
+                key={module.path}
+                to={module.path}
+                end={module.path === "/wsr"}
                 className={({ isActive }) => (isActive ? "nav-item active" : "nav-item")}
                 onClick={() => {
-                  if (module.id === "wsr") {
+                  if (module.resetWsr) {
                     requestWsrReset();
                   }
                 }}
               >
                 {({ isActive }) => (
                   <>
-                    <Glyph name={module.icon} filled={isActive && module.id === "wsr"} />
+                    <Glyph name={module.icon} filled={isActive && module.path === "/wsr"} />
                     {module.label}
                   </>
                 )}
@@ -183,7 +186,8 @@ export default function App() {
               <Route path="/sow" element={<SowAnalyzerView />} />
               <Route path="/plan" element={<PlanGeneratorView />} />
               <Route path="/wsr" element={<WsrDashboardView />} />
-              <Route path="/wsr/delay-mapping" element={<DelayMappingView />} />
+              <Route path="/delay-mapping" element={<DelayMappingView />} />
+              <Route path="/wsr/delay-mapping" element={<Navigate to="/delay-mapping" replace />} />
               <Route path="/retrospective" element={<RetrospectiveView />} />
               <Route
                 path="/operators"
