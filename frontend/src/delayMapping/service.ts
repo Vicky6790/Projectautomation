@@ -95,7 +95,13 @@ export function fromWsrDelayMapping(mapping: DelayMappingSheet): CompareMppResul
 }
 
 export function listedItems(result: CompareMppResult): DelayMappingItem[] {
-  return [...result.delayedTasks, ...result.additionalTasks];
+  return [...result.delayedTasks, ...result.additionalTasks].sort((left, right) => {
+    const finish = (left.currentFinish || "").localeCompare(right.currentFinish || "");
+    if (finish !== 0) {
+      return finish;
+    }
+    return left.taskName.localeCompare(right.taskName);
+  });
 }
 
 export function emptyComparison(): CompareMppResult {

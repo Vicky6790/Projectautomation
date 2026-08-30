@@ -35,17 +35,18 @@ def build_delay_mapping(
     go_live_date: date | None,  # kept for the facts wrapper; header uses milestone finish dates
     baseline_plan: ProjectPlanData | None = None,
 ) -> DelayMappingSheet:
-    """Map only the tasks that actually drive the Go-Live delay.
+    """Map the tasks whose planned vs shifted dates actually move Go-Live.
 
     Compare Baseline Finish vs Current Finish and walk predecessor links:
     - Delay: Current Finish after Baseline Finish.
     - Additional: task has no Baseline Finish (new work).
-    - A task is listed only if it sits on the driving predecessor chain to
-      Go-Live (latest-finish predecessor at each step). Parallel delayed work
-      with float is omitted.
-    - When Go-Live has no predecessors, only the latest-finishing Delay or
-      Additional task after Baseline Go-Live is treated as the date driver.
-    Days are unique working days, never invented, never double-counted.
+    - If Go-Live has predecessors, every Delay/Additional ancestor is listed,
+      including the first delayed task even when it finished before Baseline
+      Go-Live. Parallel work that cannot reach Go-Live is omitted.
+    - If Go-Live has no predecessors, every Delay is listed, plus Additional
+      work that finishes after Baseline Go-Live.
+    Days are unique working days, attributed earliest delay first, capped at
+    the Go-Live shift so overlapping slips are not summed.
     """
 
     from app.wsr.facts import (
@@ -148,17 +149,12 @@ def build_delay_mapping(
             impact = _impact_from_dates(
                 task, baseline_finish, holidays, parse_date, window=window
             )
-            if task_type == "delay":
-                if window:
-                    impact &= window
-                if not impact:
-                    continue
-            elif not impact:
+            if not impact:
                 continue
             candidates.append((task, task_type, impact, matched, source))
 
         driving_ids = _driving_cause_ids(
-            go_live_task, by_id, current_plan.tasks, parse_date
+            go_live_task, by_id, current_plan.tasks
         )
         if driving_ids:
             candidates = [
@@ -172,7 +168,7 @@ def build_delay_mapping(
                 )
             ]
         else:
-            date_ids = _date_driving_ids(
+            date_ids = _date_impacting_ids(
                 candidates, baseline_go_live, parse_date
             )
             candidates = [item for item in candidates if item[0].id in date_ids]
@@ -187,10 +183,9 @@ def build_delay_mapping(
         go_live_task=go_live_task,
         parse_date=parse_date,
     )
-    phase_order = {phase.name: index for index, phase in enumerate(phases)}
     rows.sort(
         key=lambda row: (
-            phase_order.get(row.parent_name or "", len(phase_order)),
+            row.revised_finish or row.planned_finish or "9999-12-31",
             task_order.get(row.current_task_id or -1, 10**9),
         )
     )
@@ -414,27 +409,13 @@ def _expanded_predecessors(
     return unique
 
 
-def _driving_predecessors(
-    task: PlanTaskData,
-    by_id: dict[int, PlanTaskData],
-    tasks: list[PlanTaskData],
-    parse_date,
-) -> list[PlanTaskData]:
-    preds = _expanded_predecessors(task, by_id, tasks)
-    dated = [(pred, _task_finish(pred, parse_date)) for pred in preds]
-    dated = [(pred, finish) for pred, finish in dated if finish is not None]
-    if not dated:
-        return []
-    latest = max(finish for _, finish in dated)
-    return [pred for pred, finish in dated if finish == latest]
-
-
 def _driving_cause_ids(
     go_live_task: PlanTaskData | None,
     by_id: dict[int, PlanTaskData],
     tasks: list[PlanTaskData],
-    parse_date,
 ) -> set[int]:
+    """Every leaf that can reach Go-Live through predecessor links."""
+
     if go_live_task is None:
         return set()
     if not _expanded_predecessors(go_live_task, by_id, tasks):
@@ -447,31 +428,27 @@ def _driving_cause_ids(
         if current.id in seen:
             continue
         seen.add(current.id)
-        for pred in _driving_predecessors(current, by_id, tasks, parse_date):
+        for pred in _expanded_predecessors(current, by_id, tasks):
             cause_ids.add(pred.id)
             queue.append(pred)
     return cause_ids
 
 
-def _date_driving_ids(
+def _date_impacting_ids(
     candidates: list[tuple[PlanTaskData, str, set[date], PlanTaskData | None, str]],
     baseline_go_live: date | None,
     parse_date,
 ) -> set[int]:
-    """When the network is missing, the latest Finish after Baseline Go-Live is the driver."""
+    """When the network is missing, list every Delay and later Additional work."""
 
-    ranked: list[tuple[date, int]] = []
-    for task, _task_type, _impact, _matched, _source in candidates:
-        if not _finishes_after_baseline_go_live(task, baseline_go_live, parse_date):
+    impacting: set[int] = set()
+    for task, task_type, _impact, _matched, _source in candidates:
+        if task_type == "delay":
+            impacting.add(task.id)
             continue
-        finish = _task_finish(task, parse_date)
-        if finish is None:
-            continue
-        ranked.append((finish, task.id))
-    if not ranked:
-        return set()
-    latest = max(finish for finish, _task_id in ranked)
-    return {task_id for finish, task_id in ranked if finish == latest}
+        if _finishes_after_baseline_go_live(task, baseline_go_live, parse_date):
+            impacting.add(task.id)
+    return impacting
 
 
 def _impact_from_dates(
@@ -566,10 +543,11 @@ def _attribute_unique_days(
 ) -> list[DelayMappingRow]:
     if net <= 0 or not candidates:
         return []
+    claimed: set[date] = set()
     delay_rows, remaining = _take_unique_days(
         [item for item in candidates if item[1] == "delay"],
         remaining=net,
-        claimed=set(),
+        claimed=claimed,
         tasks=tasks,
         phases=phases,
         successors=successors,
@@ -580,7 +558,7 @@ def _attribute_unique_days(
     additional_rows, _remaining = _take_unique_days(
         [item for item in candidates if item[1] == "additional"],
         remaining=remaining,
-        claimed=set(),
+        claimed=claimed,
         tasks=tasks,
         phases=phases,
         successors=successors,
@@ -606,9 +584,8 @@ def _take_unique_days(
     ordered = sorted(
         candidates,
         key=lambda item: (
-            len(item[2]),
+            _task_finish(item[0], parse_date) or date.max,
             min(item[2]) if item[2] else date.max,
-            item[0].wbs or "",
             item[0].id,
         ),
     )

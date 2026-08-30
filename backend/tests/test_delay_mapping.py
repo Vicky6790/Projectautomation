@@ -525,8 +525,11 @@ def test_multiple_phases_group_rows() -> None:
         "2026-08-22",
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
-    assert [row.name for row in mapping.rows] == ["Delay In Completion Of HTMLs"]
-    assert [row.parent_name for row in mapping.rows] == ["HTML Phase"]
+    assert [row.name for row in mapping.rows] == [
+        "Delay In Presenting Mobile Wireframes",
+        "Delay In Completion Of HTMLs",
+    ]
+    assert [row.parent_name for row in mapping.rows] == ["UX Phase", "HTML Phase"]
 
 
 def test_multiple_named_delays_in_one_phase() -> None:
@@ -556,8 +559,12 @@ def test_multiple_named_delays_in_one_phase() -> None:
         "2026-08-22",
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
-    assert [row.name for row in mapping.rows] == ["Delay In Sharing Sign-Off"]
-    assert mapping.rows[0].parent_name == "Design Phase"
+    assert [row.name for row in mapping.rows] == [
+        "Delay In Completion Of Designs",
+        "Delay In Sharing Sign-Off",
+    ]
+    assert [row.parent_name for row in mapping.rows] == ["Design Phase", "Design Phase"]
+    assert mapping.total_delayed_days == 8
     assert mapping.unattributed_shift_days == 0
 
 
@@ -586,10 +593,11 @@ def test_multiple_additional_tasks() -> None:
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
     assert [row.name for row in mapping.rows] == [
-        "Additional Days Due To Unplanned Round 3 Feedback"
+        "Additional Days Due To Unplanned Round 2 Feedback",
+        "Additional Days Due To Unplanned Round 3 Feedback",
     ]
-    assert mapping.rows[0].task_type == "additional"
-    assert mapping.total_delayed_days == 3
+    assert [row.task_type for row in mapping.rows] == ["additional", "additional"]
+    assert mapping.total_delayed_days == 5
     assert mapping.unattributed_shift_days == 0
 
 
@@ -797,7 +805,7 @@ def test_delayed_predecessor_of_on_time_go_live_link_is_listed() -> None:
     assert mapping.rows[0].task_type == "delay"
 
 
-def test_summary_predecessor_of_go_live_uses_latest_child() -> None:
+def test_summary_predecessor_of_go_live_lists_each_delayed_child() -> None:
     mapping = derive_wsr_facts(
         _plan(
             [
@@ -824,5 +832,39 @@ def test_summary_predecessor_of_go_live_uses_latest_child() -> None:
         "2026-08-22",
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
-    assert [row.name for row in mapping.rows] == ["CMS Integration"]
-    assert mapping.rows[0].task_type == "delay"
+    assert [row.name for row in mapping.rows] == ["API work", "CMS Integration"]
+    assert [row.task_type for row in mapping.rows] == ["delay", "delay"]
+    assert [row.shift_days for row in mapping.rows] == [3, 5]
+    assert mapping.total_delayed_days == mapping.actual_shift_working_days == 8
+
+
+def test_first_delayed_task_is_listed_even_before_go_live_window() -> None:
+    mapping = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Design",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-18",
+                    assignments=_owners("Idealake"),
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="CMS Integration",
+                    baseline_finish="2026-08-20",
+                    scheduled_finish="2026-09-01",
+                    predecessor_ids=[1],
+                    assignments=_owners("Idealake"),
+                ),
+                _go_live(id=3, predecessor_ids=[2]),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    ).delay_mapping
+    assert [row.name for row in mapping.rows] == ["Design", "CMS Integration"]
+    assert [row.task_type for row in mapping.rows] == ["delay", "delay"]
+    assert mapping.rows[0].shift_days == 6
+    assert mapping.rows[1].shift_days == 2
+    assert mapping.total_delayed_days == mapping.actual_shift_working_days == 8

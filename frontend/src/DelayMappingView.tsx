@@ -13,7 +13,7 @@ import { ShellMetaContext } from "./shellMeta";
 import type { FileRecord } from "./types";
 import { shortDate, unavailable } from "./wsrFormat";
 
-type SortKey = "taskName" | "taskType" | "shiftDays" | "owner";
+type SortKey = "taskName" | "taskType" | "shiftDays" | "owner" | "finish";
 type DrawerState =
   | { kind: "row"; item: DelayMappingItem }
   | { kind: "goLive" }
@@ -30,8 +30,8 @@ export function DelayMappingView() {
   const [ownerFilter, setOwnerFilter] = useState("All");
   const [phaseFilter, setPhaseFilter] = useState("All");
   const [query, setQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("shiftDays");
-  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const [sortKey, setSortKey] = useState<SortKey>("finish");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("asc");
   const [drawer, setDrawer] = useState<DrawerState>(null);
 
   useEffect(() => {
@@ -112,15 +112,6 @@ export function DelayMappingView() {
       );
     });
     const sorted = [...filtered].sort((a, b) => compareRows(a, b, sortKey, sortDir));
-    if (sortKey === "shiftDays" && sortDir === "desc") {
-      sorted.sort((a, b) => {
-        const impact = b.goLiveImpact - a.goLiveImpact;
-        if (impact !== 0) {
-          return impact;
-        }
-        return compareRows(a, b, "shiftDays", "desc");
-      });
-    }
     return sorted;
   }, [allRows, ownerFilter, phaseFilter, query, sortDir, sortKey, typeFilter]);
 
@@ -528,6 +519,9 @@ function compareRows(a: DelayMappingItem, b: DelayMappingItem, key: SortKey, dir
   const sign = dir === "asc" ? 1 : -1;
   if (key === "shiftDays") {
     return sign * ((a.shiftDays ?? -1) - (b.shiftDays ?? -1));
+  }
+  if (key === "finish") {
+    return sign * (a.currentFinish || "").localeCompare(b.currentFinish || "");
   }
   const left = key === "taskName" ? a.taskName : key === "taskType" ? a.taskType : a.owner || "";
   const right = key === "taskName" ? b.taskName : key === "taskType" ? b.taskType : b.owner || "";
