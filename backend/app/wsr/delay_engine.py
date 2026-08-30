@@ -35,11 +35,13 @@ def build_delay_mapping(
     go_live_date: date | None,  # kept for the facts wrapper; header uses milestone finish dates
     baseline_plan: ProjectPlanData | None = None,
 ) -> DelayMappingSheet:
-    """Compare baseline vs current schedules and attribute incremental Go-Live impact.
+    """Map Delay and Additional from Baseline Finish versus Finish.
 
-    A single uploaded MPP already carries MS Project baseline fields; those are the
-    baseline snapshot. An optional second plan can be supplied for a two-file compare.
-    Current and baseline Go-Live dates always come from the milestone finish fields.
+    Rule:
+    - No Baseline Finish → Additional (task added after the plan was baselined).
+    - Finish after Baseline Finish → Delay.
+    - Only working days inside the Go-Live shift are counted, uniquely, so Total Count
+      matches Actual Shift when these tasks cover the shift.
     """
 
     from app.wsr.facts import (
@@ -98,7 +100,6 @@ def build_delay_mapping(
     phase_tasks = select_phase_summaries(current_plan.tasks, project_name=current_plan.name)
     go_live_id = None if go_live_task is None else go_live_task.id
     successors = _successor_map(current_plan.tasks)
-    has_links = any(task.predecessor_ids for task in current_plan.tasks)
     by_id = {task.id: task for task in current_plan.tasks}
     baseline_index = _baseline_index(
         baseline_plan.tasks if baseline_plan is not None else current_plan.tasks,
@@ -140,12 +141,9 @@ def build_delay_mapping(
             if mapped is None:
                 continue
             task_type, _days = mapped
-            on_path = go_live_id is not None and _reaches_task(
-                successors, task.id, go_live_id
+            impact = _impact_from_dates(
+                task, baseline_finish, holidays, parse_date, window=window
             )
-            if has_links and not on_path:
-                continue
-            impact = _impact_from_dates(task, baseline_finish, holidays, parse_date)
             if window:
                 impact &= window
             if not impact:
@@ -318,12 +316,16 @@ def _impact_from_dates(
     baseline_finish,
     holidays: set[date],
     parse_date,
+    *,
+    window: set[date] | None = None,
 ) -> set[date]:
     finish = parse_date(task.actual_finish) or parse_date(task.scheduled_finish)
     start = parse_date(task.actual_start) or parse_date(task.scheduled_start)
     if baseline_finish is None:
         if start and finish and finish >= start:
             return _working_day_set(start, finish, holidays, inclusive_start=True)
+        if finish and window:
+            return {day for day in window if day <= finish}
         return set()
     if finish and finish > baseline_finish:
         return _working_day_set(baseline_finish, finish, holidays, inclusive_start=False)
@@ -404,6 +406,8 @@ def _attribute_unique_days(
     ordered = sorted(
         candidates,
         key=lambda item: (
+            0 if item[1] == "additional" else 1,
+            len(item[2]),
             min(item[2]) if item[2] else date.max,
             item[0].wbs or "",
             item[0].id,

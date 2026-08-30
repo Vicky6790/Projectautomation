@@ -228,6 +228,36 @@ def test_unmatched_new_work_with_owner_is_additional() -> None:
     assert mapping.unattributed_shift_days == 0
 
 
+def test_additional_without_go_live_link_breaks_down_five_day_shift() -> None:
+    mapping = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Unplanned review round",
+                    scheduled_start="2026-08-21",
+                    scheduled_finish="2026-08-27",
+                    assignments=_owners("Idealake"),
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Build",
+                    baseline_finish="2026-08-10",
+                    scheduled_finish="2026-08-10",
+                ),
+                _go_live(id=3, scheduled_finish="2026-08-27", predecessor_ids=[2]),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    ).delay_mapping
+    assert [row.name for row in mapping.rows] == ["Unplanned review round"]
+    assert mapping.rows[0].task_type == "additional"
+    assert mapping.rows[0].planned_finish is None
+    assert mapping.rows[0].shift_days == 5
+    assert mapping.total_delayed_days == mapping.actual_shift_working_days == 5
+
+
 def test_additional_task_running_in_parallel_is_not_counted() -> None:
     mapping = derive_wsr_facts(
         _plan(
@@ -252,8 +282,12 @@ def test_additional_task_running_in_parallel_is_not_counted() -> None:
         "2026-08-22",
         generated_at="2026-08-22T10:00:00Z",
     ).delay_mapping
-    assert [row.name for row in mapping.rows] == ["Delay In Completion Of Designs"]
-    assert mapping.rows[0].task_type == "additional"
+    assert [row.name for row in mapping.rows] == [
+        "Delay In Completion Of Designs",
+        "Side analysis",
+    ]
+    assert [row.task_type for row in mapping.rows] == ["additional", "additional"]
+    assert [row.shift_days for row in mapping.rows] == [3, 5]
     assert mapping.total_delayed_days == mapping.actual_shift_working_days == 8
 
 

@@ -105,9 +105,9 @@ export function DelayMappingView() {
           </div>
           <h1>Go-Live Delay Mapping</h1>
           <p>
-            Only tasks that move the Go-Live date are listed. Delay is Finish versus Baseline
-            Finish. Tasks with no Baseline Finish are Additional. Total Count matches Actual
-            Shift in Working Days when those tasks cover the shift.
+            Only tasks that move Go-Live are listed. No Baseline Finish means Additional.
+            Finish after Baseline Finish means Delay. Those unique working days break down
+            Actual Shift in Working Days.
           </p>
         </div>
         <div className="delay-head-actions">
