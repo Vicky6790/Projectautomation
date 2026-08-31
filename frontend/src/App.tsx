@@ -15,10 +15,8 @@ import { requestWsrReset } from "./wsrSession";
 
 const MODULES: { path: string; label: string; icon: string; resetWsr?: boolean }[] = [
   { path: "/sow", label: "SOW Analyzer", icon: "analytics" },
-  { path: "/plan", label: "Project Plan Builder", icon: "format_list_bulleted" },
   { path: "/wsr", label: "WSR & Insights", icon: "insights", resetWsr: true },
   { path: "/delay-mapping", label: "Delay Mapping", icon: "table_view" },
-  { path: "/retrospective", label: "Retrospective", icon: "history" },
 ];
 
 const TITLES: Record<string, string> = {

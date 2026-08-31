@@ -9,13 +9,6 @@ const STEPS = [
     detail: "Extract risks, gray areas, missing requirements, and clarification questions from the SOW.",
   },
   {
-    to: "/plan",
-    icon: "format_list_bulleted",
-    title: "Project Plan Builder",
-    hint: "Turn scope into a schedule",
-    detail: "Select phases and deliverables, then generate an MPP the team can open in Microsoft Project.",
-  },
-  {
     to: "/wsr",
     icon: "insights",
     title: "WSR & Insights",
@@ -28,13 +21,6 @@ const STEPS = [
     title: "Delay Mapping",
     hint: "Baseline vs current variance",
     detail: "Compare Baseline and Current MPP files to list Delay and Additional tasks, with Go-Live impact kept separate from task shift days.",
-  },
-  {
-    to: "/retrospective",
-    icon: "history",
-    title: "Retrospective",
-    hint: "Close the delivery loop",
-    detail: "Review schedule variance, milestone delivery, what went well, and lessons from the same plan.",
   },
 ] as const;
 
@@ -49,8 +35,8 @@ export function HomeDashboardView() {
           <p className="home-kicker">Project Automation</p>
           <h1>Welcome to Project Management Dashboard</h1>
           <p className="home-lead">
-            One workspace for the delivery path: analyze the SOW, build the plan, publish the weekly
-            status, then capture the retrospective.
+            One workspace for the delivery path: analyze the SOW, publish the weekly status, and map
+            Go-Live delay from Baseline vs Current.
           </p>
         </div>
       </div>
@@ -66,14 +52,14 @@ export function HomeDashboardView() {
           </defs>
           <path
             className="home-scene-path"
-            d="M80 80 H880"
+            d="M160 80 H800"
             fill="none"
             stroke="url(#home-line)"
             strokeWidth="3"
             strokeDasharray="8 10"
             strokeLinecap="round"
           />
-          <g transform="translate(80 80)">
+          <g transform="translate(160 80)">
             <g className="home-scene-node">
               <circle r="28" fill="#eef2ff" stroke="#4f46e5" strokeWidth="2" />
               <text textAnchor="middle" y="6" fontSize="13" fontWeight="700" fill="#4338ca">
@@ -81,15 +67,7 @@ export function HomeDashboardView() {
               </text>
             </g>
           </g>
-          <g transform="translate(347 80)">
-            <g className="home-scene-node">
-              <circle r="28" fill="#e0f2fe" stroke="#0284c7" strokeWidth="2" />
-              <text textAnchor="middle" y="6" fontSize="13" fontWeight="700" fill="#0369a1">
-                Plan
-              </text>
-            </g>
-          </g>
-          <g transform="translate(613 80)">
+          <g transform="translate(480 80)">
             <g className="home-scene-node">
               <circle r="28" fill="#d1fae5" stroke="#059669" strokeWidth="2" />
               <text textAnchor="middle" y="6" fontSize="13" fontWeight="700" fill="#047857">
@@ -97,11 +75,11 @@ export function HomeDashboardView() {
               </text>
             </g>
           </g>
-          <g transform="translate(880 80)">
+          <g transform="translate(800 80)">
             <g className="home-scene-node">
-              <circle r="28" fill="#fef3c7" stroke="#d97706" strokeWidth="2" />
-              <text textAnchor="middle" y="6" fontSize="12" fontWeight="700" fill="#b45309">
-                Retro
+              <circle r="28" fill="#e0f2fe" stroke="#0284c7" strokeWidth="2" />
+              <text textAnchor="middle" y="6" fontSize="11" fontWeight="700" fill="#0369a1">
+                Delay
               </text>
             </g>
           </g>
