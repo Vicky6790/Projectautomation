@@ -584,6 +584,7 @@ def _delay_mapping_snapshot(mapping) -> dict[str, Any] | None:
                 "taskType": row.task_type,
                 "owner": row.owner,
                 "shiftDays": row.shift_days,
+                "goLiveImpactDays": row.go_live_impact_days,
             }
             for row in mapping.rows
         ],

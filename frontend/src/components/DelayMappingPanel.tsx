@@ -125,7 +125,7 @@ function PhaseGroup({ group }: { group: { name: string; rows: DelayMappingRow[] 
             <td>{type ? capitalize(type) : "Unavailable"}</td>
             <td>{shortDate(row.planned_finish)}</td>
             <td>{shortDate(row.revised_finish)}</td>
-            <td>{days == null ? "Unavailable" : days}</td>
+            <td>{row.task_type === "additional" ? "N/A" : days == null ? "Unavailable" : days}</td>
             <td>{unavailable(row.owner)}</td>
           </tr>
         );

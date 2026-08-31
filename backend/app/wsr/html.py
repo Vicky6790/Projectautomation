@@ -322,7 +322,10 @@ def _register_table(rows, total: int) -> str:
         )
         style = f"color:{color};font-weight:bold;" if color else ""
         days = row.shift_days if row.shift_days is not None else row.delay_days
-        day_label = "Unavailable" if days is None else str(days)
+        if row.task_type == "additional":
+            day_label = "N/A"
+        else:
+            day_label = "Unavailable" if days is None else str(days)
         body.append(
             f"<tr class='{type_class}'>"
             f"<td style='{style}'>{html.escape(row.name)}</td>"

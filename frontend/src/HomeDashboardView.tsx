@@ -26,8 +26,8 @@ const STEPS = [
     to: "/delay-mapping",
     icon: "table_view",
     title: "Delay Mapping",
-    hint: "What actually moved Go-Live",
-    detail: "Compare tasks, dates, and dependencies, then list only the driving Delay and Additional work.",
+    hint: "Baseline vs current variance",
+    detail: "Compare Baseline and Current MPP files to list Delay and Additional tasks, with Go-Live impact kept separate from task shift days.",
   },
   {
     to: "/retrospective",

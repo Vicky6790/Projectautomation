@@ -118,9 +118,10 @@ export type DelayMappingRow = {
   name: string;
   parent_name?: string | null;
   wbs?: string | null;
-  task_type?: "delay" | "additional" | null;
+  task_type?: "delay" | "additional" | "unchanged" | "ahead" | "removed" | "unavailable" | null;
   shift_days?: number | null;
   delay_days?: number | null;
+  go_live_impact_days?: number | null;
   owner?: string | null;
   owner_class?: "internal" | "client" | "shared" | "unknown" | null;
   planned_start?: string | null;
@@ -138,6 +139,11 @@ export type DelayMappingRow = {
   predecessor_ids?: number[];
   successor_ids?: number[];
   go_live_path_impact?: boolean;
+  match_status?: "matched" | "additional" | "removed" | "ambiguous" | null;
+  calculation_status?: string | null;
+  evidence_reason?: string | null;
+  predecessor_names?: string[];
+  successor_names?: string[];
   calculation_source?: string | null;
 };
 

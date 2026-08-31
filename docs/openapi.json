@@ -174,7 +174,7 @@
         "type": "object"
       },
       "DelayMappingRow": {
-        "description": "One attributed DELAY or ADDITIONAL leaf on the Go-Live path. Causes are not invented.",
+        "description": "One Delay Mapping leaf. Causes, days, and owners are never invented.",
         "properties": {
           "baseline_task_id": {
             "anyOf": [
@@ -198,6 +198,26 @@
             ],
             "title": "Calculation Source"
           },
+          "calculation_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "calculated",
+                  "baseline_unavailable",
+                  "calendar_unavailable",
+                  "ambiguous_match",
+                  "go_live_unavailable",
+                  "go_live_ambiguous",
+                  "validation_failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Status"
+          },
           "current_task_id": {
             "anyOf": [
               {
@@ -220,6 +240,17 @@
             ],
             "title": "Delay Days"
           },
+          "evidence_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Reason"
+          },
           "go_live_impact": {
             "anyOf": [
               {
@@ -235,10 +266,32 @@
             ],
             "title": "Go Live Impact"
           },
+          "go_live_impact_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Go Live Impact Days"
+          },
           "go_live_path_impact": {
             "default": false,
             "title": "Go Live Path Impact",
             "type": "boolean"
+          },
+          "hierarchy_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hierarchy Path"
           },
           "impacted_milestones": {
             "items": {
@@ -259,6 +312,23 @@
             "default": "task",
             "title": "Kind",
             "type": "string"
+          },
+          "match_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "matched",
+                  "additional",
+                  "removed",
+                  "ambiguous"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Status"
           },
           "mitigation_plan": {
             "anyOf": [
@@ -348,6 +418,13 @@
             "title": "Predecessor Ids",
             "type": "array"
           },
+          "predecessor_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Predecessor Names",
+            "type": "array"
+          },
           "primary_reason": {
             "anyOf": [
               {
@@ -399,10 +476,21 @@
             "title": "Successor Ids",
             "type": "array"
           },
+          "successor_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Successor Names",
+            "type": "array"
+          },
           "task_type": {
             "enum": [
               "delay",
-              "additional"
+              "additional",
+              "unchanged",
+              "ahead",
+              "removed",
+              "unavailable"
             ],
             "title": "Task Type",
             "type": "string"
@@ -444,6 +532,21 @@
             "title": "Additional Shift Days",
             "type": "integer"
           },
+          "additional_task_count": {
+            "default": 0,
+            "title": "Additional Task Count",
+            "type": "integer"
+          },
+          "ahead_task_count": {
+            "default": 0,
+            "title": "Ahead Task Count",
+            "type": "integer"
+          },
+          "ambiguous_task_count": {
+            "default": 0,
+            "title": "Ambiguous Task Count",
+            "type": "integer"
+          },
           "attributed_shift_days": {
             "default": 0,
             "title": "Attributed Shift Days",
@@ -459,6 +562,11 @@
               }
             ],
             "title": "Baseline Go Live"
+          },
+          "baseline_task_count": {
+            "default": 0,
+            "title": "Baseline Task Count",
+            "type": "integer"
           },
           "calendar_source": {
             "anyOf": [
@@ -486,6 +594,11 @@
             ],
             "title": "Current Go Live"
           },
+          "current_task_count": {
+            "default": 0,
+            "title": "Current Task Count",
+            "type": "integer"
+          },
           "delay_shift_days": {
             "default": 0,
             "title": "Delay Shift Days",
@@ -495,6 +608,22 @@
             "default": 0,
             "title": "Delayed Task Count",
             "type": "integer"
+          },
+          "go_live_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "calculated",
+                  "unavailable",
+                  "ambiguous"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Go Live Status"
           },
           "gross_working_day_shift": {
             "anyOf": [
@@ -517,6 +646,11 @@
               }
             ],
             "title": "Holidays"
+          },
+          "matched_task_count": {
+            "default": 0,
+            "title": "Matched Task Count",
+            "type": "integer"
           },
           "matching_requires_validation": {
             "default": false,
@@ -575,6 +709,35 @@
             ],
             "title": "Reconciliation Warning"
           },
+          "removed_rows": {
+            "items": {
+              "$ref": "#/components/schemas/DelayMappingRow"
+            },
+            "title": "Removed Rows",
+            "type": "array"
+          },
+          "removed_task_count": {
+            "default": 0,
+            "title": "Removed Task Count",
+            "type": "integer"
+          },
+          "report_status": {
+            "default": "verified",
+            "enum": [
+              "verified",
+              "requires_review",
+              "validation_failed"
+            ],
+            "title": "Report Status",
+            "type": "string"
+          },
+          "review_rows": {
+            "items": {
+              "$ref": "#/components/schemas/DelayMappingRow"
+            },
+            "title": "Review Rows",
+            "type": "array"
+          },
           "rows": {
             "items": {
               "$ref": "#/components/schemas/DelayMappingRow"
@@ -624,6 +787,11 @@
               }
             ],
             "title": "Unattributed Status"
+          },
+          "unchanged_task_count": {
+            "default": 0,
+            "title": "Unchanged Task Count",
+            "type": "integer"
           }
         },
         "title": "DelayMappingSheet",

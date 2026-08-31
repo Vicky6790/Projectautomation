@@ -27,7 +27,7 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
       return `<tr>
         <td style="background:${fill}">${esc(row.taskName)}</td>
         <td style="background:${fill}">${esc(row.taskType)}</td>
-        <td style="background:${fill}">${row.shiftDays == null ? "Unavailable" : row.shiftDays}</td>
+        <td style="background:${fill}">${row.taskType === "Additional" || row.shiftDays == null ? (row.taskType === "Additional" ? "N/A" : "Unavailable") : row.shiftDays}</td>
         <td style="background:${fill}">${esc(unavailable(row.owner))}</td>
       </tr>`;
     })

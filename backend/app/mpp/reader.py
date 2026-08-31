@@ -8,6 +8,7 @@ from app.errors import AppError
 from app.models import (
     PlanAssignmentData,
     PlanPhaseData,
+    PlanRelationData,
     PlanResourceData,
     PlanTaskData,
     ProjectPlanData,
@@ -91,14 +92,33 @@ def project_from_mpxj(project) -> ProjectPlanData:
             has_actuals = True
         predecessor_ids: list[int] = []
         predecessor_names: list[str] = []
+        predecessor_links: list[PlanRelationData] = []
         for relation in task.getPredecessors() or []:
             pred = relation.getPredecessorTask()
             if pred is None or pred.getUniqueID() is None:
                 continue
-            predecessor_ids.append(int(pred.getUniqueID()))
+            pred_id = int(pred.getUniqueID())
+            predecessor_ids.append(pred_id)
             pred_name = pred.getName()
             if pred_name:
                 predecessor_names.append(str(pred_name))
+            predecessor_links.append(
+                PlanRelationData(
+                    predecessor_id=pred_id,
+                    relation_type=_relation_type(relation),
+                    lag_days=_lag_days(relation, calendar),
+                )
+            )
+        successor_ids: list[int] = []
+        successor_names: list[str] = []
+        for relation in task.getSuccessors() or []:
+            succ = _successor_task(relation)
+            if succ is None or succ.getUniqueID() is None:
+                continue
+            successor_ids.append(int(succ.getUniqueID()))
+            succ_name = succ.getName()
+            if succ_name:
+                successor_names.append(str(succ_name))
         assignments: list[PlanAssignmentData] = []
         for assignment in task.getResourceAssignments() or []:
             mapped = _assignment(assignment, calendar)
@@ -125,12 +145,29 @@ def project_from_mpxj(project) -> ProjectPlanData:
                 percent_complete=percent,
                 predecessor_ids=predecessor_ids,
                 predecessor_names=predecessor_names,
+                predecessor_links=predecessor_links,
+                successor_ids=successor_ids,
+                successor_names=successor_names,
                 comparison_available=bool(baseline_start or baseline_finish),
                 planned_work_hours=planned_work,
                 actual_work_hours=actual_work,
                 assignments=assignments,
+                total_slack_days=_slack_days(task, calendar),
+                critical=_critical(task),
+                calendar_name=_calendar_name(task, calendar),
             )
         )
+    by_id = {task.id: task for task in tasks}
+    for task in tasks:
+        if task.successor_ids:
+            continue
+        for pred_id in task.predecessor_ids:
+            pred = by_id.get(pred_id)
+            if pred is None:
+                continue
+            if task.id not in pred.successor_ids:
+                pred.successor_ids.append(task.id)
+                pred.successor_names.append(task.name)
     holidays = _holiday_dates(calendar)
     return ProjectPlanData(
         name=name,
@@ -217,6 +254,62 @@ def iso_date(value) -> str | None:
     if " " in text and len(text) >= 10:
         return text[:10]
     return text[:10] if len(text) >= 10 else text
+
+
+def _successor_task(relation):
+    for method in ("getSuccessorTask", "getTargetTask", "getSuccessor"):
+        value = _call(relation, method)
+        if value is not None:
+            return value
+    return None
+
+
+def _relation_type(relation) -> str:
+    raw = _call(relation, "getType")
+    label = str(raw or "FINISH_START").upper().replace("-", "_")
+    mapping = {
+        "FINISH_START": "FS",
+        "START_START": "SS",
+        "FINISH_FINISH": "FF",
+        "START_FINISH": "SF",
+        "FS": "FS",
+        "SS": "SS",
+        "FF": "FF",
+        "SF": "SF",
+    }
+    return mapping.get(label, "FS")
+
+
+def _lag_days(relation, calendar) -> int:
+    lag = _call(relation, "getLag")
+    hours = duration_hours(lag, calendar)
+    if hours is None:
+        return 0
+    return int(round(hours / 8.0))
+
+
+def _slack_days(task, calendar) -> float | None:
+    slack = _task_value(task, "getTotalSlack")
+    hours = duration_hours(slack, calendar)
+    if hours is None:
+        return None
+    return hours / 8.0
+
+
+def _critical(task) -> bool | None:
+    value = _task_value(task, "getCritical")
+    if value is None:
+        return None
+    return bool(value)
+
+
+def _calendar_name(task, project_calendar) -> str | None:
+    calendar = _task_value(task, "getCalendar") or project_calendar
+    if calendar is None:
+        return None
+    name = _call(calendar, "getName")
+    text = str(name).strip() if name is not None else ""
+    return text or None
 
 
 def duration_hours(duration, calendar=None) -> float | None:

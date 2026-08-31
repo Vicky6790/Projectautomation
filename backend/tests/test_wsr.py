@@ -407,6 +407,11 @@ def test_delay_mapping_compares_baseline_and_current_mpp(client: TestClient, mon
     assert {row["task_type"] for row in body["rows"] if row["name"] == "Unplanned review round"} == {
         "additional"
     }
+    assert all(
+        row["shift_days"] is None
+        for row in body["rows"]
+        if row["name"] == "Unplanned review round"
+    )
 
 
 def test_delay_mapping_current_mpp_without_baseline_file(client: TestClient, monkeypatch) -> None:

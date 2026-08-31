@@ -133,7 +133,7 @@ export function DelayMappingView() {
         <div>
           <p className="dms-kicker">Delay Mapping</p>
           <h1>DELAY MAPPING</h1>
-          <p className="dms-sub">Tasks that drive the Go-Live delay</p>
+          <p className="dms-sub">Baseline vs Current Schedule Variance</p>
         </div>
         <div className="dms-actions dms-no-print">
           <button type="button" className="btn btn-outline" onClick={() => setDrawer({ kind: "goLive" })}>
@@ -176,8 +176,8 @@ export function DelayMappingView() {
       </div>
       {!currentFile ? (
         <p className="dms-sample dms-no-print" role="status">
-          Insert the Current MPP to map only the tasks that drive the Go-Live delay. Insert a Baseline MPP to compare two
-          files; otherwise Baseline Finish inside the Current MPP is used. Missing values stay Unavailable.
+          Insert the Current MPP to compare against Baseline Finish. Insert a Baseline MPP to compare two
+          files. Missing values stay Unavailable. Additional task shift days are N/A.
         </p>
       ) : !baselineFile ? (
         <p className="dms-note dms-no-print">
@@ -200,6 +200,7 @@ export function DelayMappingView() {
         <Kpi label="Additional Tasks" value={String(result.summary.additionalTaskCount)} tone="additional" />
       </div>
       {result.summary.calendarNote ? <p className="dms-note">{result.summary.calendarNote}</p> : null}
+      {result.summary.validationWarning ? <p className="error">{result.summary.validationWarning}</p> : null}
 
       <div className="dms-sheet">
         <div className="dms-toolbar dms-no-print">
@@ -269,7 +270,7 @@ export function DelayMappingView() {
                         {row.taskType === "Delay" ? "Delay" : "Add."}
                       </span>
                     </td>
-                    <td>{row.shiftDays == null ? "Unavailable" : row.shiftDays}</td>
+                    <td>{row.taskType === "Additional" || row.shiftDays == null ? (row.taskType === "Additional" ? "N/A" : "Unavailable") : row.shiftDays}</td>
                     <td>{unavailable(row.owner)}</td>
                   </tr>
                 ))
@@ -408,31 +409,32 @@ function RowDrawer({ item, onClose }: { item: DelayMappingItem; onClose: () => v
         </button>
       </header>
       <dl className="dms-facts">
-        <Fact label="Task" value={item.taskName} />
-        <Fact label="Type" value={item.taskType.toUpperCase()} />
+        <Fact label="Classification" value={item.taskType.toUpperCase()} />
         {delay ? (
           <>
             <Fact label="Baseline Finish" value={shortDate(item.baselineFinish)} />
             <Fact label="Current Finish" value={shortDate(item.currentFinish)} />
             <Fact
-              label="Shift"
+              label="Task Shift"
               value={item.shiftDays == null ? "Unavailable" : `+${item.shiftDays} Working Days`}
             />
           </>
         ) : (
           <>
-            <Fact label="Baseline" value="Not Present" />
+            <Fact label="Baseline" value="Not Found" />
             <Fact label="Current Start" value={shortDate(item.currentStart)} />
             <Fact label="Current Finish" value={shortDate(item.currentFinish)} />
+            <Fact label="Task Shift" value="N/A" />
           </>
         )}
-        <Fact label="Owner" value={unavailable(item.owner)} />
-        <Fact label="Predecessor" value={joinNames(item.predecessors)} />
-        <Fact label="Successor" value={joinNames(item.successors)} />
         <Fact
           label="Go-Live Impact"
           value={item.goLiveImpact > 0 ? `+${item.goLiveImpact} Working Days` : "0 Working Days"}
         />
+        <Fact label="Owner" value={unavailable(item.owner)} />
+        <Fact label="Predecessor" value={joinNames(item.predecessors)} />
+        <Fact label="Successor" value={joinNames(item.successors)} />
+        <Fact label="Match Status" value={item.matchStatus || (delay ? "MATCHED" : "ADDITIONAL")} />
         <Fact label={delay ? "Evidence" : "Reason"} value={item.evidence} />
       </dl>
     </>
@@ -491,8 +493,7 @@ function GoLiveDrawer({
         <strong>{shift == null ? "Unavailable" : `+${shift} Working Days`}</strong>
       </p>
       <p className="dms-note">
-        Go-Live impact comes from Baseline Go-Live versus Current Go-Live. Task days are not summed
-        when they overlap the same schedule movement.
+        Go-Live impact comes from the schedule and dependency path, not from summing task shift days.
       </p>
     </>
   );

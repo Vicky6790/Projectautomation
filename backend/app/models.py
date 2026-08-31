@@ -69,6 +69,12 @@ class PlanPhaseData(BaseModel):
     percent_complete: float = 0
 
 
+class PlanRelationData(BaseModel):
+    predecessor_id: int
+    relation_type: Literal["FS", "SS", "FF", "SF"] = "FS"
+    lag_days: int = 0
+
+
 class PlanTaskData(BaseModel):
     id: int
     name: str
@@ -87,10 +93,16 @@ class PlanTaskData(BaseModel):
     percent_complete: float = 0
     predecessor_ids: list[int] = Field(default_factory=list)
     predecessor_names: list[str] = Field(default_factory=list)
+    predecessor_links: list[PlanRelationData] = Field(default_factory=list)
+    successor_ids: list[int] = Field(default_factory=list)
+    successor_names: list[str] = Field(default_factory=list)
     comparison_available: bool = False
     planned_work_hours: float | None = None
     actual_work_hours: float | None = None
     assignments: list[PlanAssignmentData] = Field(default_factory=list)
+    total_slack_days: float | None = None
+    critical: bool | None = None
+    calendar_name: str | None = None
 
 
 class ProjectPlanData(BaseModel):
@@ -248,15 +260,17 @@ class DelayAttributionBucket(BaseModel):
 
 
 class DelayMappingRow(BaseModel):
-    """One attributed DELAY or ADDITIONAL leaf on the Go-Live path. Causes are not invented."""
+    """One Delay Mapping leaf. Causes, days, and owners are never invented."""
 
     kind: Literal["task"] = "task"
     name: str
     parent_name: str | None = None
     wbs: str | None = None
-    task_type: Literal["delay", "additional"]
+    hierarchy_path: str | None = None
+    task_type: Literal["delay", "additional", "unchanged", "ahead", "removed", "unavailable"]
     shift_days: int | None = None
     delay_days: int | None = None
+    go_live_impact_days: int | None = None
     owner: str | None = None
     owner_class: Literal["internal", "client", "shared", "unknown"] = "unknown"
     planned_start: str | None = None
@@ -268,16 +282,34 @@ class DelayMappingRow(BaseModel):
     mitigation_plan: str | None = None
     impacted_successors: list[str] = Field(default_factory=list)
     impacted_milestones: list[str] = Field(default_factory=list)
+    predecessor_names: list[str] = Field(default_factory=list)
+    successor_names: list[str] = Field(default_factory=list)
     baseline_task_id: int | None = None
     current_task_id: int | None = None
     outline_number: str | None = None
     predecessor_ids: list[int] = Field(default_factory=list)
     successor_ids: list[int] = Field(default_factory=list)
     go_live_path_impact: bool = False
+    match_status: Literal["matched", "additional", "removed", "ambiguous"] | None = None
+    calculation_status: (
+        Literal[
+            "calculated",
+            "baseline_unavailable",
+            "calendar_unavailable",
+            "ambiguous_match",
+            "go_live_unavailable",
+            "go_live_ambiguous",
+            "validation_failed",
+        ]
+        | None
+    ) = None
+    evidence_reason: str | None = None
     calculation_source: str | None = None
 
 
 class DelayMappingSheet(BaseModel):
+    report_status: Literal["verified", "requires_review", "validation_failed"] = "verified"
+    go_live_status: Literal["calculated", "unavailable", "ambiguous"] | None = None
     baseline_go_live: str | None = None
     current_go_live: str | None = None
     gross_working_day_shift: int | None = None
@@ -292,6 +324,14 @@ class DelayMappingSheet(BaseModel):
     additional_shift_days: int = 0
     total_delayed_days: int = 0
     delayed_task_count: int = 0
+    additional_task_count: int = 0
+    matched_task_count: int = 0
+    removed_task_count: int = 0
+    unchanged_task_count: int = 0
+    ahead_task_count: int = 0
+    ambiguous_task_count: int = 0
+    baseline_task_count: int = 0
+    current_task_count: int = 0
     matching_requires_validation: bool = False
     reconciliation_status: Literal["reconciled", "requires_validation", "unavailable"] | None = None
     reconciliation_warning: str | None = None
@@ -300,6 +340,8 @@ class DelayMappingSheet(BaseModel):
     owner_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
     type_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
     rows: list[DelayMappingRow] = Field(default_factory=list)
+    review_rows: list[DelayMappingRow] = Field(default_factory=list)
+    removed_rows: list[DelayMappingRow] = Field(default_factory=list)
 
 
 class ProgressItem(BaseModel):

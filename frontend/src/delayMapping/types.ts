@@ -12,6 +12,8 @@ export type DelayMappingItem = {
   owner: string | null;
   isAdditional: boolean;
   goLiveImpact: number;
+  matchStatus?: string | null;
+  calculationStatus?: string | null;
   predecessors: string[];
   successors: string[];
   evidence: string;
@@ -32,6 +34,7 @@ export type DelayMappingSummary = {
   additionalTaskCount: number;
   holidays: number | null;
   calendarNote: string | null;
+  validationWarning: string | null;
 };
 
 export type CompareMppResult = {

@@ -83,6 +83,7 @@ export function fromWsrDelayMapping(mapping: DelayMappingSheet): CompareMppResul
       mapping.calendar_source === "weekdays_fallback"
         ? "Working days use the system weekday calendar (project calendar unavailable)."
         : null,
+    validationWarning: mapping.reconciliation_warning ?? null,
   };
   return {
     delayedTasks,
@@ -122,6 +123,7 @@ export function emptyComparison(): CompareMppResult {
       additionalTaskCount: 0,
       holidays: null,
       calendarNote: null,
+      validationWarning: null,
     },
     source: "live",
   };
@@ -238,6 +240,7 @@ function mockComparison(): CompareMppResult {
       additionalTaskCount: additionalTasks.length,
       holidays: null,
       calendarNote: null,
+      validationWarning: null,
     },
     source: "sample",
   };
@@ -259,9 +262,9 @@ function item(input: {
 }): DelayMappingItem {
   const isAdditional = input.taskType === "Additional";
   const classified = isAdditional
-    ? { shiftDays: input.goLiveImpact, baselineUnavailable: false }
+    ? { shiftDays: null as number | null, baselineUnavailable: true }
     : classifyExistingTask(input.baselineFinish, input.currentFinish, input.holidays);
-  const shiftDays = isAdditional ? input.goLiveImpact : classified.shiftDays;
+  const shiftDays = isAdditional ? null : classified.shiftDays;
   return {
     id: input.id,
     taskName: input.taskName,
@@ -276,6 +279,8 @@ function item(input: {
     goLiveImpact: input.goLiveImpact,
     predecessors: input.predecessors,
     successors: input.successors,
+    matchStatus: isAdditional ? "ADDITIONAL" : "MATCHED",
+    calculationStatus: "CALCULATED",
     baselineUnavailable: classified.baselineUnavailable,
     evidence: isAdditional
       ? "Task exists in Current MPP but not in Baseline MPP."
@@ -285,8 +290,8 @@ function item(input: {
 
 function toLiveItem(row: DelayMappingRow, mapping: DelayMappingSheet): DelayMappingItem {
   const isAdditional = row.task_type === "additional";
-  const shiftDays = row.shift_days ?? row.delay_days ?? null;
-  const goLiveImpact = shiftDays && shiftDays > 0 ? shiftDays : 0;
+  const shiftDays = isAdditional ? null : (row.shift_days ?? row.delay_days ?? null);
+  const goLiveImpact = row.go_live_impact_days ?? 0;
   return {
     id: String(row.current_task_id ?? `${row.wbs || ""}-${row.name}`),
     taskName: row.name,
@@ -299,12 +304,16 @@ function toLiveItem(row: DelayMappingRow, mapping: DelayMappingSheet): DelayMapp
     owner: row.owner ?? null,
     isAdditional,
     goLiveImpact,
-    predecessors: [],
-    successors: row.impacted_successors ?? [],
+    predecessors: row.predecessor_names ?? [],
+    successors: row.successor_names ?? row.impacted_successors ?? [],
+    matchStatus: row.match_status ?? (isAdditional ? "additional" : "matched"),
+    calculationStatus: row.calculation_status ?? "calculated",
     baselineUnavailable: isAdditional && !row.planned_finish,
-    evidence: isAdditional
-      ? "Task exists in Current MPP but not in Baseline MPP."
-      : delayEvidence(row.planned_finish, row.revised_finish, shiftDays, mapping.holidays),
+    evidence:
+      row.evidence_reason
+      || (isAdditional
+        ? "Task exists in Current MPP but not in Baseline MPP."
+        : delayEvidence(row.planned_finish, row.revised_finish, shiftDays, mapping.holidays)),
   };
 }
 
