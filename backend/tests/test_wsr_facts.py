@@ -816,6 +816,62 @@ def test_upcoming_lists_next_planned_tasks() -> None:
     assert build.scheduled_finish == "2026-08-28"
 
 
+def test_week_sections_follow_publish_date() -> None:
+    plan = _plan(
+        [
+            PlanTaskData(
+                id=1,
+                name="This week build",
+                scheduled_start="2026-08-17",
+                scheduled_finish="2026-08-21",
+            ),
+            PlanTaskData(
+                id=2,
+                name="Next week review",
+                scheduled_start="2026-08-25",
+                scheduled_finish="2026-08-28",
+            ),
+            PlanTaskData(
+                id=3,
+                name="Go Live",
+                is_milestone=True,
+                scheduled_finish="2026-09-11",
+            ),
+        ]
+    )
+    current_week = derive_wsr_facts(plan, "2026-08-22", generated_at="2026-08-22T10:00:00Z")
+    next_week = derive_wsr_facts(plan, "2026-08-29", generated_at="2026-08-29T10:00:00Z")
+    assert [item.name for item in current_week.progress_to_date] == ["This week build"]
+    assert [item.name for item in current_week.upcoming_milestones] == ["Next week review"]
+    assert [item.name for item in next_week.progress_to_date] == ["Next week review"]
+    assert [item.name for item in next_week.upcoming_milestones] == []
+
+
+def test_spanning_task_stays_in_current_week_not_upcoming() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Build across weekend",
+                    scheduled_start="2026-08-22",
+                    scheduled_finish="2026-08-25",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Go Live",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-11",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    assert [item.name for item in facts.progress_to_date] == ["Build across weekend"]
+    assert [item.name for item in facts.upcoming_milestones] == []
+
+
 def test_project_name_comes_from_wbs_one() -> None:
     facts = derive_wsr_facts(
         _plan(

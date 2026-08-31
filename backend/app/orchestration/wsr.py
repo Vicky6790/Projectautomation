@@ -6,7 +6,7 @@ from app.errors import AppError
 from app.models import AiDerivedItem, ProcessingResponse, StatusReport
 from app.wsr.evidence import STORED_AI_SECTIONS, items_from_situation_risks
 from app.wsr.executive import generate_executive_summary
-from app.wsr.facts import derive_wsr_facts, resolve_as_of
+from app.wsr.facts import derive_wsr_facts, wsr_publish_date
 from app.wsr.intelligence import build_executive_summary_input
 
 
@@ -20,7 +20,7 @@ def run_wsr_generation(handle: str, *, force: bool = False) -> ProcessingRespons
     store.set_status(handle, "running")
     try:
         plan = store.get_plan(handle)
-        as_of = resolve_as_of(plan)
+        as_of = wsr_publish_date()
         facts = derive_wsr_facts(plan, as_of)
         snapshot = plan.model_dump()
         snapshot["as_of_date"] = as_of

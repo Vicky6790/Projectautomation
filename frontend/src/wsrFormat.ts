@@ -138,6 +138,40 @@ export function durationDays(
   return days > 0 ? days : 1;
 }
 
+function mondayOf(isoDate: string): Date | null {
+  const parsed = parseDay(isoDate);
+  if (!parsed) {
+    return null;
+  }
+  const weekday = (parsed.getDay() + 6) % 7;
+  parsed.setDate(parsed.getDate() - weekday);
+  return parsed;
+}
+
+function isoDay(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function publishWeekRange(
+  asOf: string | null | undefined,
+  weeksAhead = 0,
+): string {
+  if (!asOf) {
+    return "Unavailable";
+  }
+  const start = mondayOf(asOf);
+  if (!start) {
+    return "Unavailable";
+  }
+  start.setDate(start.getDate() + weeksAhead * 7);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return `${shortDate(isoDay(start))} – ${shortDate(isoDay(end))}`;
+}
+
 export function personDaysLabel(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return "Unavailable";

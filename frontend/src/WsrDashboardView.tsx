@@ -18,6 +18,7 @@ import {
   percent,
   phaseState,
   phaseWbs,
+  publishWeekRange,
   shortDate,
   splitInsight,
   unavailable,
@@ -478,7 +479,11 @@ export function WsrDashboardView() {
           </Section>
 
           <div className="wsr-paired">
-            <Section n={4} title="Progress of current week">
+            <Section
+              n={4}
+              title="Progress of current week"
+              hint={`Tasks in the Monday–Sunday week of the WSR publish date (${publishWeekRange(report.as_of_date)}).`}
+            >
               {facts.progress_to_date?.length ? (
                 <table className="milestone-table">
                   <thead>
@@ -508,7 +513,7 @@ export function WsrDashboardView() {
             <Section
               n={5}
               title="Upcoming Milestones Of Next Week"
-              hint="Incomplete work overlapping the calendar week after the as-of week."
+              hint={`Incomplete work in the Monday–Sunday week after the WSR publish date (${publishWeekRange(report.as_of_date, 1)}).`}
             >
               {facts.upcoming_milestones?.length ? (
                 <table className="milestone-table">

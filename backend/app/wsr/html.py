@@ -8,6 +8,7 @@ from app.models import (
     StatusReport,
     WsrPlanFacts,
 )
+from app.wsr.facts import _next_week_bounds, _week_bounds
 
 _AI_SECTIONS = (
     ("risks", "Risks & Focus Areas"),
@@ -353,8 +354,9 @@ def _count_or_unavailable(value: int | None) -> str:
 
 def _progress(facts: WsrPlanFacts) -> str:
     items = facts.progress_to_date or []
+    intro = _week_window_copy(facts.as_of_date, next_week=False)
     if not items:
-        return "<p>No tasks scheduled in the current week</p>"
+        return intro + "<p>No tasks scheduled in the current week</p>"
     rows = [
         "<tr><td><b>Tasks</b></td><td><b>Start Date</b></td><td><b>End Date</b></td>"
         "<td><b>Complete</b></td></tr>"
@@ -368,13 +370,14 @@ def _progress(facts: WsrPlanFacts) -> str:
             f"<td>{html.escape(_percent(item.progress))}</td>"
             "</tr>"
         )
-    return f"<table>{''.join(rows)}</table>"
+    return intro + f"<table>{''.join(rows)}</table>"
 
 
 def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
     items = facts.upcoming_milestones or []
+    intro = _week_window_copy(as_of or facts.as_of_date, next_week=True)
     if not items:
-        return "<p>No upcoming planned tasks</p>"
+        return intro + "<p>No upcoming planned tasks</p>"
     as_of_d = _day(as_of)
     rows = [
         "<tr><td><b>Start Date</b></td><td><b>End Date</b></td>"
@@ -391,7 +394,7 @@ def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
         rows.append(
             f"<tr><td>{start}</td><td>{finish}</td><td>{name}</td><td>{today}</td></tr>"
         )
-    return f"<table>{''.join(rows)}</table>"
+    return intro + f"<table>{''.join(rows)}</table>"
 
 
 def _insights(items: list[AiDerivedItem] | None) -> str:
@@ -415,6 +418,16 @@ def _gantt_bar(name: str, left: int, width: int, color: str) -> str:
         '<table class="gantt" cellpadding="0" cellspacing="0">'
         f"<tr>{''.join(cells)}</tr></table>"
     )
+
+
+def _week_window_copy(as_of: str | None, *, next_week: bool) -> str:
+    day = _day(as_of)
+    if day is None:
+        return ""
+    start, end = _next_week_bounds(day) if next_week else _week_bounds(day)
+    label = "Upcoming week" if next_week else "Current week"
+    window = f"{_short_date(start.isoformat())} - {_short_date(end.isoformat())}"
+    return f"<p class='muted'>{html.escape(label)} from WSR publish date: {html.escape(window)}</p>"
 
 
 def _section(number: int, title: str, inner: str) -> str:

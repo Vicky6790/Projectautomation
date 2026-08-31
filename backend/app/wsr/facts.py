@@ -43,6 +43,11 @@ def resolve_as_of(plan: ProjectPlanData, *, generated_on: date | None = None) ->
     return (parsed or generated_on or datetime.now(UTC).date()).isoformat()
 
 
+def wsr_publish_date(*, generated_on: date | None = None) -> str:
+    """Date the WSR is issued. Current/next-week task lists use this date's calendar weeks."""
+    return (generated_on or datetime.now(UTC).date()).isoformat()
+
+
 def derive_wsr_facts(
     plan: ProjectPlanData,
     as_of: str,
@@ -546,6 +551,12 @@ def _week_bounds(as_of: date) -> tuple[date, date]:
     return start, start + timedelta(days=6)
 
 
+def _next_week_bounds(as_of: date) -> tuple[date, date]:
+    _week_start, week_end = _week_bounds(as_of)
+    next_start = week_end + timedelta(days=1)
+    return next_start, next_start + timedelta(days=6)
+
+
 def _overlaps_week(task: PlanTaskData, week_start: date, week_end: date) -> bool:
     start = parse_date(task.scheduled_start) or parse_date(task.actual_start)
     finish = parse_date(task.scheduled_finish) or parse_date(task.actual_finish)
@@ -583,10 +594,13 @@ def _progress_to_date(tasks: list[PlanTaskData], as_of: date) -> list[ProgressIt
 
 
 def _next_planned_tasks(tasks: list[PlanTaskData], as_of: date) -> list[MilestoneItem]:
+    current_start, current_end = _week_bounds(as_of)
     next_start, next_end = _next_week_bounds(as_of)
     items: list[MilestoneItem] = []
     for task in tasks:
         if _complete(task):
+            continue
+        if _overlaps_week(task, current_start, current_end):
             continue
         if not _overlaps_week(task, next_start, next_end):
             continue
@@ -601,12 +615,6 @@ def _next_planned_tasks(tasks: list[PlanTaskData], as_of: date) -> list[Mileston
         )
     items.sort(key=lambda item: item.scheduled_start or item.date or "")
     return items[:12]
-
-
-def _next_week_bounds(as_of: date) -> tuple[date, date]:
-    _week_start, week_end = _week_bounds(as_of)
-    next_start = week_end + timedelta(days=1)
-    return next_start, next_start + timedelta(days=6)
 
 
 def next_seven_day_tasks(plan: ProjectPlanData, as_of: str) -> list[PlanTaskData]:

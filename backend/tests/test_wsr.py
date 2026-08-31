@@ -65,6 +65,10 @@ def _empty_ai(_data: dict) -> dict:
     }
 
 
+def _publish_on(monkeypatch, day: str = "2026-08-22") -> None:
+    monkeypatch.setattr("app.orchestration.wsr.wsr_publish_date", lambda: day)
+
+
 def test_invalid_mpp_is_rejected(client: TestClient) -> None:
     response = client.post(
         "/api/v1/wsr/uploads",
@@ -74,8 +78,9 @@ def test_invalid_mpp_is_rejected(client: TestClient) -> None:
     assert response.json()["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
 
 
-def test_generate_uses_mpp_status_date(client: TestClient, monkeypatch) -> None:
+def test_generate_uses_publish_date_not_mpp_status_date(client: TestClient, monkeypatch) -> None:
     handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    _publish_on(monkeypatch)
     monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _empty_ai)
     response = client.post(f"/api/v1/wsr/requests/{handle}/generate")
     assert response.status_code == 200, response.text
@@ -90,11 +95,24 @@ def test_generate_uses_mpp_status_date(client: TestClient, monkeypatch) -> None:
     assert "delay_mapping" in result["facts"]
     assert result["facts"]["delay_mapping"]["delayed_task_count"] >= 0
     assert result["exportable"] is True
-    assert result["milestones"] == ["Build"]
+    assert result["progress"] == ["Build"]
+    assert result["milestones"] == []
     status = client.get(f"/api/v1/wsr/requests/{handle}")
     assert status.json()["status"] == "succeeded"
     again = client.post(f"/api/v1/wsr/requests/{handle}/generate")
     assert again.json()["result"]["generated_at"] == result["generated_at"]
+
+
+def test_generate_week_sections_follow_publish_date(client: TestClient, monkeypatch) -> None:
+    handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    _publish_on(monkeypatch, "2026-08-31")
+    monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _empty_ai)
+    response = client.post(f"/api/v1/wsr/requests/{handle}/generate")
+    assert response.status_code == 200, response.text
+    result = response.json()["result"]
+    assert result["as_of_date"] == "2026-08-31"
+    assert result["progress"] == []
+    assert result["milestones"] == ["Go Live"]
 
 
 def test_generate_falls_back_to_today_without_status_date(client: TestClient, monkeypatch) -> None:
@@ -107,6 +125,7 @@ def test_generate_falls_back_to_today_without_status_date(client: TestClient, mo
 
 def test_generate_retry_without_reupload(client: TestClient, monkeypatch) -> None:
     handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    _publish_on(monkeypatch)
     calls = {"n": 0}
 
     def flaky(_data: dict) -> dict:
@@ -128,6 +147,7 @@ def test_generate_retry_without_reupload(client: TestClient, monkeypatch) -> Non
 
 def test_report_available_after_generation(client: TestClient, monkeypatch) -> None:
     handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    _publish_on(monkeypatch)
     monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _empty_ai)
     client.post(f"/api/v1/wsr/requests/{handle}/generate")
     report = client.get(f"/api/v1/wsr/requests/{handle}/report")
@@ -166,6 +186,7 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
 
 def test_delay_mapping_pdf_is_a_standalone_sheet(client: TestClient, monkeypatch) -> None:
     handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    _publish_on(monkeypatch)
     monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _empty_ai)
     generated = client.post(f"/api/v1/wsr/requests/{handle}/generate")
     assert generated.status_code == 200, generated.text
@@ -216,6 +237,7 @@ def _pending_ai(_data: dict) -> dict:
 
 def _generate_pending(client: TestClient, monkeypatch) -> str:
     handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
+    _publish_on(monkeypatch)
     monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _pending_ai)
     response = client.post(f"/api/v1/wsr/requests/{handle}/generate")
     assert response.status_code == 200, response.text
