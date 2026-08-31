@@ -510,3 +510,89 @@ def test_on_time_task_is_not_listed() -> None:
         ]
     )
     assert mapping.rows == []
+
+
+def test_go_live_summary_does_not_fail_reconciliation() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(
+                id=1,
+                name="Go Live",
+                is_summary=True,
+                outline_level=1,
+                wbs="1",
+                baseline_finish="2026-08-20",
+                scheduled_finish="2026-09-01",
+            ),
+            PlanTaskData(
+                id=2,
+                name="Design Sign-off",
+                wbs="1.1",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-13",
+                predecessor_ids=[],
+            ),
+            PlanTaskData(
+                id=3,
+                name="Cutover",
+                wbs="1.2",
+                is_milestone=True,
+                baseline_finish="2026-08-20",
+                scheduled_finish="2026-09-01",
+                predecessor_ids=[2],
+            ),
+        ]
+    )
+    assert mapping.reconciliation_warning is None
+    assert mapping.report_status == "verified"
+    assert mapping.reconciliation_status == "reconciled"
+    assert [row.name for row in mapping.rows] == ["Design Sign-off", "Cutover"]
+    assert mapping.baseline_go_live == "2026-08-20"
+    assert mapping.current_go_live == "2026-09-01"
+
+
+def test_go_live_named_work_is_listed_and_reconciles() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(
+                id=1,
+                name="Go Live rehearsal",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-13",
+                assignments=_owners("Idealake"),
+            ),
+            _go_live(id=2, predecessor_ids=[1]),
+        ]
+    )
+    assert mapping.reconciliation_warning is None
+    assert mapping.report_status == "verified"
+    assert [row.name for row in mapping.rows] == ["Go Live rehearsal"]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].shift_days == 3
+
+
+def test_unmatched_baseline_go_live_does_not_fail_reconciliation() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(
+                id=1,
+                name="Design Sign-off",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-13",
+            ),
+            _go_live(id=90, predecessor_ids=[1], scheduled_finish="2026-09-01"),
+        ],
+        baseline=[
+            PlanTaskData(
+                id=1,
+                name="Design Sign-off",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            _go_live(id=80, scheduled_finish="2026-08-20", baseline_finish="2026-08-20"),
+        ],
+    )
+    assert mapping.reconciliation_warning is None
+    assert mapping.report_status == "verified"
+    assert mapping.removed_task_count == 0
+    assert [row.name for row in mapping.rows] == ["Design Sign-off"]

@@ -122,12 +122,21 @@ def build_delay_mapping(
     classified: list[dict] = []
     review_rows: list[DelayMappingRow] = []
     matching_unresolved = go_live_status == "ambiguous"
+    skipped_current_go_live = 0
+    baseline_go_live_id = None if baseline_go_live_task is None else baseline_go_live_task.id
 
     for task in current_leaves:
         matched, source = match_task(task, baseline_index)
         baseline_finish = parse_date(None if matched is None else matched.baseline_finish)
         current_finish = parse_date(task.actual_finish) or parse_date(task.scheduled_finish)
         current_start = parse_date(task.actual_start) or parse_date(task.scheduled_start)
+        # Only the selected Go-Live milestone is omitted from the executive sheet.
+        # Other tasks whose names mention go-live are real work and must still be counted.
+        if go_live_id is not None and task.id == go_live_id:
+            if matched is not None:
+                matched_baseline_ids.add(matched.id)
+            skipped_current_go_live += 1
+            continue
         if source == "ambiguous":
             matching_unresolved = True
             review_rows.append(
@@ -169,10 +178,6 @@ def build_delay_mapping(
             )
             continue
         matched_baseline_ids.add(matched.id)
-        if go_live_id is not None and task.id == go_live_id:
-            continue
-        if _is_go_live_task(task, _contains):
-            continue
         if baseline_finish is None:
             classified.append(
                 {
@@ -263,11 +268,13 @@ def build_delay_mapping(
             )
 
     removed_rows: list[DelayMappingRow] = []
+    skipped_baseline_go_live = 0
     if two_file:
         for task in baseline_leaves:
             if task.id in matched_baseline_ids:
                 continue
-            if _is_go_live_task(task, _contains):
+            if baseline_go_live_id is not None and task.id == baseline_go_live_id:
+                skipped_baseline_go_live += 1
                 continue
             removed_rows.append(
                 _register_row(
@@ -350,26 +357,15 @@ def build_delay_mapping(
     additional_count = sum(1 for row in rows if row.task_type == "additional")
     delay_shift = sum(row.shift_days or 0 for row in rows if row.task_type == "delay")
     attributed = sum(row.go_live_impact_days or 0 for row in rows)
-    matched_count = sum(
-        1
-        for item in classified
-        if item["match_status"] == "matched"
-    ) + (1 if go_live_task is not None and go_live_id is not None else 0)
     unchanged_count = sum(1 for item in classified if item["task_type"] == "unchanged")
     ahead_count = sum(1 for item in classified if item["task_type"] == "ahead")
 
     current_count = len(current_leaves)
     baseline_count = len(baseline_leaves)
-    additional_classified = sum(1 for item in classified if item["task_type"] == "additional")
     ambiguous_count = len(review_rows)
     removed_count = len(removed_rows)
-    current_accounted = matched_count + additional_classified + ambiguous_count
-    # Go-live was skipped in classified but counted in matched_count when present.
-    classified_non_gl = len(classified)
-    current_accounted = classified_non_gl + ambiguous_count + (
-        1 if go_live_task is not None else 0
-    )
-    baseline_accounted = len(matched_baseline_ids) + removed_count
+    current_accounted = len(classified) + ambiguous_count + skipped_current_go_live
+    baseline_accounted = len(matched_baseline_ids) + removed_count + skipped_baseline_go_live
     if two_file:
         recon_ok = current_accounted == current_count and baseline_accounted == baseline_count
     else:
@@ -784,6 +780,10 @@ def _is_go_live_task(task: PlanTaskData, contains) -> bool:
     return contains(task.gate, go_live_markers()) or contains(task.name, go_live_markers())
 
 
+def _exact_go_live_name(task: PlanTaskData) -> bool:
+    return _norm(task.name) in _EXPLICIT_GO_LIVE
+
+
 def _select_go_live(
     tasks: list[PlanTaskData],
     as_of: date,
@@ -791,9 +791,17 @@ def _select_go_live(
     candidate_date,
 ) -> tuple[PlanTaskData | None, str]:
     explicit = [task for task in tasks if (task.gate or "").strip().casefold() in _EXPLICIT_GO_LIVE]
-    named = explicit or [task for task in tasks if _is_go_live_task(task, contains)]
+    exact = [task for task in tasks if _exact_go_live_name(task)]
+    named = explicit or exact or [task for task in tasks if _is_go_live_task(task, contains)]
     if not named:
         return None, "unavailable"
+    # Prefer the milestone/leaf when a summary phase is also named Go Live.
+    leaves = [task for task in named if not task.is_summary]
+    if leaves:
+        named = leaves
+    milestones = [task for task in named if task.is_milestone]
+    if milestones:
+        named = milestones
     dated = [(task, when) for task in named if (when := candidate_date(task)) is not None]
     finishes = {when for _, when in dated}
     if len(named) > 1 and len(finishes) > 1:
