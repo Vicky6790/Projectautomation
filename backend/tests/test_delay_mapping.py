@@ -128,7 +128,7 @@ def test_additional_is_current_only() -> None:
     )
     assert [row.name for row in mapping.rows] == ["Additional UX Research"]
     assert mapping.rows[0].task_type == "additional"
-    assert mapping.rows[0].shift_days is None
+    assert mapping.rows[0].shift_days == 3
     assert mapping.rows[0].planned_finish is None
     assert mapping.rows[0].go_live_impact_days == 3
     assert mapping.removed_task_count == 0
@@ -409,9 +409,7 @@ def test_chain_delays_do_not_double_count_go_live_impact() -> None:
     by_name = {row.name: row for row in mapping.rows}
     assert by_name["Wireframes"].shift_days == 3
     assert by_name["Sign-Off"].shift_days == 5
-    assert (by_name["Wireframes"].go_live_impact_days or 0) + (
-        by_name["Sign-Off"].go_live_impact_days or 0
-    ) == mapping.actual_shift_working_days == 8
+    assert sum(row.shift_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days == 8
 
 
 def test_go_live_shifted_by_working_days() -> None:
@@ -707,3 +705,101 @@ def test_child_under_on_path_summary_is_listed() -> None:
     assert "Deployment Onto Production Environment" in names
     assert mapping.rows[0].task_type == "delay"
     assert mapping.actual_shift_working_days == 5
+    assert sum(row.shift_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days
+
+
+def test_overlapping_chain_shift_days_match_go_live() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(
+                id=1,
+                name="Deployment Onto Production Environment",
+                scheduled_start="2027-03-25",
+                baseline_finish="2027-03-25",
+                scheduled_finish="2027-04-01",
+                critical=True,
+                total_slack_days=0,
+            ),
+            PlanTaskData(
+                id=2,
+                name="Sanity Testing & Confirmation",
+                scheduled_start="2027-03-25",
+                baseline_finish="2027-03-25",
+                scheduled_finish="2027-04-01",
+                predecessor_ids=[1],
+                critical=True,
+                total_slack_days=0,
+            ),
+            PlanTaskData(
+                id=3,
+                name="Pre-Go-Live Checklist Execution + Acceptance",
+                scheduled_start="2027-03-26",
+                baseline_finish="2027-03-26",
+                scheduled_finish="2027-04-02",
+                predecessor_ids=[2],
+                critical=True,
+                total_slack_days=0,
+            ),
+            _go_live(
+                id=4,
+                predecessor_ids=[3],
+                scheduled_finish="2027-04-02",
+                baseline_finish="2027-03-26",
+            ),
+        ]
+    )
+    assert mapping.actual_shift_working_days == 5
+    assert [row.name for row in mapping.rows] == ["Deployment Onto Production Environment"]
+    assert mapping.rows[0].shift_days == 5
+    assert sum(row.shift_days or 0 for row in mapping.rows) == 5
+    assert mapping.delayed_task_count == 1
+
+
+def test_first_additional_on_path_is_listed_before_tail_delay() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(
+                id=1,
+                name="Kickoff",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            PlanTaskData(
+                id=4,
+                name="Extra security review",
+                scheduled_start="2026-08-12",
+                scheduled_finish="2026-08-16",
+                predecessor_ids=[1],
+            ),
+            PlanTaskData(
+                id=5,
+                name="Pre-Go-Live Checklist Execution + Acceptance",
+                baseline_finish="2026-08-20",
+                scheduled_finish="2026-08-27",
+                predecessor_ids=[4],
+                critical=True,
+                total_slack_days=0,
+            ),
+            _go_live(id=90, predecessor_ids=[5], scheduled_finish="2026-08-27"),
+        ],
+        baseline=[
+            PlanTaskData(
+                id=1,
+                name="Kickoff",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            PlanTaskData(
+                id=5,
+                name="Pre-Go-Live Checklist Execution + Acceptance",
+                baseline_finish="2026-08-20",
+                scheduled_finish="2026-08-20",
+            ),
+            _go_live(id=90, scheduled_finish="2026-08-20", baseline_finish="2026-08-20"),
+        ],
+    )
+    assert mapping.actual_shift_working_days == 5
+    assert mapping.rows[0].name == "Extra security review"
+    assert mapping.rows[0].task_type == "additional"
+    assert mapping.rows[0].shift_days == 3
+    assert sum(row.shift_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days

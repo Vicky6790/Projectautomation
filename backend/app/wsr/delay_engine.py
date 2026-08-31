@@ -112,6 +112,7 @@ def build_delay_mapping(
     successors = _successor_map(current_plan.tasks)
     by_id = {task.id: task for task in current_plan.tasks}
     wbs_index = {(task.wbs or "").strip(): task for task in current_plan.tasks if (task.wbs or "").strip()}
+    driving_ids = _driving_path_ids(go_live_task, current_plan.tasks, successors)
     two_file = baseline_plan is not None
     baseline_tasks = baseline_plan.tasks if two_file else current_plan.tasks
     baseline_index = _baseline_index(baseline_tasks, current_plan.tasks, parse_date=parse_date)
@@ -152,6 +153,7 @@ def build_delay_mapping(
                     successors=successors,
                     by_id=by_id,
                     go_live_task=go_live_task,
+                    driving_ids=driving_ids,
                     parse_date=parse_date,
                     two_file=two_file,
                     match_status="ambiguous",
@@ -290,6 +292,7 @@ def build_delay_mapping(
                     successors=successors,
                     by_id=by_id,
                     go_live_task=go_live_task,
+                    driving_ids=driving_ids,
                     parse_date=parse_date,
                     two_file=two_file,
                     match_status="removed",
@@ -305,15 +308,12 @@ def build_delay_mapping(
     for item in report_items:
         item["potential_impact"] = _potential_go_live_impact(
             item,
-            successors=successors,
-            go_live_task=go_live_task,
-            wbs_index=wbs_index,
+            driving_ids=driving_ids,
             net=net,
             holidays=holidays,
-            parse_date=parse_date,
         )
     _attribute_go_live_impact(report_items, net=net or 0)
-    report_items = [item for item in report_items if (item.get("potential_impact") or 0) > 0]
+    report_items = [item for item in report_items if (item.get("go_live_impact_days") or 0) > 0]
 
     calc_status_go_live = (
         "go_live_ambiguous"
@@ -337,11 +337,12 @@ def build_delay_mapping(
                 item["task"],
                 item["matched"],
                 item["task_type"],
-                shift_days=item["shift_days"],
+                shift_days=item.get("go_live_impact_days") or 0,
                 go_live_impact_days=item.get("go_live_impact_days") or 0,
                 successors=successors,
                 by_id=by_id,
                 go_live_task=go_live_task,
+                driving_ids=driving_ids,
                 parse_date=parse_date,
                 match_status=item["match_status"],
                 calculation_status=status,
@@ -353,7 +354,7 @@ def build_delay_mapping(
 
     rows.sort(
         key=lambda row: (
-            row.revised_finish or row.planned_finish or "9999-12-31",
+            row.revised_start or row.planned_finish or "9999-12-31",
             row.current_task_id or 10**9,
         )
     )
@@ -361,6 +362,7 @@ def build_delay_mapping(
     delay_count = sum(1 for row in rows if row.task_type == "delay")
     additional_count = sum(1 for row in rows if row.task_type == "additional")
     delay_shift = sum(row.shift_days or 0 for row in rows if row.task_type == "delay")
+    additional_shift = sum(row.shift_days or 0 for row in rows if row.task_type == "additional")
     attributed = sum(row.go_live_impact_days or 0 for row in rows)
     unchanged_count = sum(1 for item in classified if item["task_type"] == "unchanged")
     ahead_count = sum(1 for item in classified if item["task_type"] == "ahead")
@@ -406,7 +408,7 @@ def build_delay_mapping(
         unattributed_shift_days=0,
         unattributed_status=None,
         delay_shift_days=delay_shift,
-        additional_shift_days=0,
+        additional_shift_days=additional_shift,
         total_delayed_days=attributed,
         delayed_task_count=delay_count,
         additional_task_count=additional_count,
@@ -555,58 +557,72 @@ def _compare_start(matched: PlanTaskData | None, *, two_file: bool, parse_date):
     return None
 
 
-def _on_go_live_path(
-    task: PlanTaskData,
-    *,
-    successors: dict[int, list[int]],
+def _driving_path_ids(
     go_live_task: PlanTaskData | None,
-    wbs_index: dict[str, PlanTaskData],
-) -> bool:
+    tasks: list[PlanTaskData],
+    successors: dict[int, list[int]],
+) -> set[int]:
+    """Tasks that drive Go-Live: predecessor chain plus children of summaries on that chain."""
     if go_live_task is None:
-        return False
-    if _reaches_task(successors, task.id, go_live_task.id):
-        return True
-    wbs = (task.wbs or "").strip()
-    while "." in wbs:
-        wbs = wbs.rsplit(".", 1)[0]
-        parent = wbs_index.get(wbs)
-        if parent is not None and _reaches_task(successors, parent.id, go_live_task.id):
-            return True
-    return False
+        return set()
+    wbs_map = {(task.wbs or "").strip(): task for task in tasks if (task.wbs or "").strip()}
+    children: dict[int, list[int]] = {}
+    for task in tasks:
+        parent = wbs_map.get(_parent_wbs(task.wbs))
+        if parent is not None:
+            children.setdefault(parent.id, []).append(task.id)
+    preds: dict[int, list[int]] = {}
+    for src, dests in successors.items():
+        for dest in dests:
+            bucket = preds.setdefault(dest, [])
+            if src not in bucket:
+                bucket.append(src)
+    for task in tasks:
+        for pred in task.predecessor_ids:
+            bucket = preds.setdefault(task.id, [])
+            if pred not in bucket:
+                bucket.append(pred)
+    on: set[int] = set()
+    queue = [go_live_task.id]
+    while queue:
+        nid = queue.pop()
+        if nid in on:
+            continue
+        on.add(nid)
+        for pred in preds.get(nid, []):
+            if pred not in on:
+                queue.append(pred)
+        for child in children.get(nid, []):
+            if child not in on:
+                queue.append(child)
+    return on
+
+
+def _on_go_live_path(task: PlanTaskData, *, driving_ids: set[int]) -> bool:
+    return task.id in driving_ids
 
 
 def _potential_go_live_impact(
     item: dict,
     *,
-    successors: dict[int, list[int]],
-    go_live_task: PlanTaskData | None,
-    wbs_index: dict[str, PlanTaskData],
+    driving_ids: set[int],
     net: int | None,
     holidays: set[date],
-    parse_date,
 ) -> int:
-    _ = parse_date
-    if net is None or net <= 0 or go_live_task is None:
+    if net is None or net <= 0:
         return 0
     task: PlanTaskData = item["task"]
-    on_path = _on_go_live_path(
-        task, successors=successors, go_live_task=go_live_task, wbs_index=wbs_index
-    )
+    if not _on_go_live_path(task, driving_ids=driving_ids):
+        return 0
     slack = task.total_slack_days
     has_float = slack is not None and slack > 0 and task.critical is False
-    if item["task_type"] == "delay":
-        shift = item["shift_days"] or 0
-        if not on_path:
-            return 0
-        if slack is not None and shift and slack >= shift:
-            return 0
-        if has_float:
-            return 0
-        return shift
-    if not on_path:
-        return 0
     if has_float:
         return 0
+    if item["task_type"] == "delay":
+        shift = item["shift_days"] or 0
+        if slack is not None and shift and slack >= shift:
+            return 0
+        return shift
     start = item.get("current_start")
     finish = item.get("current_finish")
     if start and finish and finish >= start:
@@ -620,8 +636,8 @@ def _attribute_go_live_impact(items: list[dict], *, net: int) -> None:
     ordered = sorted(
         items,
         key=lambda item: (
+            item.get("current_start") or item.get("baseline_finish") or date.max,
             0 if item["task_type"] == "delay" else 1,
-            item.get("current_finish") or date.max,
             item["task"].id,
         ),
     )
@@ -636,7 +652,12 @@ def _attribute_go_live_impact(items: list[dict], *, net: int) -> None:
         if start and finish:
             days = sorted(
                 day
-                for day in _working_day_set(start, finish, set(), inclusive_start=item["task_type"] == "additional")
+                for day in _working_day_set(
+                    start,
+                    finish,
+                    set(),
+                    inclusive_start=item["task_type"] == "additional",
+                )
                 if day not in claimed
             )
             if days:
@@ -660,6 +681,7 @@ def _register_row(
     successors: dict[int, list[int]],
     by_id: dict[int, PlanTaskData],
     go_live_task: PlanTaskData | None,
+    driving_ids: set[int],
     parse_date,
     match_status: str,
     calculation_status: str,
@@ -676,9 +698,7 @@ def _register_row(
     successor_names = list(task.successor_names) or _impacted_names(task.id, successors, by_id, go_live_task)[0]
     milestone_names = _impacted_names(task.id, successors, by_id, go_live_task)[1]
     parent = _containing_phase(tasks, phases, task)
-    on_path = _on_go_live_path(
-        task, successors=successors, go_live_task=go_live_task, wbs_index=wbs_index
-    )
+    on_path = _on_go_live_path(task, driving_ids=driving_ids)
     impact_days = go_live_impact_days
     return DelayMappingRow(
         name=task.name,
@@ -686,8 +706,8 @@ def _register_row(
         wbs=(task.wbs or "").strip() or None,
         hierarchy_path=_canonical_key(task, tasks),
         task_type=task_type,  # type: ignore[arg-type]
-        shift_days=None if task_type == "additional" else shift_days,
-        delay_days=None if task_type == "additional" else shift_days,
+        shift_days=shift_days,
+        delay_days=shift_days,
         go_live_impact_days=impact_days,
         owner=" & ".join(names) if names else None,
         owner_class=_owner_class(names),

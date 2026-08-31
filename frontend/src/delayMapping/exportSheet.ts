@@ -27,11 +27,17 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
       return `<tr>
         <td style="background:${fill}">${esc(row.taskName)}</td>
         <td style="background:${fill}">${esc(row.taskType)}</td>
-        <td style="background:${fill}">${row.taskType === "Additional" || row.shiftDays == null ? (row.taskType === "Additional" ? "N/A" : "Unavailable") : row.shiftDays}</td>
+        <td style="background:${fill}">${row.shiftDays == null ? "Unavailable" : String(row.shiftDays)}</td>
         <td style="background:${fill}">${esc(unavailable(row.owner))}</td>
       </tr>`;
     })
     .join("")}
+  <tr>
+    <td><b>Total</b></td>
+    <td></td>
+    <td><b>${rows.reduce((sum, row) => sum + (row.shiftDays ?? 0), 0)}</b></td>
+    <td></td>
+  </tr>
 </table>
 </body>
 </html>`;

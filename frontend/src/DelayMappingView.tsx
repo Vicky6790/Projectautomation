@@ -126,6 +126,7 @@ export function DelayMappingView() {
 
   const shift = result.summary.goLiveShift;
   const canExport = Boolean(currentFile);
+  const listedShiftTotal = rows.reduce((sum, row) => sum + (row.shiftDays ?? 0), 0);
 
   return (
     <section className="dms-page">
@@ -270,7 +271,7 @@ export function DelayMappingView() {
                         {row.taskType === "Delay" ? "Delay" : "Add."}
                       </span>
                     </td>
-                    <td>{row.taskType === "Additional" || row.shiftDays == null ? (row.taskType === "Additional" ? "N/A" : "Unavailable") : row.shiftDays}</td>
+                    <td>{shiftCell(row)}</td>
                     <td>{unavailable(row.owner)}</td>
                   </tr>
                 ))
@@ -284,6 +285,16 @@ export function DelayMappingView() {
                 </tr>
               )}
             </tbody>
+            {rows.length ? (
+              <tfoot>
+                <tr className="dms-total-row">
+                  <td>Total</td>
+                  <td />
+                  <td>{listedShiftTotal}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            ) : null}
           </table>
         </div>
       </div>
@@ -424,7 +435,10 @@ function RowDrawer({ item, onClose }: { item: DelayMappingItem; onClose: () => v
             <Fact label="Baseline" value="Not Found" />
             <Fact label="Current Start" value={shortDate(item.currentStart)} />
             <Fact label="Current Finish" value={shortDate(item.currentFinish)} />
-            <Fact label="Task Shift" value="N/A" />
+            <Fact
+              label="Task Shift"
+              value={item.shiftDays == null ? "N/A" : `+${item.shiftDays} Working Days`}
+            />
           </>
         )}
         <Fact
@@ -493,7 +507,8 @@ function GoLiveDrawer({
         <strong>{shift == null ? "Unavailable" : `+${shift} Working Days`}</strong>
       </p>
       <p className="dms-note">
-        Go-Live impact comes from the schedule and dependency path, not from summing task shift days.
+        Shift Days Count is unique working days on the driving path, capped at the Go-Live shift. Later tasks in the
+        same chain are not counted twice.
       </p>
     </>
   );
@@ -506,6 +521,10 @@ function Fact({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+function shiftCell(row: DelayMappingItem): string {
+  return row.shiftDays == null ? "Unavailable" : String(row.shiftDays);
 }
 
 function joinNames(values: string[]): string {

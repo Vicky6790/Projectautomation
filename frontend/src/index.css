@@ -2661,6 +2661,17 @@ label select {
   cursor: pointer;
 }
 
+.dms-table tfoot td {
+  cursor: default;
+}
+
+.dms-total-row td {
+  background: #f8fafc;
+  font-weight: 700;
+  border-top: 2px solid #e2e8f0;
+  border-bottom: none;
+}
+
 .dms-table tbody tr:hover td {
   background: #f8fafc;
 }
