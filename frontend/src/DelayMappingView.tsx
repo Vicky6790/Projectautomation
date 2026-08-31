@@ -177,7 +177,7 @@ export function DelayMappingView() {
       {!currentFile ? (
         <p className="dms-sample dms-no-print" role="status">
           Insert the Current MPP to compare against Baseline Finish. Insert a Baseline MPP to compare two
-          files. Missing values stay Unavailable. Additional task shift days are N/A.
+          files. Missing values stay Unavailable. Only Delay and Additional tasks that move Go-Live are listed.
         </p>
       ) : !baselineFile ? (
         <p className="dms-note dms-no-print">

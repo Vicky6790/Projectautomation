@@ -127,7 +127,7 @@ def build_delay_mapping(
 
     for task in current_leaves:
         matched, source = match_task(task, baseline_index)
-        baseline_finish = parse_date(None if matched is None else matched.baseline_finish)
+        baseline_finish = _compare_finish(matched, two_file=two_file, parse_date=parse_date)
         current_finish = parse_date(task.actual_finish) or parse_date(task.scheduled_finish)
         current_start = parse_date(task.actual_start) or parse_date(task.scheduled_start)
         # Only the selected Go-Live milestone is omitted from the executive sheet.
@@ -153,6 +153,7 @@ def build_delay_mapping(
                     by_id=by_id,
                     go_live_task=go_live_task,
                     parse_date=parse_date,
+                    two_file=two_file,
                     match_status="ambiguous",
                     calculation_status="ambiguous_match",
                     evidence_reason="Multiple baseline tasks match this current task. Delay was not calculated.",
@@ -290,6 +291,7 @@ def build_delay_mapping(
                     by_id=by_id,
                     go_live_task=go_live_task,
                     parse_date=parse_date,
+                    two_file=two_file,
                     match_status="removed",
                     calculation_status="calculated",
                     evidence_reason="Task exists in Baseline MPP but not in Current MPP.",
@@ -305,11 +307,13 @@ def build_delay_mapping(
             item,
             successors=successors,
             go_live_task=go_live_task,
+            wbs_index=wbs_index,
             net=net,
             holidays=holidays,
             parse_date=parse_date,
         )
     _attribute_go_live_impact(report_items, net=net or 0)
+    report_items = [item for item in report_items if (item.get("potential_impact") or 0) > 0]
 
     calc_status_go_live = (
         "go_live_ambiguous"
@@ -343,6 +347,7 @@ def build_delay_mapping(
                 calculation_status=status,
                 evidence_reason=item["evidence"],
                 calculation_source=item["source"],
+                two_file=two_file,
             )
         )
 
@@ -527,19 +532,66 @@ def _canonical_key(task: PlanTaskData, tasks: list[PlanTaskData]) -> str:
     )
 
 
+def _compare_finish(matched: PlanTaskData | None, *, two_file: bool, parse_date):
+    """Baseline Finish for compare. Two-file uses the Baseline MPP schedule when the field is empty."""
+    if matched is None:
+        return None
+    finish = parse_date(matched.baseline_finish)
+    if finish is not None:
+        return finish
+    if two_file:
+        return parse_date(matched.scheduled_finish)
+    return None
+
+
+def _compare_start(matched: PlanTaskData | None, *, two_file: bool, parse_date):
+    if matched is None:
+        return None
+    start = parse_date(matched.baseline_start)
+    if start is not None:
+        return start
+    if two_file:
+        return parse_date(matched.scheduled_start)
+    return None
+
+
+def _on_go_live_path(
+    task: PlanTaskData,
+    *,
+    successors: dict[int, list[int]],
+    go_live_task: PlanTaskData | None,
+    wbs_index: dict[str, PlanTaskData],
+) -> bool:
+    if go_live_task is None:
+        return False
+    if _reaches_task(successors, task.id, go_live_task.id):
+        return True
+    wbs = (task.wbs or "").strip()
+    while "." in wbs:
+        wbs = wbs.rsplit(".", 1)[0]
+        parent = wbs_index.get(wbs)
+        if parent is not None and _reaches_task(successors, parent.id, go_live_task.id):
+            return True
+    return False
+
+
 def _potential_go_live_impact(
     item: dict,
     *,
     successors: dict[int, list[int]],
     go_live_task: PlanTaskData | None,
+    wbs_index: dict[str, PlanTaskData],
     net: int | None,
     holidays: set[date],
     parse_date,
 ) -> int:
+    _ = parse_date
     if net is None or net <= 0 or go_live_task is None:
         return 0
     task: PlanTaskData = item["task"]
-    on_path = _reaches_task(successors, task.id, go_live_task.id)
+    on_path = _on_go_live_path(
+        task, successors=successors, go_live_task=go_live_task, wbs_index=wbs_index
+    )
     slack = task.total_slack_days
     has_float = slack is not None and slack > 0 and task.critical is False
     if item["task_type"] == "delay":
@@ -613,9 +665,10 @@ def _register_row(
     calculation_status: str,
     evidence_reason: str,
     calculation_source: str,
+    two_file: bool = False,
 ) -> DelayMappingRow:
-    planned_start = parse_date(None if baseline is None else baseline.baseline_start)
-    planned_finish = parse_date(None if baseline is None else baseline.baseline_finish)
+    planned_start = _compare_start(baseline, two_file=two_file, parse_date=parse_date)
+    planned_finish = _compare_finish(baseline, two_file=two_file, parse_date=parse_date)
     current_start = parse_date(task.actual_start) or parse_date(task.scheduled_start)
     current_finish = parse_date(task.actual_finish) or parse_date(task.scheduled_finish)
     names = _resolved_owner_names(task, tasks)
@@ -623,7 +676,9 @@ def _register_row(
     successor_names = list(task.successor_names) or _impacted_names(task.id, successors, by_id, go_live_task)[0]
     milestone_names = _impacted_names(task.id, successors, by_id, go_live_task)[1]
     parent = _containing_phase(tasks, phases, task)
-    on_path = go_live_task is not None and _reaches_task(successors, task.id, go_live_task.id)
+    on_path = _on_go_live_path(
+        task, successors=successors, go_live_task=go_live_task, wbs_index=wbs_index
+    )
     impact_days = go_live_impact_days
     return DelayMappingRow(
         name=task.name,
