@@ -1,4 +1,4 @@
-export type DelayTaskType = "DELAYED" | "ADDITIONAL";
+export type DelayTaskType = "Delay" | "Additional";
 
 export type DelayMappingItem = {
   id: string;

@@ -196,8 +196,8 @@ def test_delay_mapping_pdf_is_a_standalone_sheet(client: TestClient, monkeypatch
     assert f'delay-mapping-{handle}.pdf' in report.headers["content-disposition"]
     text = pdf_text(report.content)
     assert "Go-Live Delay Mapping" in text
-    assert "Project Deadline" in text
-    assert "Identified Deadline Impact" in text
+    assert "Baselined Go-Live Date" in text
+    assert "Actual Shift In Working Days" in text
     assert "Executive Summary" not in text
     assert "Risks & Focus Areas" not in text
 
@@ -361,8 +361,9 @@ def test_evidence_is_isolated_to_the_request(client: TestClient, monkeypatch) ->
     assert patched.status_code == 404
 
 
-def test_delay_mapping_uses_single_uploaded_mpp(client: TestClient, monkeypatch) -> None:
+def test_delay_mapping_compares_baseline_and_current_mpp(client: TestClient, monkeypatch) -> None:
     as_of = date.fromisoformat("2026-08-22")
+    baseline = _plan(status_date="2026-08-22")
     current = ProjectPlanData(
         name="Demo",
         owner="Alex PM",
@@ -402,12 +403,23 @@ def test_delay_mapping_uses_single_uploaded_mpp(client: TestClient, monkeypatch)
             ),
         ],
     )
-    monkeypatch.setattr("app.routers.wsr.read_mpp_bytes", lambda _content, _name: current)
-    file_id = client.post(
+    queued = [baseline, current]
+    monkeypatch.setattr(
+        "app.routers.wsr.read_mpp_bytes",
+        lambda _content, _name: queued.pop(0),
+    )
+    baseline_id = client.post(
         "/api/v1/wsr/uploads",
-        files={"file": ("plan.mpp", mpp_stub_bytes(), "application/vnd.ms-project")},
+        files={"file": ("baseline.mpp", mpp_stub_bytes(), "application/vnd.ms-project")},
     ).json()["id"]
-    response = client.post("/api/v1/wsr/delay-mapping", json={"current_file_id": file_id})
+    current_id = client.post(
+        "/api/v1/wsr/uploads",
+        files={"file": ("current.mpp", mpp_stub_bytes(), "application/vnd.ms-project")},
+    ).json()["id"]
+    response = client.post(
+        "/api/v1/wsr/delay-mapping",
+        json={"baseline_file_id": baseline_id, "current_file_id": current_id},
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["baseline_go_live"] == "2026-09-11"

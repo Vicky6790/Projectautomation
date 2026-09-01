@@ -2478,10 +2478,6 @@ label select {
   margin-bottom: 16px;
 }
 
-.dms-uploads-single {
-  grid-template-columns: minmax(280px, 520px);
-}
-
 .dms-upload-slot {
   background: #fff;
   border: 1px solid #e2e8f0;
@@ -2637,15 +2633,10 @@ label select {
 
 .dms-table th,
 .dms-table td {
-  padding: 10px 12px;
+  padding: 10px 16px;
   text-align: left;
   border-bottom: 1px solid #f1f5f9;
   white-space: nowrap;
-}
-
-.dms-table td:last-child {
-  white-space: normal;
-  max-width: 280px;
 }
 
 .dms-table th {

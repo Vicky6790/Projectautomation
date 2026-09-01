@@ -2,6 +2,9 @@ import { useMemo } from "react";
 import type { DelayMappingRow, DelayMappingSheet } from "../types";
 import { shortDate, unavailable } from "../wsrFormat";
 
+const RECONCILE_WARNING =
+  "Delay mapping total does not reconcile with the calculated Go-Live shift. PM validation required.";
+
 export function DelayMappingPanel({
   mapping,
 }: {
@@ -14,24 +17,35 @@ export function DelayMappingPanel({
   const total =
     mapping.total_delayed_days ??
     rows.reduce((sum, row) => sum + (row.go_live_impact_days ?? 0), 0);
-  const warning = mapping.reconciliation_warning || null;
+  const warning =
+    mapping.matching_requires_validation
+      ? mapping.reconciliation_warning || RECONCILE_WARNING
+      : null;
 
   return (
     <div className="delay-engine">
       <div className="delay-summary-card">
-        <h2 className="delay-block-title">Project Deadline</h2>
+        <h2 className="delay-block-title">Go-Live Date Shift</h2>
         <table className="delay-summary">
           <tbody>
             <tr>
-              <th>Project Deadline</th>
-              <td>{shortDate(mapping.current_go_live)}</td>
-            </tr>
-            <tr>
-              <th>Baseline Deadline</th>
+              <th>Baselined Go-Live Date</th>
               <td>{shortDate(mapping.baseline_go_live)}</td>
             </tr>
             <tr>
-              <th>Identified Deadline Impact</th>
+              <th>Current Go-Live Date</th>
+              <td>{shortDate(mapping.current_go_live)}</td>
+            </tr>
+            <tr>
+              <th>Shift In Working Days</th>
+              <td>{unavailableCount(mapping.shift_working_days ?? mapping.gross_working_day_shift)}</td>
+            </tr>
+            <tr>
+              <th>Holidays In Above Duration</th>
+              <td>{unavailableCount(mapping.holidays)}</td>
+            </tr>
+            <tr>
+              <th>Actual Shift In Working Days</th>
               <td className="delay-actual">{unavailableCount(actual)}</td>
             </tr>
           </tbody>
@@ -65,13 +79,11 @@ export function DelayMappingPanel({
                 <tr>
                   <th>Task Name</th>
                   <th>Task Type</th>
-                  <th>Start</th>
                   <th>Baseline Finish</th>
                   <th>Finish</th>
-                  <th>Delay / Impact Days</th>
-                  <th>Predecessors</th>
+                  <th>Shift Days Count</th>
+                  <th>Go-Live Impact</th>
                   <th>Owner</th>
-                  <th>Impact Reason</th>
                 </tr>
               </thead>
               <tbody>
@@ -87,8 +99,6 @@ export function DelayMappingPanel({
                   <td>
                     <strong>{total}</strong>
                   </td>
-                  <td />
-                  <td />
                   <td />
                 </tr>
               </tbody>
@@ -106,26 +116,21 @@ function PhaseGroup({ group }: { group: { name: string; rows: DelayMappingRow[] 
   return (
     <>
       <tr className="delay-phase-row">
-        <td colSpan={9}>{group.name}</td>
+        <td colSpan={7}>{group.name}</td>
       </tr>
       {group.rows.map((row, index) => {
+        const days = row.shift_days ?? row.delay_days;
         const type = row.task_type;
-        const typeLabel = type === "delay" ? "DELAYED" : type === "additional" ? "ADDITIONAL" : type ? type.toUpperCase() : "Unavailable";
-        const impact = row.go_live_impact_days;
-        const impactLabel =
-          type === "additional" && !impact ? "N/A" : impact == null ? "Unavailable" : `+${impact} WD`;
-        const baseline = type === "additional" ? "N/A" : shortDate(row.planned_finish);
+        const shiftLabel = type === "additional" ? "N/A" : days == null ? "Unavailable" : days;
         return (
           <tr key={`${group.name}-${row.wbs || row.name}-${index}`} className={type ? `delay-type-${type}` : undefined}>
             <td>{row.name}</td>
-            <td>{typeLabel}</td>
-            <td>{shortDate(row.revised_start)}</td>
-            <td>{baseline}</td>
+            <td>{type ? capitalize(type) : "Unavailable"}</td>
+            <td>{shortDate(row.planned_finish)}</td>
             <td>{shortDate(row.revised_finish)}</td>
-            <td>{impactLabel}</td>
-            <td>{row.predecessor_names?.join(", ") || "Unavailable"}</td>
+            <td>{shiftLabel}</td>
+            <td>{row.go_live_impact_days == null ? "Unavailable" : row.go_live_impact_days}</td>
             <td>{unavailable(row.owner)}</td>
-            <td>{row.evidence_reason || row.primary_reason || "Unavailable"}</td>
           </tr>
         );
       })}
@@ -153,53 +158,48 @@ function unavailableCount(value: number | null | undefined): string {
   return value == null ? "Unavailable" : String(value);
 }
 
+function capitalize(value: string): string {
+  return value ? value[0].toUpperCase() + value.slice(1) : value;
+}
+
 export function downloadDelayMappingSheet(mapping: DelayMappingSheet, asOf?: string) {
   const rows = mapping.rows ?? [];
   const actual = mapping.actual_shift_working_days ?? mapping.net_working_day_shift;
   const total =
     mapping.total_delayed_days ??
     rows.reduce((sum, row) => sum + (row.go_live_impact_days ?? 0), 0);
+  const shift = mapping.shift_working_days ?? mapping.gross_working_day_shift;
   const summary = [
-    ["PROJECT DEADLINE"],
-    ["Project Deadline", mapping.current_go_live?.slice(0, 10) || ""],
-    ["Baseline Deadline", mapping.baseline_go_live?.slice(0, 10) || ""],
+    ["GO-LIVE DATE SHIFT"],
+    ["Baselined Go-Live Date", mapping.baseline_go_live?.slice(0, 10) || ""],
+    ["Current Go-Live Date", mapping.current_go_live?.slice(0, 10) || ""],
     asOf ? ["As Of", asOf.slice(0, 10)] : [],
-    ["Identified Deadline Impact", actual == null ? "" : String(actual)],
+    ["Shift In Working Days", shift == null ? "" : String(shift)],
+    ["Holidays In Above Duration", mapping.holidays == null ? "" : String(mapping.holidays)],
+    ["Actual Shift In Working Days", actual == null ? "" : String(actual)],
     mapping.reconciliation_warning ? ["Warning", mapping.reconciliation_warning] : [],
     [],
     ["DELAY MAPPING"],
-    [
-      "Task Name",
-      "Task Type",
-      "Start",
-      "Baseline Finish",
-      "Finish",
-      "Delay / Impact Days",
-      "Predecessors",
-      "Owner",
-      "Impact Reason",
-    ],
+    ["Task Name", "Task Type", "Baseline Finish", "Finish", "Shift Days Count", "Go-Live Impact", "Owner"],
   ].filter((line) => line.length > 0);
   const body: string[][] = [];
   for (const group of groupByPhase(rows)) {
-    body.push([group.name, "", "", "", "", "", "", "", ""]);
+    body.push([group.name, "", "", "", "", "", ""]);
     for (const row of group.rows) {
-      const type = row.task_type === "delay" ? "DELAYED" : row.task_type === "additional" ? "ADDITIONAL" : row.task_type || "";
-      const impact = row.go_live_impact_days;
+      const days = row.shift_days ?? row.delay_days;
+      const shiftLabel = row.task_type === "additional" ? "N/A" : days == null ? "" : String(days);
       body.push([
         row.name,
-        type,
-        row.revised_start?.slice(0, 10) || "",
-        row.task_type === "additional" ? "N/A" : row.planned_finish?.slice(0, 10) || "",
+        row.task_type ? capitalize(row.task_type) : "",
+        row.planned_finish?.slice(0, 10) || "",
         row.revised_finish?.slice(0, 10) || "",
-        impact == null ? "" : String(impact),
-        (row.predecessor_names || []).join(", "),
+        shiftLabel,
+        row.go_live_impact_days == null ? "" : String(row.go_live_impact_days),
         row.owner || "",
-        row.evidence_reason || row.primary_reason || "",
       ]);
     }
   }
-  const csv = [...summary, ...body, ["Total", "", "", "", "", String(total), "", "", ""]]
+  const csv = [...summary, ...body, ["Total Count", "", "", "", "", String(total), ""]]
     .map((line) => line.map(csvCell).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });

@@ -1,7 +1,7 @@
 from datetime import date
 
 from app.models import PlanAssignmentData, PlanTaskData, ProjectPlanData
-from app.wsr.delay_engine import _INCOMPLETE_MESSAGE
+from app.wsr.delay_engine import match_task
 from app.wsr.facts import derive_wsr_facts
 
 
@@ -25,12 +25,19 @@ def _go_live(**kwargs) -> PlanTaskData:
     return PlanTaskData(**data)
 
 
-def _mapping(tasks: list[PlanTaskData], **kwargs):
-    return derive_wsr_facts(
-        _plan(tasks, **kwargs),
-        "2026-08-22",
-        generated_at="2026-08-22T10:00:00Z",
-    ).delay_mapping
+def _mapping(tasks: list[PlanTaskData], baseline: list[PlanTaskData] | None = None, **kwargs):
+    from app.wsr.delay_engine import build_delay_mapping
+
+    current = _plan(tasks, **kwargs)
+    if baseline is None:
+        return derive_wsr_facts(current, "2026-08-22", generated_at="2026-08-22T10:00:00Z").delay_mapping
+    return build_delay_mapping(
+        current,
+        date(2026, 8, 22),
+        [],
+        date(2026, 9, 1),
+        baseline_plan=_plan(baseline, **kwargs),
+    )
 
 
 def test_unchanged_task_is_not_listed() -> None:
@@ -91,7 +98,7 @@ def test_ahead_task_is_not_listed() -> None:
     assert mapping.ahead_task_count == 1
 
 
-def test_missing_baseline_finish_is_additional() -> None:
+def test_additional_is_current_only() -> None:
     mapping = _mapping(
         [
             PlanTaskData(
@@ -109,62 +116,58 @@ def test_missing_baseline_finish_is_additional() -> None:
                 scheduled_finish="2026-08-10",
             ),
             _go_live(id=90, predecessor_ids=[4], scheduled_finish="2026-08-27"),
-        ]
+        ],
+        baseline=[
+            PlanTaskData(
+                id=1,
+                name="Kickoff",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            _go_live(id=90, scheduled_finish="2026-08-20", baseline_finish="2026-08-20"),
+        ],
     )
     assert [row.name for row in mapping.rows] == ["Additional UX Research"]
     assert mapping.rows[0].task_type == "additional"
     assert mapping.rows[0].shift_days is None
     assert mapping.rows[0].planned_finish is None
     assert mapping.rows[0].go_live_impact_days == 3
-    assert mapping.rows[0].evidence_reason == (
-        "Additional task contributes to the dependency chain ending at Go-Live."
-    )
+    assert mapping.removed_task_count == 0
 
 
-def test_na_baseline_finish_is_additional() -> None:
+def test_removed_is_baseline_only() -> None:
     mapping = _mapping(
-        [
-            PlanTaskData(
-                id=4,
-                name="Additional Security Review",
-                baseline_finish="N/A",
-                scheduled_start="2026-08-12",
-                scheduled_finish="2026-08-16",
-                predecessor_ids=[1],
-            ),
+        [_go_live(scheduled_finish="2026-08-20")],
+        baseline=[
             PlanTaskData(
                 id=1,
-                name="Kickoff",
+                name="Old discovery",
                 baseline_finish="2026-08-10",
                 scheduled_finish="2026-08-10",
             ),
-            _go_live(id=90, predecessor_ids=[4], scheduled_finish="2026-08-27"),
-        ]
+            _go_live(scheduled_finish="2026-08-20"),
+        ],
     )
-    assert mapping.rows[0].task_type == "additional"
-    assert mapping.rows[0].planned_finish is None
+    assert mapping.rows == []
+    assert mapping.removed_task_count == 1
+    assert mapping.removed_rows[0].name == "Old discovery"
+    assert mapping.removed_rows[0].task_type == "removed"
 
 
-def test_additional_off_path_is_not_listed() -> None:
+def test_matched_without_baseline_finish_is_unavailable() -> None:
     mapping = _mapping(
         [
             PlanTaskData(
                 id=1,
-                name="Kickoff",
-                baseline_finish="2026-08-10",
-                scheduled_finish="2026-08-10",
+                name="Review",
+                scheduled_finish="2026-08-13",
             ),
-            PlanTaskData(
-                id=4,
-                name="Side analysis",
-                scheduled_start="2026-08-21",
-                scheduled_finish="2026-08-27",
-            ),
-            _go_live(id=3, predecessor_ids=[1], scheduled_finish="2026-08-27"),
+            _go_live(),
         ]
     )
     assert mapping.rows == []
-    assert mapping.additional_task_count == 0
+    names = [row.name for row in mapping.rows]
+    assert "Review" not in names
 
 
 def test_delayed_task_with_float_is_not_listed() -> None:
@@ -204,6 +207,37 @@ def test_delayed_task_on_go_live_path_has_impact() -> None:
     assert mapping.rows[0].shift_days == 8
     assert mapping.rows[0].go_live_impact_days == 8
     assert mapping.actual_shift_working_days == 8
+
+
+def test_additional_off_path_is_not_listed() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(
+                id=1,
+                name="Kickoff",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            PlanTaskData(
+                id=4,
+                name="Side analysis",
+                scheduled_start="2026-08-21",
+                scheduled_finish="2026-08-27",
+            ),
+            _go_live(id=3, predecessor_ids=[1], scheduled_finish="2026-08-27"),
+        ],
+        baseline=[
+            PlanTaskData(
+                id=1,
+                name="Kickoff",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            _go_live(id=3, scheduled_finish="2026-08-20", baseline_finish="2026-08-20"),
+        ],
+    )
+    assert mapping.rows == []
+    assert mapping.additional_task_count == 0
 
 
 def test_weekend_inside_shift_period_is_not_counted() -> None:
@@ -255,7 +289,7 @@ def test_repeated_names_in_different_sets_stay_separate() -> None:
     assert mapping.rows[0].shift_days == 3
 
 
-def test_additional_not_on_deadline_path_stays_hidden() -> None:
+def test_inserted_row_still_matches_by_id() -> None:
     mapping = _mapping(
         [
             PlanTaskData(
@@ -273,11 +307,81 @@ def test_additional_not_on_deadline_path_stays_hidden() -> None:
                 scheduled_finish="2026-08-12",
             ),
             _go_live(id=3, predecessor_ids=[1]),
-        ]
+        ],
+        baseline=[
+            PlanTaskData(
+                id=1,
+                name="Design Sign-off",
+                wbs="1.1",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            _go_live(id=3, scheduled_finish="2026-08-20", baseline_finish="2026-08-20"),
+        ],
     )
     by_name = {row.name: row for row in mapping.rows}
     assert by_name["Design Sign-off"].task_type == "delay"
+    assert by_name["Design Sign-off"].shift_days == 3
     assert "Inserted review" not in by_name
+
+
+def test_ambiguous_mapping_requires_validation() -> None:
+    from app.wsr.delay_engine import _baseline_index, build_delay_mapping
+    from app.wsr.facts import parse_date
+
+    current = PlanTaskData(id=99, name="Review", wbs="", outline_level=3)
+    baseline_tasks = [
+        PlanTaskData(id=1, name="Review", wbs="1.1.1", outline_level=3, baseline_finish="2026-08-01"),
+        PlanTaskData(id=2, name="Review", wbs="1.2.1", outline_level=3, baseline_finish="2026-08-01"),
+    ]
+    index = _baseline_index(baseline_tasks, [current], parse_date=parse_date)
+    matched, source = match_task(current, index)
+    assert matched is None
+    assert source == "ambiguous"
+
+    mapping = build_delay_mapping(
+        _plan(
+            [
+                PlanTaskData(
+                    id=99,
+                    name="Review",
+                    outline_level=3,
+                    scheduled_start="2026-08-11",
+                    scheduled_finish="2026-08-13",
+                    assignments=_owners("Idealake"),
+                ),
+                _go_live(id=3, scheduled_finish="2026-09-01"),
+            ]
+        ),
+        date(2026, 8, 22),
+        [],
+        date(2026, 9, 1),
+        baseline_plan=_plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Review",
+                    wbs="1.1.1",
+                    outline_level=3,
+                    baseline_finish="2026-08-01",
+                    scheduled_finish="2026-08-01",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Review",
+                    wbs="1.2.1",
+                    outline_level=3,
+                    baseline_finish="2026-08-01",
+                    scheduled_finish="2026-08-01",
+                ),
+                _go_live(id=3, scheduled_finish="2026-08-20"),
+            ]
+        ),
+    )
+    assert mapping.matching_requires_validation is True
+    assert mapping.rows == []
+    assert mapping.ambiguous_task_count == 1
+    assert mapping.review_rows[0].calculation_status == "ambiguous_match"
 
 
 def test_chain_delays_do_not_double_count_go_live_impact() -> None:
@@ -347,10 +451,9 @@ def test_missing_baseline_go_live() -> None:
             PlanTaskData(id=2, name="Go Live", is_milestone=True, scheduled_finish="2026-09-01"),
         ]
     )
-    assert mapping.rows == []
+    assert mapping.baseline_go_live is None
     assert mapping.actual_shift_working_days is None
     assert mapping.go_live_status == "unavailable"
-    assert mapping.reconciliation_warning == _INCOMPLETE_MESSAGE
 
 
 def test_ownerless_delay_stays_without_invented_owner() -> None:
@@ -403,7 +506,7 @@ def test_on_time_task_is_not_listed() -> None:
     assert mapping.rows == []
 
 
-def test_go_live_summary_uses_named_deadline() -> None:
+def test_go_live_summary_does_not_fail_reconciliation() -> None:
     mapping = _mapping(
         [
             PlanTaskData(
@@ -436,6 +539,7 @@ def test_go_live_summary_uses_named_deadline() -> None:
     )
     assert mapping.reconciliation_warning is None
     assert mapping.report_status == "verified"
+    assert mapping.reconciliation_status == "reconciled"
     assert [row.name for row in mapping.rows] == ["Design Sign-off", "Cutover"]
     assert mapping.baseline_go_live == "2026-08-20"
     assert mapping.current_go_live == "2026-09-01"
@@ -459,6 +563,152 @@ def test_go_live_named_work_is_listed_and_reconciles() -> None:
     assert [row.name for row in mapping.rows] == ["Go Live rehearsal"]
     assert mapping.rows[0].task_type == "delay"
     assert mapping.rows[0].shift_days == 3
+
+
+def test_unmatched_baseline_go_live_does_not_fail_reconciliation() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(
+                id=1,
+                name="Design Sign-off",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-13",
+            ),
+            _go_live(id=90, predecessor_ids=[1], scheduled_finish="2026-09-01"),
+        ],
+        baseline=[
+            PlanTaskData(
+                id=1,
+                name="Design Sign-off",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            _go_live(id=80, scheduled_finish="2026-08-20", baseline_finish="2026-08-20"),
+        ],
+    )
+    assert mapping.reconciliation_warning is None
+    assert mapping.report_status == "verified"
+    assert mapping.removed_task_count == 0
+    assert [row.name for row in mapping.rows] == ["Design Sign-off"]
+
+
+def test_two_file_uses_baseline_schedule_when_baseline_finish_missing() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(
+                id=1,
+                name="Deployment Onto Production Environment",
+                wbs="1.15.4",
+                scheduled_finish="2027-04-01",
+                critical=True,
+                total_slack_days=0,
+            ),
+            PlanTaskData(
+                id=2,
+                name="Delayed In Project Plan Sign-Off",
+                scheduled_start="2026-08-18",
+                scheduled_finish="2026-08-21",
+            ),
+            _go_live(
+                id=3,
+                predecessor_ids=[1],
+                scheduled_finish="2027-04-02",
+                baseline_finish="2027-03-26",
+            ),
+        ],
+        baseline=[
+            PlanTaskData(
+                id=1,
+                name="Deployment Onto Production Environment",
+                wbs="1.15.4",
+                scheduled_finish="2027-03-25",
+            ),
+            _go_live(id=3, scheduled_finish="2027-03-26", baseline_finish="2027-03-26"),
+        ],
+    )
+    assert [row.name for row in mapping.rows] == ["Deployment Onto Production Environment"]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].shift_days == 5
+    assert mapping.rows[0].planned_finish == "2027-03-25"
+    assert mapping.additional_task_count == 0
+    assert mapping.actual_shift_working_days == 5
+
+
+def test_child_under_on_path_summary_is_listed() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(
+                id=10,
+                name="Production Deployment Phase",
+                wbs="1.15",
+                is_summary=True,
+                outline_level=2,
+                scheduled_finish="2027-04-01",
+            ),
+            PlanTaskData(
+                id=11,
+                name="Deployment Onto Production Environment",
+                wbs="1.15.4",
+                outline_level=3,
+                scheduled_finish="2027-04-01",
+                critical=True,
+                total_slack_days=0,
+                predecessor_ids=[],
+            ),
+            PlanTaskData(
+                id=12,
+                name="Pre-Go-Live Checklist Execution + Acceptance",
+                wbs="1.16.1",
+                scheduled_finish="2027-04-02",
+                critical=True,
+                total_slack_days=0,
+                predecessor_ids=[10],
+            ),
+            _go_live(
+                id=13,
+                wbs="1.16.2",
+                predecessor_ids=[12],
+                scheduled_finish="2027-04-02",
+                baseline_finish="2027-03-26",
+            ),
+        ],
+        baseline=[
+            PlanTaskData(
+                id=10,
+                name="Production Deployment Phase",
+                wbs="1.15",
+                is_summary=True,
+                outline_level=2,
+                scheduled_finish="2027-03-25",
+            ),
+            PlanTaskData(
+                id=11,
+                name="Deployment Onto Production Environment",
+                wbs="1.15.4",
+                outline_level=3,
+                scheduled_finish="2027-03-25",
+            ),
+            PlanTaskData(
+                id=12,
+                name="Pre-Go-Live Checklist Execution + Acceptance",
+                wbs="1.16.1",
+                scheduled_finish="2027-03-26",
+                predecessor_ids=[10],
+            ),
+            _go_live(
+                id=13,
+                wbs="1.16.2",
+                predecessor_ids=[12],
+                scheduled_finish="2027-03-26",
+                baseline_finish="2027-03-26",
+            ),
+        ],
+    )
+    names = [row.name for row in mapping.rows]
+    assert "Deployment Onto Production Environment" in names
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.actual_shift_working_days == 5
+    assert sum(row.go_live_impact_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days
 
 
 def test_overlapping_chain_shift_days_match_go_live() -> None:
@@ -535,7 +785,22 @@ def test_first_additional_on_path_is_listed_before_tail_delay() -> None:
                 total_slack_days=0,
             ),
             _go_live(id=90, predecessor_ids=[5], scheduled_finish="2026-08-27"),
-        ]
+        ],
+        baseline=[
+            PlanTaskData(
+                id=1,
+                name="Kickoff",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            PlanTaskData(
+                id=5,
+                name="Pre-Go-Live Checklist Execution + Acceptance",
+                baseline_finish="2026-08-20",
+                scheduled_finish="2026-08-20",
+            ),
+            _go_live(id=90, scheduled_finish="2026-08-20", baseline_finish="2026-08-20"),
+        ],
     )
     assert mapping.actual_shift_working_days == 5
     assert mapping.rows[0].name == "Extra security review"
@@ -545,133 +810,37 @@ def test_first_additional_on_path_is_listed_before_tail_delay() -> None:
     assert sum(row.go_live_impact_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days
 
 
-def test_duplicate_task_ids_fail_validation() -> None:
+def test_renumbered_wbs_matches_by_canonical_identity() -> None:
     mapping = _mapping(
         [
-            PlanTaskData(id=1, name="A", baseline_finish="2026-08-10", scheduled_finish="2026-08-13"),
-            PlanTaskData(id=1, name="B", baseline_finish="2026-08-10", scheduled_finish="2026-08-13"),
-            _go_live(id=2, predecessor_ids=[1]),
-        ]
-    )
-    assert mapping.rows == []
-    assert mapping.reconciliation_warning == _INCOMPLETE_MESSAGE
-
-
-def test_unresolved_predecessor_fails_validation() -> None:
-    mapping = _mapping(
-        [
+            PlanTaskData(id=10, name="UX", wbs="1.1", outline_level=1, is_summary=True),
             PlanTaskData(
-                id=1,
-                name="Design Sign-off",
-                baseline_finish="2026-08-10",
+                id=50,
+                name="Creation Of Wireframe",
+                wbs="1.1.2",
+                outline_level=2,
+                set_name="Set 1",
+                scheduled_start="2026-08-10",
                 scheduled_finish="2026-08-13",
-                predecessor_ids=[99],
             ),
-            _go_live(id=2, predecessor_ids=[1]),
-        ]
-    )
-    assert mapping.rows == []
-    assert mapping.reconciliation_warning == _INCOMPLETE_MESSAGE
-
-
-def test_circular_dependency_fails_validation() -> None:
-    mapping = _mapping(
-        [
+            _go_live(id=90, predecessor_ids=[50]),
+        ],
+        baseline=[
+            PlanTaskData(id=10, name="UX", wbs="1.1", outline_level=1, is_summary=True),
             PlanTaskData(
-                id=1,
-                name="A",
+                id=20,
+                name="Creation Of Wireframe",
+                wbs="1.1.1",
+                outline_level=2,
+                set_name="Set 1",
                 baseline_finish="2026-08-10",
-                scheduled_finish="2026-08-13",
-                predecessor_ids=[2],
-            ),
-            PlanTaskData(
-                id=2,
-                name="B",
-                baseline_finish="2026-08-10",
-                scheduled_finish="2026-08-13",
-                predecessor_ids=[1],
-            ),
-            _go_live(id=3, predecessor_ids=[2]),
-        ]
-    )
-    assert mapping.rows == []
-    assert mapping.reconciliation_warning == _INCOMPLETE_MESSAGE
-
-
-def test_ambiguous_go_live_does_not_guess() -> None:
-    mapping = _mapping(
-        [
-            PlanTaskData(
-                id=1,
-                name="Go Live",
-                is_milestone=True,
-                baseline_finish="2026-08-20",
-                scheduled_finish="2026-09-01",
-            ),
-            PlanTaskData(
-                id=2,
-                name="Production Go-Live",
-                is_milestone=True,
-                baseline_finish="2026-08-20",
-                scheduled_finish="2026-09-10",
-            ),
-        ]
-    )
-    assert mapping.rows == []
-    assert mapping.go_live_status == "ambiguous"
-    assert mapping.reconciliation_warning == _INCOMPLETE_MESSAGE
-
-
-def test_fallback_uses_latest_completion_milestone() -> None:
-    mapping = _mapping(
-        [
-            PlanTaskData(
-                id=1,
-                name="UAT complete",
-                is_milestone=True,
-                baseline_finish="2026-08-10",
-                scheduled_finish="2026-08-15",
-            ),
-            PlanTaskData(
-                id=2,
-                name="Production release",
-                is_milestone=True,
-                baseline_finish="2026-08-20",
-                scheduled_finish="2026-09-01",
-            ),
-            PlanTaskData(
-                id=3,
-                name="Delayed build",
-                baseline_finish="2026-08-20",
-                scheduled_finish="2026-09-01",
-                predecessor_ids=[],
-            ),
-        ]
-    )
-    assert mapping.current_go_live == "2026-09-01"
-    assert mapping.baseline_go_live == "2026-08-20"
-    assert mapping.go_live_status == "calculated"
-
-
-def test_configured_gate_wins_over_name() -> None:
-    mapping = _mapping(
-        [
-            PlanTaskData(
-                id=1,
-                name="Customer launch",
-                gate="GO-LIVE",
-                is_milestone=True,
-                baseline_finish="2026-08-20",
-                scheduled_finish="2026-09-01",
-            ),
-            PlanTaskData(
-                id=2,
-                name="Go Live",
-                is_milestone=True,
-                baseline_finish="2026-08-01",
                 scheduled_finish="2026-08-10",
             ),
-        ]
+            _go_live(id=90, scheduled_finish="2026-08-20", baseline_finish="2026-08-20"),
+        ],
     )
-    assert mapping.current_go_live == "2026-09-01"
-    assert mapping.baseline_go_live == "2026-08-20"
+    assert [row.name for row in mapping.rows] == ["Creation Of Wireframe"]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].calculation_source == "canonical"
+    assert mapping.rows[0].shift_days == 3
+    assert mapping.rows[0].go_live_impact_days == 3

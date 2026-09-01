@@ -39,7 +39,7 @@ export function classifyExistingTask(
   baselineFinish: string | null,
   currentFinish: string | null,
   holidays?: Set<string>,
-): { taskType: "DELAYED" | null; shiftDays: number | null; baselineUnavailable: boolean } {
+): { taskType: "Delay" | null; shiftDays: number | null; baselineUnavailable: boolean } {
   if (!baselineFinish) {
     return { taskType: null, shiftDays: null, baselineUnavailable: true };
   }
@@ -50,7 +50,7 @@ export function classifyExistingTask(
   if (shiftDays == null || shiftDays <= 0) {
     return { taskType: null, shiftDays: shiftDays ?? 0, baselineUnavailable: false };
   }
-  return { taskType: "DELAYED", shiftDays, baselineUnavailable: false };
+  return { taskType: "Delay", shiftDays, baselineUnavailable: false };
 }
 
 export function compareMPP(_input?: {
@@ -64,8 +64,8 @@ export function fromWsrDelayMapping(mapping: DelayMappingSheet): CompareMppResul
   const items = (mapping.rows ?? [])
     .filter((row) => row.task_type === "delay" || row.task_type === "additional")
     .map((row) => toLiveItem(row, mapping));
-  const delayedTasks = items.filter((item) => item.taskType === "DELAYED");
-  const additionalTasks = items.filter((item) => item.taskType === "ADDITIONAL");
+  const delayedTasks = items.filter((item) => item.taskType === "Delay");
+  const additionalTasks = items.filter((item) => item.taskType === "Additional");
   const totalShift = mapping.actual_shift_working_days ?? mapping.net_working_day_shift ?? null;
   const goLiveImpact: GoLiveImpact = {
     baselineGoLive: mapping.baseline_go_live ?? null,
@@ -142,7 +142,7 @@ function mockComparison(): CompareMppResult {
       id: "ia-feedback",
       taskName: "IA Feedback Delay",
       phase: "UX",
-      taskType: "DELAYED",
+      taskType: "Delay",
       baselineFinish: "2026-08-10",
       currentFinish: "2026-08-13",
       owner: "Client",
@@ -155,7 +155,7 @@ function mockComparison(): CompareMppResult {
       id: "ui-approval",
       taskName: "UI Approval Delay",
       phase: "UI",
-      taskType: "DELAYED",
+      taskType: "Delay",
       baselineFinish: "2026-08-20",
       currentFinish: "2026-08-24",
       owner: "Client",
@@ -168,7 +168,7 @@ function mockComparison(): CompareMppResult {
       id: "cms-integration",
       taskName: "CMS Integration",
       phase: "CMS",
-      taskType: "DELAYED",
+      taskType: "Delay",
       baselineFinish: "2026-08-18",
       currentFinish: "2026-08-25",
       owner: "Idealake",
@@ -183,7 +183,7 @@ function mockComparison(): CompareMppResult {
       id: "ux-research",
       taskName: "Additional UX Research",
       phase: "UX",
-      taskType: "ADDITIONAL",
+      taskType: "Additional",
       baselineFinish: null,
       currentStart: "2026-08-12",
       currentFinish: "2026-08-16",
@@ -197,7 +197,7 @@ function mockComparison(): CompareMppResult {
       id: "qa-review",
       taskName: "Additional QA Review",
       phase: "QA",
-      taskType: "ADDITIONAL",
+      taskType: "Additional",
       baselineFinish: null,
       currentStart: "2026-09-28",
       currentFinish: "2026-09-29",
@@ -211,7 +211,7 @@ function mockComparison(): CompareMppResult {
       id: "design-spike",
       taskName: "Parallel design spike",
       phase: "UX",
-      taskType: "ADDITIONAL",
+      taskType: "Additional",
       baselineFinish: null,
       currentStart: "2026-08-03",
       currentFinish: "2026-08-06",
@@ -250,7 +250,7 @@ function item(input: {
   id: string;
   taskName: string;
   phase: string;
-  taskType: "DELAYED" | "ADDITIONAL";
+  taskType: "Delay" | "Additional";
   baselineFinish: string | null;
   currentStart?: string | null;
   currentFinish: string | null;
@@ -260,7 +260,7 @@ function item(input: {
   successors: string[];
   holidays: Set<string>;
 }): DelayMappingItem {
-  const isAdditional = input.taskType === "ADDITIONAL";
+  const isAdditional = input.taskType === "Additional";
   const classified = isAdditional
     ? { shiftDays: null as number | null, baselineUnavailable: true }
     : classifyExistingTask(input.baselineFinish, input.currentFinish, input.holidays);
@@ -283,7 +283,7 @@ function item(input: {
     calculationStatus: "CALCULATED",
     baselineUnavailable: classified.baselineUnavailable,
     evidence: isAdditional
-      ? "Additional task contributes to the dependency chain ending at Go-Live."
+      ? "Task exists in Current MPP but not in Baseline MPP."
       : delayEvidence(input.baselineFinish, input.currentFinish, shiftDays),
   };
 }
@@ -296,7 +296,7 @@ function toLiveItem(row: DelayMappingRow, mapping: DelayMappingSheet): DelayMapp
     id: String(row.current_task_id ?? `${row.wbs || ""}-${row.name}`),
     taskName: row.name,
     phase: row.parent_name?.trim() || "Other",
-    taskType: isAdditional ? "ADDITIONAL" : "DELAYED",
+    taskType: isAdditional ? "Additional" : "Delay",
     baselineFinish: row.planned_finish ?? null,
     currentStart: row.revised_start ?? null,
     currentFinish: row.revised_finish ?? null,
@@ -312,7 +312,7 @@ function toLiveItem(row: DelayMappingRow, mapping: DelayMappingSheet): DelayMapp
     evidence:
       row.evidence_reason
       || (isAdditional
-        ? "Additional task contributes to the dependency chain ending at Go-Live."
+        ? "Task exists in Current MPP but not in Baseline MPP."
         : delayEvidence(row.planned_finish, row.revised_finish, shiftDays, mapping.holidays)),
   };
 }
