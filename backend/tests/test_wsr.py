@@ -430,7 +430,7 @@ def test_delay_mapping_compares_baseline_and_current_mpp(client: TestClient, mon
         "additional"
     }
     assert all(
-        isinstance(row["shift_days"], int) and row["shift_days"] > 0
+        isinstance(row["go_live_impact_days"], int) and row["go_live_impact_days"] > 0
         for row in body["rows"]
         if row["name"] == "Unplanned review round"
     )

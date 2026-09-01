@@ -290,8 +290,8 @@ function item(input: {
 
 function toLiveItem(row: DelayMappingRow, mapping: DelayMappingSheet): DelayMappingItem {
   const isAdditional = row.task_type === "additional";
-  const shiftDays = row.shift_days ?? row.delay_days ?? null;
-  const goLiveImpact = row.go_live_impact_days ?? shiftDays ?? 0;
+  const shiftDays = isAdditional ? null : (row.shift_days ?? row.delay_days ?? null);
+  const goLiveImpact = row.go_live_impact_days ?? 0;
   return {
     id: String(row.current_task_id ?? `${row.wbs || ""}-${row.name}`),
     taskName: row.name,

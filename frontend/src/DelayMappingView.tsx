@@ -13,7 +13,7 @@ import { ShellMetaContext } from "./shellMeta";
 import type { FileRecord } from "./types";
 import { shortDate, unavailable } from "./wsrFormat";
 
-type SortKey = "taskName" | "taskType" | "shiftDays" | "owner" | "finish";
+type SortKey = "taskName" | "taskType" | "shiftDays" | "impact" | "owner" | "finish";
 type DrawerState =
   | { kind: "row"; item: DelayMappingItem }
   | { kind: "goLive" }
@@ -126,7 +126,7 @@ export function DelayMappingView() {
 
   const shift = result.summary.goLiveShift;
   const canExport = Boolean(currentFile);
-  const listedShiftTotal = rows.reduce((sum, row) => sum + (row.shiftDays ?? 0), 0);
+  const listedImpactTotal = rows.reduce((sum, row) => sum + (row.goLiveImpact || 0), 0);
 
   return (
     <section className="dms-page">
@@ -254,6 +254,12 @@ export function DelayMappingView() {
                   dir={sortDir}
                   onClick={() => toggleSort("shiftDays")}
                 />
+                <SortHeader
+                  label="Go-Live Impact"
+                  active={sortKey === "impact"}
+                  dir={sortDir}
+                  onClick={() => toggleSort("impact")}
+                />
                 <SortHeader label="Owner" active={sortKey === "owner"} dir={sortDir} onClick={() => toggleSort("owner")} />
               </tr>
             </thead>
@@ -272,12 +278,13 @@ export function DelayMappingView() {
                       </span>
                     </td>
                     <td>{shiftCell(row)}</td>
+                    <td>{row.goLiveImpact > 0 ? row.goLiveImpact : "0"}</td>
                     <td>{unavailable(row.owner)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="dms-empty">
+                  <td colSpan={5} className="dms-empty">
                     {allRows.length === 0
                       ? "No driving Delay or Additional tasks caused this Go-Live shift."
                       : "No driving Delay or Additional tasks match the current filters."}
@@ -290,7 +297,8 @@ export function DelayMappingView() {
                 <tr className="dms-total-row">
                   <td>Total</td>
                   <td />
-                  <td>{listedShiftTotal}</td>
+                  <td />
+                  <td>{listedImpactTotal}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -507,8 +515,9 @@ function GoLiveDrawer({
         <strong>{shift == null ? "Unavailable" : `+${shift} Working Days`}</strong>
       </p>
       <p className="dms-note">
-        Shift Days Count is unique working days on the driving path, capped at the Go-Live shift. Later tasks in the
-        same chain are not counted twice.
+        Shift Days Count is that task’s own working-day slip (N/A for Additional). Go-Live Impact is unique
+        working days on the driving path, capped at the Go-Live shift, so later tasks in the same chain are not
+        counted twice.
       </p>
     </>
   );
@@ -524,6 +533,9 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function shiftCell(row: DelayMappingItem): string {
+  if (row.taskType === "Additional") {
+    return "N/A";
+  }
   return row.shiftDays == null ? "Unavailable" : String(row.shiftDays);
 }
 
@@ -539,6 +551,9 @@ function compareRows(a: DelayMappingItem, b: DelayMappingItem, key: SortKey, dir
   const sign = dir === "asc" ? 1 : -1;
   if (key === "shiftDays") {
     return sign * ((a.shiftDays ?? -1) - (b.shiftDays ?? -1));
+  }
+  if (key === "impact") {
+    return sign * ((a.goLiveImpact ?? 0) - (b.goLiveImpact ?? 0));
   }
   if (key === "finish") {
     return sign * (a.currentFinish || "").localeCompare(b.currentFinish || "");

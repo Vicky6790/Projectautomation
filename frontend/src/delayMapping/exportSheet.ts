@@ -6,8 +6,8 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
 <head><meta charset="UTF-8" /></head>
 <body>
 <table border="1">
-  <tr><th colspan="4">DELAY MAPPING</th></tr>
-  <tr><td colspan="4">Baseline vs Current Schedule Variance</td></tr>
+  <tr><th colspan="5">DELAY MAPPING</th></tr>
+  <tr><td colspan="5">Baseline vs Current Schedule Variance</td></tr>
   <tr></tr>
   <tr><td>Baseline Go-Live</td><td>${esc(shortDate(result.summary.baselineGoLive))}</td></tr>
   <tr><td>Current Go-Live</td><td>${esc(shortDate(result.summary.currentGoLive))}</td></tr>
@@ -19,15 +19,18 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
     <th>Task Name</th>
     <th>Task Type</th>
     <th>Shift Days Count</th>
+    <th>Go-Live Impact</th>
     <th>Owner</th>
   </tr>
   ${rows
     .map((row) => {
       const fill = row.taskType === "Delay" ? "#FEF2F2" : "#FFF7ED";
+      const shift = row.taskType === "Additional" ? "N/A" : row.shiftDays == null ? "Unavailable" : String(row.shiftDays);
       return `<tr>
         <td style="background:${fill}">${esc(row.taskName)}</td>
         <td style="background:${fill}">${esc(row.taskType)}</td>
-        <td style="background:${fill}">${row.shiftDays == null ? "Unavailable" : String(row.shiftDays)}</td>
+        <td style="background:${fill}">${shift}</td>
+        <td style="background:${fill}">${String(row.goLiveImpact)}</td>
         <td style="background:${fill}">${esc(unavailable(row.owner))}</td>
       </tr>`;
     })
@@ -35,7 +38,8 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
   <tr>
     <td><b>Total</b></td>
     <td></td>
-    <td><b>${rows.reduce((sum, row) => sum + (row.shiftDays ?? 0), 0)}</b></td>
+    <td></td>
+    <td><b>${rows.reduce((sum, row) => sum + (row.goLiveImpact || 0), 0)}</b></td>
     <td></td>
   </tr>
 </table>

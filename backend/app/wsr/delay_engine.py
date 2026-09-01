@@ -329,6 +329,7 @@ def build_delay_mapping(
         status = item["calculation_status"]
         if calc_status_go_live != "calculated" and item["task_type"] == "delay":
             status = calc_status_go_live if item.get("go_live_impact_days") else status
+        raw_shift = item.get("shift_days") if item["task_type"] == "delay" else None
         rows.append(
             _register_row(
                 current_plan.tasks,
@@ -337,7 +338,7 @@ def build_delay_mapping(
                 item["task"],
                 item["matched"],
                 item["task_type"],
-                shift_days=item.get("go_live_impact_days") or 0,
+                shift_days=raw_shift,
                 go_live_impact_days=item.get("go_live_impact_days") or 0,
                 successors=successors,
                 by_id=by_id,
@@ -361,8 +362,8 @@ def build_delay_mapping(
 
     delay_count = sum(1 for row in rows if row.task_type == "delay")
     additional_count = sum(1 for row in rows if row.task_type == "additional")
-    delay_shift = sum(row.shift_days or 0 for row in rows if row.task_type == "delay")
-    additional_shift = sum(row.shift_days or 0 for row in rows if row.task_type == "additional")
+    delay_shift = sum(row.go_live_impact_days or 0 for row in rows if row.task_type == "delay")
+    additional_shift = sum(row.go_live_impact_days or 0 for row in rows if row.task_type == "additional")
     attributed = sum(row.go_live_impact_days or 0 for row in rows)
     unchanged_count = sum(1 for item in classified if item["task_type"] == "unchanged")
     ahead_count = sum(1 for item in classified if item["task_type"] == "ahead")
@@ -436,43 +437,27 @@ def match_task(
     current: PlanTaskData,
     baseline_index: dict[str, object],
 ) -> tuple[PlanTaskData | None, str]:
-    """Match a current task to a baseline task. Never guess when the match is ambiguous."""
+    """Match by Unique ID, then name hierarchy. Never use physical row or WBS numbers."""
 
     by_id: dict[int, PlanTaskData] = baseline_index["by_id"]  # type: ignore[assignment]
-    by_wbs: dict[str, list[PlanTaskData]] = baseline_index["by_wbs"]  # type: ignore[assignment]
     by_hierarchy: dict[tuple[str, str], list[PlanTaskData]] = baseline_index["by_hierarchy"]  # type: ignore[assignment]
     by_canonical: dict[str, list[PlanTaskData]] = baseline_index["by_canonical"]  # type: ignore[assignment]
-    by_name_phase: dict[tuple[str, str], list[PlanTaskData]] = baseline_index["by_name_phase"]  # type: ignore[assignment]
     current_tasks: list[PlanTaskData] = baseline_index["current_tasks"]  # type: ignore[assignment]
 
     hit = by_id.get(current.id)
     if hit is not None:
         return hit, "id"
-    wbs = (current.wbs or "").strip()
-    if wbs:
-        wbs_hits = by_wbs.get(wbs, [])
-        if len(wbs_hits) == 1:
-            return wbs_hits[0], "wbs"
-        if len(wbs_hits) > 1:
-            return None, "ambiguous"
-    parent = _parent_wbs(current.wbs)
-    hierarchy_key = (_norm(current.name), _norm(parent))
-    hier_hits = by_hierarchy.get(hierarchy_key, [])
-    if len(hier_hits) == 1:
-        return hier_hits[0], "hierarchy"
-    if len(hier_hits) > 1:
-        return None, "ambiguous"
     canon = _canonical_key(current, current_tasks)
     canon_hits = by_canonical.get(canon, [])
     if len(canon_hits) == 1:
         return canon_hits[0], "canonical"
     if len(canon_hits) > 1:
         return None, "ambiguous"
-    name_key = (_norm(current.name), str(current.outline_level))
-    name_hits = by_name_phase.get(name_key, [])
-    if len(name_hits) == 1:
-        return name_hits[0], "name_phase"
-    if len(name_hits) > 1:
+    hierarchy_key = (_norm(current.name), _parent_name(current, current_tasks))
+    hier_hits = by_hierarchy.get(hierarchy_key, [])
+    if len(hier_hits) == 1:
+        return hier_hits[0], "hierarchy"
+    if len(hier_hits) > 1:
         return None, "ambiguous"
     return None, "unmatched"
 
@@ -485,25 +470,17 @@ def _baseline_index(
     _ = parse_date
     scoped = _relevant_leaves(tasks)
     by_id = {task.id: task for task in scoped}
-    by_wbs: dict[str, list[PlanTaskData]] = {}
     by_hierarchy: dict[tuple[str, str], list[PlanTaskData]] = {}
     by_canonical: dict[str, list[PlanTaskData]] = {}
-    by_name_phase: dict[tuple[str, str], list[PlanTaskData]] = {}
     for task in scoped:
-        wbs = (task.wbs or "").strip()
-        if wbs:
-            by_wbs.setdefault(wbs, []).append(task)
-        parent = _parent_wbs(task.wbs)
-        by_hierarchy.setdefault((_norm(task.name), _norm(parent)), []).append(task)
+        by_hierarchy.setdefault((_norm(task.name), _parent_name(task, tasks)), []).append(task)
         by_canonical.setdefault(_canonical_key(task, tasks), []).append(task)
-        by_name_phase.setdefault((_norm(task.name), str(task.outline_level)), []).append(task)
     return {
         "by_id": by_id,
-        "by_wbs": by_wbs,
         "by_hierarchy": by_hierarchy,
         "by_canonical": by_canonical,
-        "by_name_phase": by_name_phase,
         "current_tasks": current_tasks,
+        "baseline_tasks": tasks,
     }
 
 
@@ -516,6 +493,12 @@ def _parent_wbs(wbs: str | None) -> str:
     if "." not in text:
         return ""
     return text.rsplit(".", 1)[0]
+
+
+def _parent_name(task: PlanTaskData, tasks: list[PlanTaskData]) -> str:
+    wbs_map = {(item.wbs or "").strip(): item for item in tasks if (item.wbs or "").strip()}
+    parent = wbs_map.get(_parent_wbs(task.wbs))
+    return _norm(None if parent is None else parent.name)
 
 
 def _canonical_key(task: PlanTaskData, tasks: list[PlanTaskData]) -> str:

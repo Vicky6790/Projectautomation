@@ -16,7 +16,7 @@ export function DelayMappingPanel({
   const actual = mapping.actual_shift_working_days ?? mapping.net_working_day_shift;
   const total =
     mapping.total_delayed_days ??
-    rows.reduce((sum, row) => sum + (row.shift_days ?? row.delay_days ?? 0), 0);
+    rows.reduce((sum, row) => sum + (row.go_live_impact_days ?? 0), 0);
   const warning =
     mapping.matching_requires_validation
       ? mapping.reconciliation_warning || RECONCILE_WARNING
@@ -82,6 +82,7 @@ export function DelayMappingPanel({
                   <th>Baseline Finish</th>
                   <th>Finish</th>
                   <th>Shift Days Count</th>
+                  <th>Go-Live Impact</th>
                   <th>Owner</th>
                 </tr>
               </thead>
@@ -91,6 +92,7 @@ export function DelayMappingPanel({
                 ))}
                 <tr className="delay-total-row">
                   <td>Total</td>
+                  <td />
                   <td />
                   <td />
                   <td />
@@ -114,18 +116,20 @@ function PhaseGroup({ group }: { group: { name: string; rows: DelayMappingRow[] 
   return (
     <>
       <tr className="delay-phase-row">
-        <td colSpan={6}>{group.name}</td>
+        <td colSpan={7}>{group.name}</td>
       </tr>
       {group.rows.map((row, index) => {
         const days = row.shift_days ?? row.delay_days;
         const type = row.task_type;
+        const shiftLabel = type === "additional" ? "N/A" : days == null ? "Unavailable" : days;
         return (
           <tr key={`${group.name}-${row.wbs || row.name}-${index}`} className={type ? `delay-type-${type}` : undefined}>
             <td>{row.name}</td>
             <td>{type ? capitalize(type) : "Unavailable"}</td>
             <td>{shortDate(row.planned_finish)}</td>
             <td>{shortDate(row.revised_finish)}</td>
-            <td>{days == null ? "Unavailable" : days}</td>
+            <td>{shiftLabel}</td>
+            <td>{row.go_live_impact_days == null ? "Unavailable" : row.go_live_impact_days}</td>
             <td>{unavailable(row.owner)}</td>
           </tr>
         );
@@ -163,7 +167,7 @@ export function downloadDelayMappingSheet(mapping: DelayMappingSheet, asOf?: str
   const actual = mapping.actual_shift_working_days ?? mapping.net_working_day_shift;
   const total =
     mapping.total_delayed_days ??
-    rows.reduce((sum, row) => sum + (row.shift_days ?? row.delay_days ?? 0), 0);
+    rows.reduce((sum, row) => sum + (row.go_live_impact_days ?? 0), 0);
   const shift = mapping.shift_working_days ?? mapping.gross_working_day_shift;
   const summary = [
     ["GO-LIVE DATE SHIFT"],
@@ -176,24 +180,26 @@ export function downloadDelayMappingSheet(mapping: DelayMappingSheet, asOf?: str
     mapping.reconciliation_warning ? ["Warning", mapping.reconciliation_warning] : [],
     [],
     ["DELAY MAPPING"],
-    ["Task Name", "Task Type", "Baseline Finish", "Finish", "Shift Days Count", "Owner"],
+    ["Task Name", "Task Type", "Baseline Finish", "Finish", "Shift Days Count", "Go-Live Impact", "Owner"],
   ].filter((line) => line.length > 0);
   const body: string[][] = [];
   for (const group of groupByPhase(rows)) {
-    body.push([group.name, "", "", "", "", ""]);
+    body.push([group.name, "", "", "", "", "", ""]);
     for (const row of group.rows) {
       const days = row.shift_days ?? row.delay_days;
+      const shiftLabel = row.task_type === "additional" ? "N/A" : days == null ? "" : String(days);
       body.push([
         row.name,
         row.task_type ? capitalize(row.task_type) : "",
         row.planned_finish?.slice(0, 10) || "",
         row.revised_finish?.slice(0, 10) || "",
-        days == null ? "" : String(days),
+        shiftLabel,
+        row.go_live_impact_days == null ? "" : String(row.go_live_impact_days),
         row.owner || "",
       ]);
     }
   }
-  const csv = [...summary, ...body, ["Total Count", "", "", "", String(total), ""]]
+  const csv = [...summary, ...body, ["Total Count", "", "", "", "", String(total), ""]]
     .map((line) => line.map(csvCell).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });

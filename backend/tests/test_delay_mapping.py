@@ -74,6 +74,7 @@ def test_finish_after_baseline_is_delay() -> None:
     assert [row.name for row in mapping.rows] == ["Design Sign-off"]
     assert mapping.rows[0].task_type == "delay"
     assert mapping.rows[0].shift_days == 3
+    assert mapping.rows[0].go_live_impact_days == 3
     assert mapping.rows[0].owner == "Idealake"
     assert mapping.rows[0].planned_finish == "2026-08-10"
     assert mapping.rows[0].revised_finish == "2026-08-13"
@@ -128,7 +129,7 @@ def test_additional_is_current_only() -> None:
     )
     assert [row.name for row in mapping.rows] == ["Additional UX Research"]
     assert mapping.rows[0].task_type == "additional"
-    assert mapping.rows[0].shift_days == 3
+    assert mapping.rows[0].shift_days is None
     assert mapping.rows[0].planned_finish is None
     assert mapping.rows[0].go_live_impact_days == 3
     assert mapping.removed_task_count == 0
@@ -409,7 +410,9 @@ def test_chain_delays_do_not_double_count_go_live_impact() -> None:
     by_name = {row.name: row for row in mapping.rows}
     assert by_name["Wireframes"].shift_days == 3
     assert by_name["Sign-Off"].shift_days == 5
-    assert sum(row.shift_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days == 8
+    assert by_name["Wireframes"].go_live_impact_days == 3
+    assert by_name["Sign-Off"].go_live_impact_days == 5
+    assert sum(row.go_live_impact_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days == 8
 
 
 def test_go_live_shifted_by_working_days() -> None:
@@ -705,7 +708,7 @@ def test_child_under_on_path_summary_is_listed() -> None:
     assert "Deployment Onto Production Environment" in names
     assert mapping.rows[0].task_type == "delay"
     assert mapping.actual_shift_working_days == 5
-    assert sum(row.shift_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days
+    assert sum(row.go_live_impact_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days
 
 
 def test_overlapping_chain_shift_days_match_go_live() -> None:
@@ -751,7 +754,8 @@ def test_overlapping_chain_shift_days_match_go_live() -> None:
     assert mapping.actual_shift_working_days == 5
     assert [row.name for row in mapping.rows] == ["Deployment Onto Production Environment"]
     assert mapping.rows[0].shift_days == 5
-    assert sum(row.shift_days or 0 for row in mapping.rows) == 5
+    assert mapping.rows[0].go_live_impact_days == 5
+    assert sum(row.go_live_impact_days or 0 for row in mapping.rows) == 5
     assert mapping.delayed_task_count == 1
 
 
@@ -801,5 +805,42 @@ def test_first_additional_on_path_is_listed_before_tail_delay() -> None:
     assert mapping.actual_shift_working_days == 5
     assert mapping.rows[0].name == "Extra security review"
     assert mapping.rows[0].task_type == "additional"
+    assert mapping.rows[0].shift_days is None
+    assert mapping.rows[0].go_live_impact_days == 3
+    assert sum(row.go_live_impact_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days
+
+
+def test_renumbered_wbs_matches_by_canonical_identity() -> None:
+    mapping = _mapping(
+        [
+            PlanTaskData(id=10, name="UX", wbs="1.1", outline_level=1, is_summary=True),
+            PlanTaskData(
+                id=50,
+                name="Creation Of Wireframe",
+                wbs="1.1.2",
+                outline_level=2,
+                set_name="Set 1",
+                scheduled_start="2026-08-10",
+                scheduled_finish="2026-08-13",
+            ),
+            _go_live(id=90, predecessor_ids=[50]),
+        ],
+        baseline=[
+            PlanTaskData(id=10, name="UX", wbs="1.1", outline_level=1, is_summary=True),
+            PlanTaskData(
+                id=20,
+                name="Creation Of Wireframe",
+                wbs="1.1.1",
+                outline_level=2,
+                set_name="Set 1",
+                baseline_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+            ),
+            _go_live(id=90, scheduled_finish="2026-08-20", baseline_finish="2026-08-20"),
+        ],
+    )
+    assert [row.name for row in mapping.rows] == ["Creation Of Wireframe"]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].calculation_source == "canonical"
     assert mapping.rows[0].shift_days == 3
-    assert sum(row.shift_days or 0 for row in mapping.rows) == mapping.actual_shift_working_days
+    assert mapping.rows[0].go_live_impact_days == 3
