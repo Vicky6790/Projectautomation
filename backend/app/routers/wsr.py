@@ -7,6 +7,7 @@ from app.errors import AppError
 from app.ingestion import validate_upload
 from app.models import (
     DelayMappingCompareRequest,
+    DelayMappingDiagnostic,
     DelayMappingSheet,
     FileRecord,
     ProcessingResponse,
@@ -49,6 +50,34 @@ def compare_delay_mapping(body: DelayMappingCompareRequest) -> DelayMappingSheet
     from app.wsr.facts import delay_mapping_from_plans
 
     return delay_mapping_from_plans(current, baseline)
+
+
+@router.post("/delay-mapping/diagnostic", response_model=DelayMappingDiagnostic)
+def compare_delay_mapping_diagnostic(body: DelayMappingCompareRequest) -> DelayMappingDiagnostic:
+    current_id = body.current_file_id.strip()
+    baseline_id = (body.baseline_file_id or "").strip()
+    if not current_id:
+        raise AppError(400, "CURRENT_MPP_REQUIRED", "Insert a Current MPP to compare.")
+    if not baseline_id:
+        raise AppError(400, "BASELINE_MPP_REQUIRED", "Insert a Baseline MPP for the diagnostic.")
+    current = storage_mod.store.get_plan(current_id)
+    baseline = storage_mod.store.get_plan(baseline_id)
+    from app.wsr.delay_diagnostic import build_delay_mapping_diagnostic
+
+    return build_delay_mapping_diagnostic(current, baseline)
+
+
+@router.post("/delay-mapping/diagnostic.csv")
+def download_delay_mapping_diagnostic_csv(body: DelayMappingCompareRequest) -> Response:
+    payload = compare_delay_mapping_diagnostic(body)
+    from app.wsr.delay_diagnostic import diagnostic_csv
+
+    content = diagnostic_csv(payload)
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="delay-mapping-diagnostic.csv"'},
+    )
 
 
 @router.post("/requests/{handle}/generate", response_model=ProcessingResponse)

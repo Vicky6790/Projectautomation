@@ -22,6 +22,8 @@ FROZEN_PATHS = (
     "/api/v1/plan/requests/{handle}/mpp",
     "/api/v1/wsr/uploads",
     "/api/v1/wsr/delay-mapping",
+    "/api/v1/wsr/delay-mapping/diagnostic",
+    "/api/v1/wsr/delay-mapping/diagnostic.csv",
     "/api/v1/wsr/jobs",
     "/api/v1/wsr/jobs/{job_id}",
     "/api/v1/wsr/jobs/{job_id}/retry",

@@ -172,6 +172,63 @@ export type DelayMappingSheet = {
   rows?: DelayMappingRow[];
 };
 
+export type DelayMappingDiagnosticRow = {
+  current_task_id: number;
+  current_task_name: string;
+  current_outline_number?: string | null;
+  current_outline_level: number;
+  current_parent?: string | null;
+  current_phase?: string | null;
+  current_start?: string | null;
+  current_finish?: string | null;
+  current_predecessors?: string | null;
+  baseline_matching_task_id?: number | null;
+  baseline_task_name?: string | null;
+  baseline_outline_number?: string | null;
+  baseline_finish?: string | null;
+  baseline_predecessors?: string | null;
+  match_method: string;
+  match_confidence: string;
+  classification:
+    | "MATCHED"
+    | "ADDITIONAL"
+    | "DELAYED"
+    | "AHEAD"
+    | "UNCHANGED"
+    | "AMBIGUOUS"
+    | "BASELINE_DATA_MISSING";
+  baseline_finish_source?: string | null;
+};
+
+export type DelayMappingDiagnosticRemoved = {
+  baseline_task_id: number;
+  baseline_task_name: string;
+  baseline_outline_number?: string | null;
+  baseline_finish?: string | null;
+  baseline_predecessors?: string | null;
+};
+
+export type DelayMappingDiagnosticReconcile = {
+  baseline_executable_task_count: number;
+  current_executable_task_count: number;
+  matched_count: number;
+  additional_count: number;
+  removed_count: number;
+  ambiguous_count: number;
+  matched_plus_additional: number;
+  matched_plus_removed: number;
+  current_reconciles: boolean;
+  baseline_reconciles: boolean;
+  unmatched_current_tasks: string[];
+  unmatched_baseline_tasks: string[];
+};
+
+export type DelayMappingDiagnostic = {
+  rows: DelayMappingDiagnosticRow[];
+  removed_tasks: DelayMappingDiagnosticRemoved[];
+  reconciliation: DelayMappingDiagnosticReconcile;
+};
+
 export type ProgressItem = {
   name: string;
   date?: string | null;

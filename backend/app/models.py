@@ -452,6 +452,64 @@ class DelayMappingCompareRequest(BaseModel):
     baseline_file_id: str | None = None
 
 
+class DelayMappingDiagnosticRow(BaseModel):
+    current_task_id: int
+    current_task_name: str
+    current_outline_number: str | None = None
+    current_outline_level: int
+    current_parent: str | None = None
+    current_phase: str | None = None
+    current_start: str | None = None
+    current_finish: str | None = None
+    current_predecessors: str | None = None
+    baseline_matching_task_id: int | None = None
+    baseline_task_name: str | None = None
+    baseline_outline_number: str | None = None
+    baseline_finish: str | None = None
+    baseline_predecessors: str | None = None
+    match_method: str
+    match_confidence: str
+    classification: Literal[
+        "MATCHED",
+        "ADDITIONAL",
+        "DELAYED",
+        "AHEAD",
+        "UNCHANGED",
+        "AMBIGUOUS",
+        "BASELINE_DATA_MISSING",
+    ]
+    baseline_finish_source: str | None = None
+
+
+class DelayMappingDiagnosticRemoved(BaseModel):
+    baseline_task_id: int
+    baseline_task_name: str
+    baseline_outline_number: str | None = None
+    baseline_finish: str | None = None
+    baseline_predecessors: str | None = None
+
+
+class DelayMappingDiagnosticReconcile(BaseModel):
+    baseline_executable_task_count: int
+    current_executable_task_count: int
+    matched_count: int
+    additional_count: int
+    removed_count: int
+    ambiguous_count: int
+    matched_plus_additional: int
+    matched_plus_removed: int
+    current_reconciles: bool
+    baseline_reconciles: bool
+    unmatched_current_tasks: list[str] = Field(default_factory=list)
+    unmatched_baseline_tasks: list[str] = Field(default_factory=list)
+
+
+class DelayMappingDiagnostic(BaseModel):
+    rows: list[DelayMappingDiagnosticRow] = Field(default_factory=list)
+    removed_tasks: list[DelayMappingDiagnosticRemoved] = Field(default_factory=list)
+    reconciliation: DelayMappingDiagnosticReconcile
+
+
 class WsrEvidenceResponse(BaseModel):
     item_id: str
     content: str

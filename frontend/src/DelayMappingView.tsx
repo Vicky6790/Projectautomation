@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
-import { compareDelayMapping } from "./api";
+import { compareDelayMapping, delayMappingDiagnostic, downloadDelayMappingDiagnosticCsv } from "./api";
 import { FileUploader } from "./components/FileUploader";
 import {
   contributingItems,
@@ -10,7 +10,7 @@ import {
 import { exportDelayMappingExcel, printDelayMappingSheet } from "./delayMapping/exportSheet";
 import type { CompareMppResult, DelayMappingItem, DelayTaskType } from "./delayMapping/types";
 import { ShellMetaContext } from "./shellMeta";
-import type { FileRecord } from "./types";
+import type { FileRecord, DelayMappingDiagnostic } from "./types";
 import { shortDate, unavailable } from "./wsrFormat";
 
 type SortKey = "taskName" | "taskType" | "shiftDays" | "impact" | "owner" | "finish";
@@ -33,6 +33,8 @@ export function DelayMappingView() {
   const [sortKey, setSortKey] = useState<SortKey>("finish");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("asc");
   const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [diagnostic, setDiagnostic] = useState<DelayMappingDiagnostic | null>(null);
+  const [diagnosticBusy, setDiagnosticBusy] = useState(false);
 
   useEffect(() => {
     setPageMeta(
@@ -67,6 +69,35 @@ export function DelayMappingView() {
       .finally(() => {
         if (!cancelled) {
           setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baselineFile?.id, currentFile?.id]);
+
+  useEffect(() => {
+    if (!currentFile || !baselineFile) {
+      setDiagnostic(null);
+      return;
+    }
+    let cancelled = false;
+    setDiagnosticBusy(true);
+    delayMappingDiagnostic(currentFile.id, baselineFile.id)
+      .then((payload) => {
+        if (!cancelled) {
+          setDiagnostic(payload);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setDiagnostic(null);
+          setCompareError(error instanceof Error ? error.message : "Could not build the match diagnostic.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDiagnosticBusy(false);
         }
       });
     return () => {
@@ -143,6 +174,40 @@ export function DelayMappingView() {
           <button
             type="button"
             className="btn btn-outline"
+            disabled={!baselineFile || !currentFile || diagnosticBusy || !diagnostic}
+            onClick={() => {
+              if (!baselineFile || !currentFile || !diagnostic) {
+                return;
+              }
+              const blob = new Blob([JSON.stringify(diagnostic, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = "delay-mapping-diagnostic.json";
+              link.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Diagnostic JSON
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline"
+            disabled={!baselineFile || !currentFile || diagnosticBusy}
+            onClick={() => {
+              if (!baselineFile || !currentFile) {
+                return;
+              }
+              void downloadDelayMappingDiagnosticCsv(currentFile.id, baselineFile.id).catch((error: unknown) => {
+                setCompareError(error instanceof Error ? error.message : "Diagnostic CSV download failed");
+              });
+            }}
+          >
+            Diagnostic CSV
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline"
             disabled={!canExport}
             onClick={() => exportDelayMappingExcel(result, rows)}
           >
@@ -187,6 +252,8 @@ export function DelayMappingView() {
         </p>
       ) : null}
       {compareError ? <p className="error">{compareError}</p> : null}
+      {diagnosticBusy ? <p className="dms-loading dms-no-print">Building match diagnostic…</p> : null}
+      {diagnostic ? <DiagnosticSummary payload={diagnostic} /> : null}
       {loading ? <p className="dms-loading dms-no-print">Comparing Baseline vs Current…</p> : null}
 
       <div className="dms-kpis">
@@ -325,6 +392,37 @@ export function DelayMappingView() {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function DiagnosticSummary({ payload }: { payload: DelayMappingDiagnostic }) {
+  const recon = payload.reconciliation;
+  return (
+    <div className="dms-diagnostic dms-no-print">
+      <p className="dms-kicker">Match diagnostic (no Go-Live impact)</p>
+      <ul>
+        <li>Baseline executable: {recon.baseline_executable_task_count}</li>
+        <li>Current executable: {recon.current_executable_task_count}</li>
+        <li>Matched: {recon.matched_count}</li>
+        <li>Additional: {recon.additional_count}</li>
+        <li>Removed: {recon.removed_count}</li>
+        <li>Ambiguous: {recon.ambiguous_count}</li>
+        <li>
+          Matched + Additional = {recon.matched_plus_additional}{" "}
+          {recon.current_reconciles ? "(reconciles)" : "(does not reconcile)"}
+        </li>
+        <li>
+          Matched + Removed = {recon.matched_plus_removed}{" "}
+          {recon.baseline_reconciles ? "(reconciles)" : "(does not reconcile)"}
+        </li>
+      </ul>
+      {recon.unmatched_current_tasks.length ? (
+        <p className="error">Unmatched current: {recon.unmatched_current_tasks.join("; ")}</p>
+      ) : null}
+      {recon.unmatched_baseline_tasks.length ? (
+        <p className="error">Unmatched baseline: {recon.unmatched_baseline_tasks.join("; ")}</p>
+      ) : null}
+    </div>
   );
 }
 

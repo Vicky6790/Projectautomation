@@ -173,6 +173,334 @@
         "title": "DelayMappingCompareRequest",
         "type": "object"
       },
+      "DelayMappingDiagnostic": {
+        "properties": {
+          "reconciliation": {
+            "$ref": "#/components/schemas/DelayMappingDiagnosticReconcile"
+          },
+          "removed_tasks": {
+            "items": {
+              "$ref": "#/components/schemas/DelayMappingDiagnosticRemoved"
+            },
+            "title": "Removed Tasks",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DelayMappingDiagnosticRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reconciliation"
+        ],
+        "title": "DelayMappingDiagnostic",
+        "type": "object"
+      },
+      "DelayMappingDiagnosticReconcile": {
+        "properties": {
+          "additional_count": {
+            "title": "Additional Count",
+            "type": "integer"
+          },
+          "ambiguous_count": {
+            "title": "Ambiguous Count",
+            "type": "integer"
+          },
+          "baseline_executable_task_count": {
+            "title": "Baseline Executable Task Count",
+            "type": "integer"
+          },
+          "baseline_reconciles": {
+            "title": "Baseline Reconciles",
+            "type": "boolean"
+          },
+          "current_executable_task_count": {
+            "title": "Current Executable Task Count",
+            "type": "integer"
+          },
+          "current_reconciles": {
+            "title": "Current Reconciles",
+            "type": "boolean"
+          },
+          "matched_count": {
+            "title": "Matched Count",
+            "type": "integer"
+          },
+          "matched_plus_additional": {
+            "title": "Matched Plus Additional",
+            "type": "integer"
+          },
+          "matched_plus_removed": {
+            "title": "Matched Plus Removed",
+            "type": "integer"
+          },
+          "removed_count": {
+            "title": "Removed Count",
+            "type": "integer"
+          },
+          "unmatched_baseline_tasks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched Baseline Tasks",
+            "type": "array"
+          },
+          "unmatched_current_tasks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched Current Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "baseline_executable_task_count",
+          "current_executable_task_count",
+          "matched_count",
+          "additional_count",
+          "removed_count",
+          "ambiguous_count",
+          "matched_plus_additional",
+          "matched_plus_removed",
+          "current_reconciles",
+          "baseline_reconciles"
+        ],
+        "title": "DelayMappingDiagnosticReconcile",
+        "type": "object"
+      },
+      "DelayMappingDiagnosticRemoved": {
+        "properties": {
+          "baseline_finish": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Finish"
+          },
+          "baseline_outline_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Outline Number"
+          },
+          "baseline_predecessors": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Predecessors"
+          },
+          "baseline_task_id": {
+            "title": "Baseline Task Id",
+            "type": "integer"
+          },
+          "baseline_task_name": {
+            "title": "Baseline Task Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseline_task_id",
+          "baseline_task_name"
+        ],
+        "title": "DelayMappingDiagnosticRemoved",
+        "type": "object"
+      },
+      "DelayMappingDiagnosticRow": {
+        "properties": {
+          "baseline_finish": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Finish"
+          },
+          "baseline_finish_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Finish Source"
+          },
+          "baseline_matching_task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Matching Task Id"
+          },
+          "baseline_outline_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Outline Number"
+          },
+          "baseline_predecessors": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Predecessors"
+          },
+          "baseline_task_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Task Name"
+          },
+          "classification": {
+            "enum": [
+              "MATCHED",
+              "ADDITIONAL",
+              "DELAYED",
+              "AHEAD",
+              "UNCHANGED",
+              "AMBIGUOUS",
+              "BASELINE_DATA_MISSING"
+            ],
+            "title": "Classification",
+            "type": "string"
+          },
+          "current_finish": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Finish"
+          },
+          "current_outline_level": {
+            "title": "Current Outline Level",
+            "type": "integer"
+          },
+          "current_outline_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Outline Number"
+          },
+          "current_parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Parent"
+          },
+          "current_phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase"
+          },
+          "current_predecessors": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Predecessors"
+          },
+          "current_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Start"
+          },
+          "current_task_id": {
+            "title": "Current Task Id",
+            "type": "integer"
+          },
+          "current_task_name": {
+            "title": "Current Task Name",
+            "type": "string"
+          },
+          "match_confidence": {
+            "title": "Match Confidence",
+            "type": "string"
+          },
+          "match_method": {
+            "title": "Match Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_task_id",
+          "current_task_name",
+          "current_outline_level",
+          "match_method",
+          "match_confidence",
+          "classification"
+        ],
+        "title": "DelayMappingDiagnosticRow",
+        "type": "object"
+      },
       "DelayMappingRow": {
         "description": "One Delay Mapping leaf. Causes, days, and owners are never invented.",
         "properties": {
@@ -2998,6 +3326,86 @@
           }
         },
         "summary": "Compare Delay Mapping",
+        "tags": [
+          "wsr"
+        ]
+      }
+    },
+    "/api/v1/wsr/delay-mapping/diagnostic": {
+      "post": {
+        "operationId": "compare_delay_mapping_diagnostic_api_v1_wsr_delay_mapping_diagnostic_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelayMappingCompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelayMappingDiagnostic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare Delay Mapping Diagnostic",
+        "tags": [
+          "wsr"
+        ]
+      }
+    },
+    "/api/v1/wsr/delay-mapping/diagnostic.csv": {
+      "post": {
+        "operationId": "download_delay_mapping_diagnostic_csv_api_v1_wsr_delay_mapping_diagnostic_csv_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelayMappingCompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Delay Mapping Diagnostic Csv",
         "tags": [
           "wsr"
         ]

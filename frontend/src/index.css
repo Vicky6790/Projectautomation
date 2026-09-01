@@ -2478,6 +2478,18 @@ label select {
   margin-bottom: 16px;
 }
 
+.dms-diagnostic {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.dms-diagnostic ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
 .dms-upload-slot {
   background: #fff;
   border: 1px solid #e2e8f0;
