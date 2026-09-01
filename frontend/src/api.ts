@@ -1,5 +1,4 @@
 import type {
-  DelayMappingDiagnostic,
   DelayMappingSheet,
   FileRecord,
   HealthResponse,
@@ -237,49 +236,6 @@ export function compareDelayMapping(
       baseline_file_id: baselineFileId || null,
     }),
   });
-}
-
-export function delayMappingDiagnostic(
-  currentFileId: string,
-  baselineFileId: string,
-): Promise<DelayMappingDiagnostic> {
-  return request(`/api/v1/wsr/delay-mapping/diagnostic`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      current_file_id: currentFileId,
-      baseline_file_id: baselineFileId,
-    }),
-  });
-}
-
-export async function downloadDelayMappingDiagnosticCsv(
-  currentFileId: string,
-  baselineFileId: string,
-): Promise<void> {
-  const response = await fetch(`/api/v1/wsr/delay-mapping/diagnostic.csv`, {
-    ...SESSION,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      current_file_id: currentFileId,
-      baseline_file_id: baselineFileId,
-    }),
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as
-      | { error?: { message?: string; code?: string } }
-      | null;
-    notifyAuthLost(payload?.error?.code);
-    throw new ApiRequestError(payload?.error?.message ?? "Diagnostic CSV download failed");
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "delay-mapping-diagnostic.csv";
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 export function getWsrRequest(handle: string): Promise<ProcessingResponse> {

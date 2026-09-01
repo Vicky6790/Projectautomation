@@ -446,34 +446,3 @@ def test_delay_mapping_current_mpp_without_baseline_file(client: TestClient, mon
 def test_delay_mapping_compare_requires_current_mpp(client: TestClient) -> None:
     response = client.post("/api/v1/wsr/delay-mapping", json={"current_file_id": ""})
     assert response.status_code in {400, 422}
-
-
-def test_delay_mapping_diagnostic_requires_baseline(client: TestClient, monkeypatch) -> None:
-    handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
-    response = client.post("/api/v1/wsr/delay-mapping/diagnostic", json={"current_file_id": handle})
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "BASELINE_MPP_REQUIRED"
-
-
-def test_delay_mapping_diagnostic_lists_every_current_task(client: TestClient, monkeypatch) -> None:
-    baseline_id = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
-    current_id = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
-    body = {"current_file_id": current_id, "baseline_file_id": baseline_id}
-    response = client.post("/api/v1/wsr/delay-mapping/diagnostic", json=body)
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["reconciliation"]["current_executable_task_count"] == len(payload["rows"])
-    assert {row["classification"] for row in payload["rows"]} <= {
-        "MATCHED",
-        "ADDITIONAL",
-        "DELAYED",
-        "AHEAD",
-        "UNCHANGED",
-        "AMBIGUOUS",
-        "BASELINE_DATA_MISSING",
-    }
-    csv_response = client.post("/api/v1/wsr/delay-mapping/diagnostic.csv", json=body)
-    assert csv_response.status_code == 200, csv_response.text
-    assert "Classification" in csv_response.text
-    assert "Go-Live Impact" not in csv_response.text
-
