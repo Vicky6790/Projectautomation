@@ -1,4 +1,4 @@
-import { shortDate, unavailable } from "../wsrFormat";
+import { shortDate } from "../wsrFormat";
 import type { CompareMppResult, DelayMappingItem } from "./types";
 
 export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMappingItem[]): void {
@@ -6,54 +6,35 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
 <head><meta charset="UTF-8" /></head>
 <body>
 <table border="1">
-  <tr><th colspan="9">DELAY MAPPING</th></tr>
-  <tr><td colspan="9">Tasks that move the project deadline</td></tr>
+  <tr><th colspan="7">DELAY MAPPING</th></tr>
+  <tr><td colspan="7">Tasks whose Baseline Finish is NA</td></tr>
   <tr></tr>
-  <tr><td>Project Deadline</td><td>${esc(shortDate(result.summary.currentGoLive))}</td></tr>
-  <tr><td>Identified Deadline Impact</td><td>${shiftLabel(result.summary.goLiveShift)}</td></tr>
-  <tr><td>Delayed Tasks</td><td>${result.summary.delayedTaskCount}</td></tr>
-  <tr><td>Additional Tasks</td><td>${result.summary.additionalTaskCount}</td></tr>
+  <tr><td>Total tasks read</td><td>${result.summary.tasksRead}</td></tr>
+  <tr><td>Tasks with Baseline Finish = NA</td><td>${result.summary.baselineFinishNaCount}</td></tr>
+  <tr><td>Delay Sheet rows generated</td><td>${result.summary.delaySheetRows}</td></tr>
   <tr></tr>
   <tr>
+    <th>Task ID</th>
     <th>Task Name</th>
-    <th>Task Type</th>
+    <th>WBS</th>
     <th>Start</th>
     <th>Baseline Finish</th>
     <th>Finish</th>
-    <th>Delay / Impact Days</th>
     <th>Predecessors</th>
-    <th>Owner</th>
-    <th>Impact Reason</th>
   </tr>
   ${rows
     .map((row) => {
-      const fill = row.taskType === "DELAYED" ? "#FEF2F2" : "#FFF7ED";
-      const baseline = row.taskType === "ADDITIONAL" ? "N/A" : shortDate(row.baselineFinish);
-      const impact = row.goLiveImpact > 0 ? `+${row.goLiveImpact} WD` : row.taskType === "ADDITIONAL" ? "N/A" : "0";
       return `<tr>
-        <td style="background:${fill}">${esc(row.taskName)}</td>
-        <td style="background:${fill}">${esc(row.taskType)}</td>
-        <td style="background:${fill}">${esc(shortDate(row.currentStart))}</td>
-        <td style="background:${fill}">${esc(baseline)}</td>
-        <td style="background:${fill}">${esc(shortDate(row.currentFinish))}</td>
-        <td style="background:${fill}">${esc(impact)}</td>
-        <td style="background:${fill}">${esc(row.predecessors.join(", ") || "Unavailable")}</td>
-        <td style="background:${fill}">${esc(unavailable(row.owner))}</td>
-        <td style="background:${fill}">${esc(row.evidence)}</td>
+        <td>${esc(row.taskId)}</td>
+        <td>${esc(row.taskName)}</td>
+        <td>${esc(row.wbs || "")}</td>
+        <td>${esc(shortDate(row.currentStart))}</td>
+        <td>${esc(row.baselineFinish || "")}</td>
+        <td>${esc(shortDate(row.currentFinish))}</td>
+        <td>${esc(row.predecessors.join(", "))}</td>
       </tr>`;
     })
     .join("")}
-  <tr>
-    <td><b>Total</b></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td><b>${rows.reduce((sum, row) => sum + (row.goLiveImpact || 0), 0)}</b></td>
-    <td></td>
-    <td></td>
-    <td></td>
-  </tr>
 </table>
 </body>
 </html>`;
@@ -73,13 +54,6 @@ export function printDelayMappingSheet(): void {
   window.addEventListener("afterprint", restore);
   window.print();
   window.setTimeout(restore, 1000);
-}
-
-function shiftLabel(value: number | null): string {
-  if (value == null) {
-    return "Unavailable";
-  }
-  return value > 0 ? `+${value} Working Days` : `${value} Working Days`;
 }
 
 function esc(value: string): string {

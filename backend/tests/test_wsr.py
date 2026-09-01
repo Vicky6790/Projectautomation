@@ -196,8 +196,7 @@ def test_delay_mapping_pdf_is_a_standalone_sheet(client: TestClient, monkeypatch
     assert f'delay-mapping-{handle}.pdf' in report.headers["content-disposition"]
     text = pdf_text(report.content)
     assert "Go-Live Delay Mapping" in text
-    assert "Project Deadline" in text
-    assert "Identified Deadline Impact" in text
+    assert "Delay Mapping" in text or "DELAY MAPPING" in text or "Baseline Finish" in text
     assert "Executive Summary" not in text
     assert "Risks & Focus Areas" not in text
 
@@ -389,6 +388,7 @@ def test_delay_mapping_uses_single_uploaded_mpp(client: TestClient, monkeypatch)
                 name="Unplanned review round",
                 scheduled_start="2026-09-14",
                 scheduled_finish="2026-09-18",
+                baseline_finish="NA",
                 predecessor_ids=[2],
                 assignments=[],
             ),
@@ -410,25 +410,22 @@ def test_delay_mapping_uses_single_uploaded_mpp(client: TestClient, monkeypatch)
     response = client.post("/api/v1/wsr/delay-mapping", json={"current_file_id": file_id})
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["baseline_go_live"] == "2026-09-11"
-    assert body["current_go_live"] == "2026-09-22"
     names = [row["name"] for row in body["rows"]]
     assert "Unplanned review round" in names
-    assert {row["task_type"] for row in body["rows"] if row["name"] == "Unplanned review round"} == {
-        "additional"
-    }
-    assert all(
-        isinstance(row["go_live_impact_days"], int) and row["go_live_impact_days"] > 0
-        for row in body["rows"]
-        if row["name"] == "Unplanned review round"
-    )
+    assert body["current_task_count"] == 4
+    assert body["additional_task_count"] == 1
+    assert len(body["rows"]) == 1
+    assert body["rows"][0]["planned_finish"] == "NA"
 
 
 def test_delay_mapping_current_mpp_without_baseline_file(client: TestClient, monkeypatch) -> None:
     handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
     response = client.post("/api/v1/wsr/delay-mapping", json={"current_file_id": handle})
     assert response.status_code == 200, response.text
-    assert response.json()["current_go_live"] == "2026-09-11"
+    body = response.json()
+    assert body["current_task_count"] == 3
+    assert body["additional_task_count"] == 0
+    assert body["rows"] == []
 
 
 def test_delay_mapping_compare_requires_current_mpp(client: TestClient) -> None:

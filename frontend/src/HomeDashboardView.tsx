@@ -19,8 +19,8 @@ const STEPS = [
     to: "/delay-mapping",
     icon: "table_view",
     title: "Delay Mapping",
-    hint: "Deadline impact from one MPP",
-    detail: "Upload the current MPP. Delay Mapping lists DELAYED and ADDITIONAL tasks that reach Go-Live, without double-counting sequential delays.",
+    hint: "Baseline Finish = NA",
+    detail: "Upload one MPP. The Delay Sheet lists every task whose Baseline Finish is NA.",
   },
 ] as const;
 

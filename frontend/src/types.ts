@@ -162,6 +162,8 @@ export type DelayMappingSheet = {
   additional_shift_days?: number;
   total_delayed_days?: number;
   delayed_task_count?: number;
+  additional_task_count?: number;
+  current_task_count?: number;
   matching_requires_validation?: boolean;
   reconciliation_status?: "reconciled" | "requires_validation" | "unavailable" | null;
   reconciliation_warning?: string | null;

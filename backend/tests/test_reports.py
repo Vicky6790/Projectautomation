@@ -293,9 +293,12 @@ def test_delay_mapping_pdf_uses_sheet_facts_only() -> None:
                             {
                                 "name": "Delay In Presenting Mobile Wireframes",
                                 "parent_name": "Design",
-                                "task_type": "delay",
-                                "shift_days": 3,
-                                "owner": "Idealake",
+                                "task_type": "additional",
+                                "current_task_id": 11,
+                                "wbs": "1.2",
+                                "planned_finish": "NA",
+                                "revised_start": "2026-08-11",
+                                "revised_finish": "2026-08-18",
                             }
                         ],
                     },
@@ -319,7 +322,7 @@ def test_delay_mapping_pdf_uses_sheet_facts_only() -> None:
     assert "Go-Live Delay Mapping" in text
     assert "Core Banking" in text
     assert "Delay In Presenting Mobile Wireframes" in text
-    assert "Idealake" in text
+    assert "NA" in text
     assert "Build may slip" not in text
     assert "Executive Summary" not in text
 
