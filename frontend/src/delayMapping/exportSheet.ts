@@ -6,32 +6,40 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
 <head><meta charset="UTF-8" /></head>
 <body>
 <table border="1">
-  <tr><th colspan="5">DELAY MAPPING</th></tr>
-  <tr><td colspan="5">Baseline vs Current Schedule Variance</td></tr>
+  <tr><th colspan="9">DELAY MAPPING</th></tr>
+  <tr><td colspan="9">Tasks that move the project deadline</td></tr>
   <tr></tr>
-  <tr><td>Baseline Go-Live</td><td>${esc(shortDate(result.summary.baselineGoLive))}</td></tr>
-  <tr><td>Current Go-Live</td><td>${esc(shortDate(result.summary.currentGoLive))}</td></tr>
-  <tr><td>Go-Live Shift</td><td>${shiftLabel(result.summary.goLiveShift)}</td></tr>
+  <tr><td>Project Deadline</td><td>${esc(shortDate(result.summary.currentGoLive))}</td></tr>
+  <tr><td>Identified Deadline Impact</td><td>${shiftLabel(result.summary.goLiveShift)}</td></tr>
   <tr><td>Delayed Tasks</td><td>${result.summary.delayedTaskCount}</td></tr>
   <tr><td>Additional Tasks</td><td>${result.summary.additionalTaskCount}</td></tr>
   <tr></tr>
   <tr>
     <th>Task Name</th>
     <th>Task Type</th>
-    <th>Shift Days Count</th>
-    <th>Go-Live Impact</th>
+    <th>Start</th>
+    <th>Baseline Finish</th>
+    <th>Finish</th>
+    <th>Delay / Impact Days</th>
+    <th>Predecessors</th>
     <th>Owner</th>
+    <th>Impact Reason</th>
   </tr>
   ${rows
     .map((row) => {
-      const fill = row.taskType === "Delay" ? "#FEF2F2" : "#FFF7ED";
-      const shift = row.taskType === "Additional" ? "N/A" : row.shiftDays == null ? "Unavailable" : String(row.shiftDays);
+      const fill = row.taskType === "DELAYED" ? "#FEF2F2" : "#FFF7ED";
+      const baseline = row.taskType === "ADDITIONAL" ? "N/A" : shortDate(row.baselineFinish);
+      const impact = row.goLiveImpact > 0 ? `+${row.goLiveImpact} WD` : row.taskType === "ADDITIONAL" ? "N/A" : "0";
       return `<tr>
         <td style="background:${fill}">${esc(row.taskName)}</td>
         <td style="background:${fill}">${esc(row.taskType)}</td>
-        <td style="background:${fill}">${shift}</td>
-        <td style="background:${fill}">${String(row.goLiveImpact)}</td>
+        <td style="background:${fill}">${esc(shortDate(row.currentStart))}</td>
+        <td style="background:${fill}">${esc(baseline)}</td>
+        <td style="background:${fill}">${esc(shortDate(row.currentFinish))}</td>
+        <td style="background:${fill}">${esc(impact)}</td>
+        <td style="background:${fill}">${esc(row.predecessors.join(", ") || "Unavailable")}</td>
         <td style="background:${fill}">${esc(unavailable(row.owner))}</td>
+        <td style="background:${fill}">${esc(row.evidence)}</td>
       </tr>`;
     })
     .join("")}
@@ -39,7 +47,11 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
     <td><b>Total</b></td>
     <td></td>
     <td></td>
+    <td></td>
+    <td></td>
     <td><b>${rows.reduce((sum, row) => sum + (row.goLiveImpact || 0), 0)}</b></td>
+    <td></td>
+    <td></td>
     <td></td>
   </tr>
 </table>

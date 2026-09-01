@@ -1,4 +1,4 @@
-"""Deterministic Delay Mapping. Numbers come from MPP dates, calendars, and links — never AI."""
+"""Deterministic Delay Mapping from one MPP. Numbers come from dates, calendars, and links — never AI."""
 
 from __future__ import annotations
 
@@ -11,23 +11,23 @@ from app.models import (
     PlanTaskData,
     ProjectPlanData,
 )
-from app.wsr.detection import (
-    client_owner_markers,
-    go_live_markers,
-    internal_owner_markers,
-)
+from app.wsr.detection import client_owner_markers, internal_owner_markers
 
-_RECONCILE_WARNING = (
-    "MPP reconciliation failed. Please review the source files before generating the report."
+_INCOMPLETE_MESSAGE = (
+    "Unable to determine deadline impact because required "
+    "MPP schedule/dependency information is incomplete."
 )
-_AMBIGUOUS_WARNING = (
-    "Delay mapping total does not reconcile with the calculated Go-Live shift. "
-    "PM validation required."
+_CONFIGURED_GO_LIVE = frozenset({"go_live", "go-live", "go live", "golive"})
+_RECOGNIZED_GO_LIVE = frozenset(
+    {
+        "go live",
+        "project go live",
+        "go live date",
+        "production go live",
+    }
 )
-_EXPLICIT_GO_LIVE = frozenset({"go_live", "go-live", "go live", "golive"})
-_VALIDATION_MESSAGE = (
-    "MPP reconciliation failed. Please review the source files before generating the report."
-)
+_BLANK_BASELINE = frozenset({"", "n/a", "na", "null", "none", "unavailable", "-"})
+_ADDITIONAL_REASON = "Additional task contributes to the dependency chain ending at Go-Live."
 
 
 def build_delay_mapping(
@@ -37,183 +37,78 @@ def build_delay_mapping(
     go_live_date: date | None,
     baseline_plan: ProjectPlanData | None = None,
 ) -> DelayMappingSheet:
-    from app.wsr.facts import (
-        _candidate_date,
-        _contains,
-        parse_date,
-        select_phase_summaries,
-    )
+    from app.wsr.facts import _candidate_date, parse_date, select_phase_summaries
 
-    current_plan = plan
     _ = go_live_date
-    holidays = _holiday_set(current_plan, parse_date)
+    _ = baseline_plan
+    holidays = _holiday_set(plan, parse_date)
     calendar_source = (
-        "project"
-        if (current_plan.calendar_available or current_plan.holiday_dates)
-        else "weekdays_fallback"
+        "project" if (plan.calendar_available or plan.holiday_dates) else "weekdays_fallback"
     )
-    go_live_task, go_live_status = _select_go_live(
-        current_plan.tasks, as_of, _contains, _candidate_date
-    )
-    baseline_go_live_task = None
-    if baseline_plan is not None:
-        baseline_go_live_task, baseline_gl_status = _select_go_live(
-            baseline_plan.tasks, as_of, _contains, _candidate_date
+    graph_error = _graph_validation_error(plan.tasks)
+    go_live_task, go_live_status = _select_go_live(plan.tasks, as_of, _candidate_date, parse_date)
+    if graph_error or go_live_status in {"ambiguous", "unavailable"}:
+        status = "ambiguous" if go_live_status == "ambiguous" else "unavailable"
+        return _failed_sheet(
+            go_live_task=None if go_live_status != "calculated" else go_live_task,
+            go_live_status=status,
+            calendar_source=calendar_source,
+            parse_date=parse_date,
         )
-        if baseline_gl_status == "ambiguous" or go_live_status == "ambiguous":
-            go_live_status = "ambiguous"
-    if go_live_status == "ambiguous":
-        baseline_go_live = None
-        current_go_live = None
-    elif baseline_plan is not None:
-        baseline_go_live = parse_date(
-            None
-            if baseline_go_live_task is None
-            else (baseline_go_live_task.baseline_finish or baseline_go_live_task.scheduled_finish)
-        )
-        current_go_live = parse_date(
-            None if go_live_task is None else go_live_task.scheduled_finish
-        )
-        if go_live_task is None:
-            go_live_status = "unavailable"
-    else:
-        baseline_go_live = parse_date(
-            None if go_live_task is None else go_live_task.baseline_finish
-        )
-        current_go_live = parse_date(
-            None if go_live_task is None else go_live_task.scheduled_finish
-        )
-        if go_live_task is None:
-            go_live_status = "unavailable"
-        elif baseline_go_live is None or current_go_live is None:
-            go_live_status = "unavailable"
-        else:
-            go_live_status = "calculated"
 
-    gross = None
-    holiday_count = None
-    net = None
-    if go_live_status != "calculated" or baseline_go_live is None or current_go_live is None:
-        pass
-    elif current_go_live > baseline_go_live:
+    baseline_go_live = parse_date(None if go_live_task is None else go_live_task.baseline_finish)
+    current_go_live = _task_finish(go_live_task, parse_date)
+    if go_live_task is None or current_go_live is None or baseline_go_live is None:
+        return _failed_sheet(
+            go_live_task=go_live_task,
+            go_live_status="unavailable",
+            calendar_source=calendar_source,
+            parse_date=parse_date,
+        )
+    go_live_status = "calculated"
+
+    gross = 0
+    holiday_count = 0 if calendar_source == "project" else None
+    net = 0
+    if current_go_live > baseline_go_live:
         gross = _weekdays_after(baseline_go_live, current_go_live)
         if calendar_source == "project":
             holiday_count = _holiday_weekdays_after(baseline_go_live, current_go_live, holidays)
             net = max(0, gross - holiday_count)
         else:
             net = gross
-    else:
-        gross = 0
-        holiday_count = 0 if calendar_source == "project" else None
-        net = 0
 
-    phase_tasks = select_phase_summaries(current_plan.tasks, project_name=current_plan.name)
-    go_live_id = None if go_live_task is None else go_live_task.id
-    successors = _successor_map(current_plan.tasks)
-    by_id = {task.id: task for task in current_plan.tasks}
-    wbs_index = {(task.wbs or "").strip(): task for task in current_plan.tasks if (task.wbs or "").strip()}
-    driving_ids = _driving_path_ids(go_live_task, current_plan.tasks, successors)
-    two_file = baseline_plan is not None
-    baseline_tasks = baseline_plan.tasks if two_file else current_plan.tasks
-    baseline_index = _baseline_index(baseline_tasks, current_plan.tasks, parse_date=parse_date)
+    phase_tasks = select_phase_summaries(plan.tasks, project_name=plan.name)
+    go_live_id = go_live_task.id
+    successors = _successor_map(plan.tasks)
+    by_id = {task.id: task for task in plan.tasks}
+    wbs_index = {(task.wbs or "").strip(): task for task in plan.tasks if (task.wbs or "").strip()}
+    driving_ids = _driving_path_ids(go_live_task, plan.tasks, successors)
 
-    current_leaves = _relevant_leaves(current_plan.tasks)
-    baseline_leaves = _relevant_leaves(baseline_tasks)
-    matched_baseline_ids: set[int] = set()
     classified: list[dict] = []
-    review_rows: list[DelayMappingRow] = []
-    matching_unresolved = go_live_status == "ambiguous"
-    skipped_current_go_live = 0
-    baseline_go_live_id = None if baseline_go_live_task is None else baseline_go_live_task.id
-
-    for task in current_leaves:
-        matched, source = match_task(task, baseline_index)
-        baseline_finish = _compare_finish(matched, two_file=two_file, parse_date=parse_date)
-        current_finish = parse_date(task.actual_finish) or parse_date(task.scheduled_finish)
-        current_start = parse_date(task.actual_start) or parse_date(task.scheduled_start)
-        # Only the selected Go-Live milestone is omitted from the executive sheet.
-        # Other tasks whose names mention go-live are real work and must still be counted.
-        if go_live_id is not None and task.id == go_live_id:
-            if matched is not None:
-                matched_baseline_ids.add(matched.id)
-            skipped_current_go_live += 1
+    unchanged_count = 0
+    ahead_count = 0
+    non_impacting_additional = 0
+    for task in _relevant_leaves(plan.tasks):
+        if task.id == go_live_id:
             continue
-        if source == "ambiguous":
-            matching_unresolved = True
-            review_rows.append(
-                _register_row(
-                    current_plan.tasks,
-                    phase_tasks,
-                    wbs_index,
-                    task,
-                    None,
-                    "unavailable",
-                    shift_days=None,
-                    go_live_impact_days=None,
-                    successors=successors,
-                    by_id=by_id,
-                    go_live_task=go_live_task,
-                    driving_ids=driving_ids,
-                    parse_date=parse_date,
-                    two_file=two_file,
-                    match_status="ambiguous",
-                    calculation_status="ambiguous_match",
-                    evidence_reason="Multiple baseline tasks match this current task. Delay was not calculated.",
-                    calculation_source="ambiguous",
-                )
-            )
-            continue
-        if matched is None:
-            classified.append(
-                {
-                    "task": task,
-                    "matched": None,
-                    "task_type": "additional",
-                    "source": source,
-                    "baseline_finish": None,
-                    "current_finish": current_finish,
-                    "current_start": current_start,
-                    "shift_days": None,
-                    "match_status": "additional",
-                    "calculation_status": "calculated",
-                    "evidence": "Task exists in Current MPP but not in Baseline MPP.",
-                }
-            )
-            continue
-        matched_baseline_ids.add(matched.id)
+        current_finish = _task_finish(task, parse_date)
+        current_start = _task_start(task, parse_date)
+        baseline_finish = _baseline_finish(task, parse_date)
         if baseline_finish is None:
             classified.append(
                 {
                     "task": task,
-                    "matched": matched,
-                    "task_type": "unavailable",
-                    "source": source,
+                    "task_type": "additional",
                     "baseline_finish": None,
                     "current_finish": current_finish,
                     "current_start": current_start,
                     "shift_days": None,
-                    "match_status": "matched",
-                    "calculation_status": "baseline_unavailable",
-                    "evidence": "Baseline Finish is unavailable. Delay was not calculated.",
+                    "evidence": _ADDITIONAL_REASON,
                 }
             )
             continue
         if current_finish is None:
-            classified.append(
-                {
-                    "task": task,
-                    "matched": matched,
-                    "task_type": "unavailable",
-                    "source": source,
-                    "baseline_finish": baseline_finish,
-                    "current_finish": None,
-                    "current_start": current_start,
-                    "shift_days": None,
-                    "match_status": "matched",
-                    "calculation_status": "baseline_unavailable",
-                    "evidence": "Current Finish is unavailable. Delay was not calculated.",
-                }
-            )
             continue
         if current_finish > baseline_finish:
             shift = len(
@@ -222,15 +117,11 @@ def build_delay_mapping(
             classified.append(
                 {
                     "task": task,
-                    "matched": matched,
                     "task_type": "delay",
-                    "source": source,
                     "baseline_finish": baseline_finish,
                     "current_finish": current_finish,
                     "current_start": current_start,
                     "shift_days": shift,
-                    "match_status": "matched",
-                    "calculation_status": "calculated",
                     "evidence": (
                         "Current Finish is later than Baseline Finish. "
                         f"Working-day variance: {shift}."
@@ -238,124 +129,58 @@ def build_delay_mapping(
                 }
             )
         elif current_finish < baseline_finish:
-            classified.append(
-                {
-                    "task": task,
-                    "matched": matched,
-                    "task_type": "ahead",
-                    "source": source,
-                    "baseline_finish": baseline_finish,
-                    "current_finish": current_finish,
-                    "current_start": current_start,
-                    "shift_days": None,
-                    "match_status": "matched",
-                    "calculation_status": "calculated",
-                    "evidence": "Current Finish is earlier than Baseline Finish.",
-                }
-            )
+            ahead_count += 1
         else:
-            classified.append(
-                {
-                    "task": task,
-                    "matched": matched,
-                    "task_type": "unchanged",
-                    "source": source,
-                    "baseline_finish": baseline_finish,
-                    "current_finish": current_finish,
-                    "current_start": current_start,
-                    "shift_days": 0,
-                    "match_status": "matched",
-                    "calculation_status": "calculated",
-                    "evidence": "Current Finish equals Baseline Finish.",
-                }
-            )
+            unchanged_count += 1
 
-    removed_rows: list[DelayMappingRow] = []
-    skipped_baseline_go_live = 0
-    if two_file:
-        for task in baseline_leaves:
-            if task.id in matched_baseline_ids:
-                continue
-            if baseline_go_live_id is not None and task.id == baseline_go_live_id:
-                skipped_baseline_go_live += 1
-                continue
-            removed_rows.append(
-                _register_row(
-                    current_plan.tasks,
-                    phase_tasks,
-                    wbs_index,
-                    task,
-                    task,
-                    "removed",
-                    shift_days=None,
-                    go_live_impact_days=None,
-                    successors=successors,
-                    by_id=by_id,
-                    go_live_task=go_live_task,
-                    driving_ids=driving_ids,
-                    parse_date=parse_date,
-                    two_file=two_file,
-                    match_status="removed",
-                    calculation_status="calculated",
-                    evidence_reason="Task exists in Baseline MPP but not in Current MPP.",
-                    calculation_source="removed",
-                )
-            )
-
-    report_items = [
-        item for item in classified if item["task_type"] in {"delay", "additional"}
-    ]
+    report_items = [item for item in classified if item["task_type"] in {"delay", "additional"}]
     for item in report_items:
         item["potential_impact"] = _potential_go_live_impact(
             item,
             driving_ids=driving_ids,
+            successors=successors,
+            go_live_id=go_live_id,
             net=net,
             holidays=holidays,
         )
     _attribute_go_live_impact(report_items, net=net or 0)
-    report_items = [item for item in report_items if (item.get("go_live_impact_days") or 0) > 0]
-
-    calc_status_go_live = (
-        "go_live_ambiguous"
-        if go_live_status == "ambiguous"
-        else "go_live_unavailable"
-        if go_live_status == "unavailable"
-        else "calendar_unavailable"
-        if calendar_source == "weekdays_fallback"
-        else "calculated"
-    )
-    rows: list[DelayMappingRow] = []
+    visible: list[dict] = []
     for item in report_items:
-        status = item["calculation_status"]
-        if calc_status_go_live != "calculated" and item["task_type"] == "delay":
-            status = calc_status_go_live if item.get("go_live_impact_days") else status
-        raw_shift = item.get("shift_days") if item["task_type"] == "delay" else None
+        impact = int(item.get("go_live_impact_days") or 0)
+        if impact <= 0:
+            if item["task_type"] == "additional":
+                non_impacting_additional += 1
+            continue
+        if item["task_type"] == "additional":
+            item["evidence"] = _ADDITIONAL_REASON
+        else:
+            item["evidence"] = (
+                f"{item['evidence']} Delayed task contributes to the dependency chain ending at Go-Live."
+            )
+        visible.append(item)
+
+    rows: list[DelayMappingRow] = []
+    for item in visible:
         rows.append(
             _register_row(
-                current_plan.tasks,
+                plan.tasks,
                 phase_tasks,
                 wbs_index,
                 item["task"],
-                item["matched"],
                 item["task_type"],
-                shift_days=raw_shift,
+                shift_days=item.get("shift_days") if item["task_type"] == "delay" else None,
                 go_live_impact_days=item.get("go_live_impact_days") or 0,
                 successors=successors,
                 by_id=by_id,
                 go_live_task=go_live_task,
                 driving_ids=driving_ids,
                 parse_date=parse_date,
-                match_status=item["match_status"],
-                calculation_status=status,
                 evidence_reason=item["evidence"],
-                calculation_source=item["source"],
-                two_file=two_file,
             )
         )
-
     rows.sort(
         key=lambda row: (
-            row.revised_start or row.planned_finish or "9999-12-31",
+            row.revised_start or row.revised_finish or "9999-12-31",
             row.current_task_id or 10**9,
         )
     )
@@ -365,123 +190,114 @@ def build_delay_mapping(
     delay_shift = sum(row.go_live_impact_days or 0 for row in rows if row.task_type == "delay")
     additional_shift = sum(row.go_live_impact_days or 0 for row in rows if row.task_type == "additional")
     attributed = sum(row.go_live_impact_days or 0 for row in rows)
-    unchanged_count = sum(1 for item in classified if item["task_type"] == "unchanged")
-    ahead_count = sum(1 for item in classified if item["task_type"] == "ahead")
-
-    current_count = len(current_leaves)
-    baseline_count = len(baseline_leaves)
-    ambiguous_count = len(review_rows)
-    removed_count = len(removed_rows)
-    current_accounted = len(classified) + ambiguous_count + skipped_current_go_live
-    baseline_accounted = len(matched_baseline_ids) + removed_count + skipped_baseline_go_live
-    if two_file:
-        recon_ok = current_accounted == current_count and baseline_accounted == baseline_count
-    else:
-        recon_ok = current_accounted == current_count
-    if matching_unresolved and go_live_status != "ambiguous":
-        recon_status = "requires_validation"
-        warning = _AMBIGUOUS_WARNING if not recon_ok else None
-        report_status = "requires_review"
-    elif not recon_ok:
-        recon_status = "requires_validation"
-        warning = _VALIDATION_MESSAGE
-        report_status = "validation_failed"
-    else:
-        recon_status = "reconciled"
-        warning = None
-        report_status = "verified"
-    if go_live_status == "ambiguous":
-        report_status = "requires_review"
-        recon_status = "requires_validation"
-        warning = warning or "Go-Live is ambiguous. Configure the official Go-Live task."
+    _ = non_impacting_additional
 
     return DelayMappingSheet(
-        report_status=report_status,
-        go_live_status=go_live_status if go_live_status in {"calculated", "unavailable", "ambiguous"} else None,
-        baseline_go_live=None if baseline_go_live is None else baseline_go_live.isoformat(),
-        current_go_live=None if current_go_live is None else current_go_live.isoformat(),
+        report_status="verified",
+        go_live_status=go_live_status,
+        baseline_go_live=baseline_go_live.isoformat(),
+        current_go_live=current_go_live.isoformat(),
         gross_working_day_shift=gross,
         shift_working_days=gross,
         holidays=holiday_count,
         net_working_day_shift=net,
         actual_shift_working_days=net,
         attributed_shift_days=attributed,
-        unattributed_shift_days=0,
-        unattributed_status=None,
+        unattributed_shift_days=max(0, (net or 0) - attributed),
+        unattributed_status="explained",
         delay_shift_days=delay_shift,
         additional_shift_days=additional_shift,
         total_delayed_days=attributed,
         delayed_task_count=delay_count,
         additional_task_count=additional_count,
-        matched_task_count=len(matched_baseline_ids),
-        removed_task_count=removed_count,
+        matched_task_count=sum(1 for item in classified if item["task_type"] != "additional"),
+        removed_task_count=0,
         unchanged_task_count=unchanged_count,
         ahead_task_count=ahead_count,
-        ambiguous_task_count=ambiguous_count,
-        baseline_task_count=baseline_count,
-        current_task_count=current_count,
-        reconciliation_status=recon_status,
-        reconciliation_warning=warning,
+        ambiguous_task_count=0,
+        baseline_task_count=len(_relevant_leaves(plan.tasks)),
+        current_task_count=len(_relevant_leaves(plan.tasks)),
+        reconciliation_status="reconciled",
+        reconciliation_warning=None,
         calendar_source=calendar_source,
-        matching_requires_validation=matching_unresolved,
+        matching_requires_validation=False,
         phase_attribution=[],
         owner_attribution=[],
         type_attribution=[],
         rows=rows,
-        review_rows=review_rows,
-        removed_rows=removed_rows,
+        review_rows=[],
+        removed_rows=[],
     )
 
 
-def match_task(
-    current: PlanTaskData,
-    baseline_index: dict[str, object],
-) -> tuple[PlanTaskData | None, str]:
-    """Match by Unique ID, then name hierarchy. Never use physical row or WBS numbers."""
-
-    by_id: dict[int, PlanTaskData] = baseline_index["by_id"]  # type: ignore[assignment]
-    by_hierarchy: dict[tuple[str, str], list[PlanTaskData]] = baseline_index["by_hierarchy"]  # type: ignore[assignment]
-    by_canonical: dict[str, list[PlanTaskData]] = baseline_index["by_canonical"]  # type: ignore[assignment]
-    current_tasks: list[PlanTaskData] = baseline_index["current_tasks"]  # type: ignore[assignment]
-
-    hit = by_id.get(current.id)
-    if hit is not None:
-        return hit, "id"
-    canon = _canonical_key(current, current_tasks)
-    canon_hits = by_canonical.get(canon, [])
-    if len(canon_hits) == 1:
-        return canon_hits[0], "canonical"
-    if len(canon_hits) > 1:
-        return None, "ambiguous"
-    hierarchy_key = (_norm(current.name), _parent_name(current, current_tasks))
-    hier_hits = by_hierarchy.get(hierarchy_key, [])
-    if len(hier_hits) == 1:
-        return hier_hits[0], "hierarchy"
-    if len(hier_hits) > 1:
-        return None, "ambiguous"
-    return None, "unmatched"
-
-
-def _baseline_index(
-    tasks: list[PlanTaskData],
-    current_tasks: list[PlanTaskData],
+def _failed_sheet(
+    *,
+    go_live_task: PlanTaskData | None,
+    go_live_status: str,
+    calendar_source: str,
     parse_date,
-) -> dict[str, object]:
-    _ = parse_date
-    scoped = _relevant_leaves(tasks)
-    by_id = {task.id: task for task in scoped}
-    by_hierarchy: dict[tuple[str, str], list[PlanTaskData]] = {}
-    by_canonical: dict[str, list[PlanTaskData]] = {}
-    for task in scoped:
-        by_hierarchy.setdefault((_norm(task.name), _parent_name(task, tasks)), []).append(task)
-        by_canonical.setdefault(_canonical_key(task, tasks), []).append(task)
-    return {
-        "by_id": by_id,
-        "by_hierarchy": by_hierarchy,
-        "by_canonical": by_canonical,
-        "current_tasks": current_tasks,
-        "baseline_tasks": tasks,
-    }
+) -> DelayMappingSheet:
+    baseline = None if go_live_task is None else parse_date(go_live_task.baseline_finish)
+    current = _task_finish(go_live_task, parse_date)
+    return DelayMappingSheet(
+        report_status="validation_failed" if go_live_status != "ambiguous" else "requires_review",
+        go_live_status=go_live_status if go_live_status in {"calculated", "unavailable", "ambiguous"} else "unavailable",
+        baseline_go_live=None if baseline is None else baseline.isoformat(),
+        current_go_live=None if current is None else current.isoformat(),
+        gross_working_day_shift=None,
+        shift_working_days=None,
+        holidays=None,
+        net_working_day_shift=None,
+        actual_shift_working_days=None,
+        attributed_shift_days=0,
+        unattributed_shift_days=0,
+        delay_shift_days=0,
+        additional_shift_days=0,
+        total_delayed_days=0,
+        delayed_task_count=0,
+        additional_task_count=0,
+        reconciliation_status="requires_validation",
+        reconciliation_warning=_INCOMPLETE_MESSAGE,
+        calendar_source=calendar_source,  # type: ignore[arg-type]
+        matching_requires_validation=go_live_status == "ambiguous",
+        rows=[],
+        review_rows=[],
+        removed_rows=[],
+    )
+
+
+def _graph_validation_error(tasks: list[PlanTaskData]) -> str | None:
+    ids = [task.id for task in tasks]
+    if len(ids) != len(set(ids)):
+        return "duplicate"
+    by_id = set(ids)
+    for task in tasks:
+        for pred in task.predecessor_ids:
+            if pred not in by_id:
+                return "unresolved"
+    if _has_cycle(tasks):
+        return "cycle"
+    return None
+
+
+def _has_cycle(tasks: list[PlanTaskData]) -> bool:
+    successors = _successor_map(tasks)
+    white, gray, black = 0, 1, 2
+    color = {task.id: white for task in tasks}
+
+    def visit(nid: int) -> bool:
+        color[nid] = gray
+        for nxt in successors.get(nid, []):
+            if nxt not in color:
+                continue
+            if color[nxt] == gray:
+                return True
+            if color[nxt] == white and visit(nxt):
+                return True
+        color[nid] = black
+        return False
+
+    return any(color[nid] == white and visit(nid) for nid in color)
 
 
 def _relevant_leaves(tasks: list[PlanTaskData]) -> list[PlanTaskData]:
@@ -493,12 +309,6 @@ def _parent_wbs(wbs: str | None) -> str:
     if "." not in text:
         return ""
     return text.rsplit(".", 1)[0]
-
-
-def _parent_name(task: PlanTaskData, tasks: list[PlanTaskData]) -> str:
-    wbs_map = {(item.wbs or "").strip(): item for item in tasks if (item.wbs or "").strip()}
-    parent = wbs_map.get(_parent_wbs(task.wbs))
-    return _norm(None if parent is None else parent.name)
 
 
 def _canonical_key(task: PlanTaskData, tasks: list[PlanTaskData]) -> str:
@@ -517,27 +327,21 @@ def _canonical_key(task: PlanTaskData, tasks: list[PlanTaskData]) -> str:
     )
 
 
-def _compare_finish(matched: PlanTaskData | None, *, two_file: bool, parse_date):
-    """Baseline Finish for compare. Two-file uses the Baseline MPP schedule when the field is empty."""
-    if matched is None:
+def _baseline_finish(task: PlanTaskData, parse_date) -> date | None:
+    raw = (task.baseline_finish or "").strip()
+    if raw.casefold() in _BLANK_BASELINE:
         return None
-    finish = parse_date(matched.baseline_finish)
-    if finish is not None:
-        return finish
-    if two_file:
-        return parse_date(matched.scheduled_finish)
-    return None
+    return parse_date(task.baseline_finish)
 
 
-def _compare_start(matched: PlanTaskData | None, *, two_file: bool, parse_date):
-    if matched is None:
+def _task_finish(task: PlanTaskData | None, parse_date) -> date | None:
+    if task is None:
         return None
-    start = parse_date(matched.baseline_start)
-    if start is not None:
-        return start
-    if two_file:
-        return parse_date(matched.scheduled_start)
-    return None
+    return parse_date(task.actual_finish) or parse_date(task.scheduled_finish)
+
+
+def _task_start(task: PlanTaskData, parse_date) -> date | None:
+    return parse_date(task.actual_start) or parse_date(task.scheduled_start)
 
 
 def _driving_path_ids(
@@ -581,21 +385,31 @@ def _driving_path_ids(
     return on
 
 
-def _on_go_live_path(task: PlanTaskData, *, driving_ids: set[int]) -> bool:
-    return task.id in driving_ids
+def _on_go_live_path(
+    task: PlanTaskData,
+    *,
+    driving_ids: set[int],
+    successors: dict[int, list[int]],
+    go_live_id: int,
+) -> bool:
+    if task.id in driving_ids:
+        return True
+    return _reaches_task(successors, task.id, go_live_id)
 
 
 def _potential_go_live_impact(
     item: dict,
     *,
     driving_ids: set[int],
+    successors: dict[int, list[int]],
+    go_live_id: int,
     net: int | None,
     holidays: set[date],
 ) -> int:
     if net is None or net <= 0:
         return 0
     task: PlanTaskData = item["task"]
-    if not _on_go_live_path(task, driving_ids=driving_ids):
+    if not _on_go_live_path(task, driving_ids=driving_ids, successors=successors, go_live_id=go_live_id):
         return 0
     slack = task.total_slack_days
     has_float = slack is not None and slack > 0 and task.critical is False
@@ -610,7 +424,7 @@ def _potential_go_live_impact(
     finish = item.get("current_finish")
     if start and finish and finish >= start:
         return len(_working_day_set(start, finish, holidays, inclusive_start=True))
-    return 0
+    return net
 
 
 def _attribute_go_live_impact(items: list[dict], *, net: int) -> None:
@@ -656,7 +470,6 @@ def _register_row(
     phases: list[PlanTaskData],
     wbs_index: dict[str, PlanTaskData],
     task: PlanTaskData,
-    baseline: PlanTaskData | None,
     task_type: str,
     *,
     shift_days: int | None,
@@ -666,22 +479,19 @@ def _register_row(
     go_live_task: PlanTaskData | None,
     driving_ids: set[int],
     parse_date,
-    match_status: str,
-    calculation_status: str,
     evidence_reason: str,
-    calculation_source: str,
-    two_file: bool = False,
 ) -> DelayMappingRow:
-    planned_start = _compare_start(baseline, two_file=two_file, parse_date=parse_date)
-    planned_finish = _compare_finish(baseline, two_file=two_file, parse_date=parse_date)
-    current_start = parse_date(task.actual_start) or parse_date(task.scheduled_start)
-    current_finish = parse_date(task.actual_finish) or parse_date(task.scheduled_finish)
+    _ = wbs_index
+    planned_start = parse_date(task.baseline_start)
+    planned_finish = _baseline_finish(task, parse_date)
+    current_start = _task_start(task, parse_date)
+    current_finish = _task_finish(task, parse_date)
     names = _resolved_owner_names(task, tasks)
     successor_ids = list(successors.get(task.id, [])) or list(task.successor_ids)
     successor_names = list(task.successor_names) or _impacted_names(task.id, successors, by_id, go_live_task)[0]
     milestone_names = _impacted_names(task.id, successors, by_id, go_live_task)[1]
     parent = _containing_phase(tasks, phases, task)
-    on_path = _on_go_live_path(task, driving_ids=driving_ids)
+    on_path = task.id in driving_ids
     impact_days = go_live_impact_days
     return DelayMappingRow(
         name=task.name,
@@ -703,19 +513,30 @@ def _register_row(
         mitigation_plan=None,
         impacted_successors=successor_names,
         impacted_milestones=milestone_names,
-        predecessor_names=list(task.predecessor_names),
+        predecessor_names=_pred_names(task, by_id),
         successor_names=successor_names,
-        baseline_task_id=None if baseline is None else baseline.id,
+        baseline_task_id=task.id,
         current_task_id=task.id,
         outline_number=(task.wbs or "").strip() or None,
         predecessor_ids=list(task.predecessor_ids),
         successor_ids=successor_ids,
         go_live_path_impact=on_path and (impact_days or 0) > 0,
-        match_status=match_status,  # type: ignore[arg-type]
-        calculation_status=calculation_status,  # type: ignore[arg-type]
+        match_status="additional" if task_type == "additional" else "matched",
+        calculation_status="calculated",
         evidence_reason=evidence_reason,
-        calculation_source=calculation_source,
+        calculation_source="mpp",
     )
+
+
+def _pred_names(task: PlanTaskData, by_id: dict[int, PlanTaskData]) -> list[str]:
+    names = [name.strip() for name in task.predecessor_names if name and name.strip()]
+    if names:
+        return names
+    resolved: list[str] = []
+    for pred_id in task.predecessor_ids:
+        pred = by_id.get(pred_id)
+        resolved.append(pred.name if pred is not None else str(pred_id))
+    return resolved
 
 
 def _owner_names(task: PlanTaskData) -> list[str]:
@@ -831,41 +652,55 @@ def _containing_phase(
     return max(wbs_matches, key=lambda item: len((item.wbs or "").strip()))
 
 
-def _is_go_live_task(task: PlanTaskData, contains) -> bool:
-    gate = (task.gate or "").strip().casefold()
-    if gate in _EXPLICIT_GO_LIVE:
-        return True
-    return contains(task.gate, go_live_markers()) or contains(task.name, go_live_markers())
-
-
-def _exact_go_live_name(task: PlanTaskData) -> bool:
-    return _norm(task.name) in _EXPLICIT_GO_LIVE
+def _name_key(value: str | None) -> str:
+    return " ".join((value or "").casefold().replace("-", " ").replace("_", " ").split())
 
 
 def _select_go_live(
     tasks: list[PlanTaskData],
     as_of: date,
-    contains,
     candidate_date,
+    parse_date,
 ) -> tuple[PlanTaskData | None, str]:
-    explicit = [task for task in tasks if (task.gate or "").strip().casefold() in _EXPLICIT_GO_LIVE]
-    exact = [task for task in tasks if _exact_go_live_name(task)]
-    named = explicit or exact or [task for task in tasks if _is_go_live_task(task, contains)]
-    if not named:
+    configured = [
+        task for task in tasks if (task.gate or "").strip().casefold() in _CONFIGURED_GO_LIVE
+    ]
+    if configured:
+        return _resolve_go_live_candidates(configured, as_of, candidate_date, parse_date)
+    recognized = [task for task in tasks if _name_key(task.name) in _RECOGNIZED_GO_LIVE]
+    if recognized:
+        return _resolve_go_live_candidates(recognized, as_of, candidate_date, parse_date)
+    milestones = [task for task in tasks if task.is_milestone and not task.is_summary]
+    dated = []
+    for task in milestones:
+        when = candidate_date(task) or parse_date(task.actual_finish) or parse_date(task.baseline_finish)
+        if when is not None:
+            dated.append((task, when))
+    if not dated:
         return None, "unavailable"
-    # Prefer the milestone/leaf when a summary phase is also named Go Live.
-    leaves = [task for task in named if not task.is_summary]
-    if leaves:
-        named = leaves
-    milestones = [task for task in named if task.is_milestone]
-    if milestones:
-        named = milestones
-    dated = [(task, when) for task in named if (when := candidate_date(task)) is not None]
+    latest = max(when for _, when in dated)
+    at_latest = [task for task, when in dated if when == latest]
+    return min(at_latest, key=lambda item: item.id), "calculated"
+
+
+def _resolve_go_live_candidates(
+    named: list[PlanTaskData],
+    as_of: date,
+    candidate_date,
+    parse_date,
+) -> tuple[PlanTaskData | None, str]:
+    leaves = [task for task in named if not task.is_summary] or named
+    milestones = [task for task in leaves if task.is_milestone] or leaves
+    dated: list[tuple[PlanTaskData, date]] = []
+    for task in milestones:
+        when = candidate_date(task) or parse_date(task.actual_finish)
+        if when is not None:
+            dated.append((task, when))
     finishes = {when for _, when in dated}
-    if len(named) > 1 and len(finishes) > 1:
+    if len(milestones) > 1 and len(finishes) > 1:
         return None, "ambiguous"
     if not dated:
-        return named[0], "calculated"
+        return milestones[0], "calculated"
     future = [(task, when) for task, when in dated if when >= as_of]
     if future:
         return min(future, key=lambda item: item[1])[0], "calculated"

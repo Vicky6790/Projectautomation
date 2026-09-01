@@ -224,16 +224,12 @@ export function generateWsr(handle: string): Promise<ProcessingResponse> {
   });
 }
 
-export function compareDelayMapping(
-  currentFileId: string,
-  baselineFileId?: string | null,
-): Promise<DelayMappingSheet> {
+export function compareDelayMapping(fileId: string): Promise<DelayMappingSheet> {
   return request(`/api/v1/wsr/delay-mapping`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      current_file_id: currentFileId,
-      baseline_file_id: baselineFileId || null,
+      current_file_id: fileId,
     }),
   });
 }

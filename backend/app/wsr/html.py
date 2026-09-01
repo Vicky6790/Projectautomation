@@ -270,12 +270,12 @@ def _delay_mapping(facts: WsrPlanFacts, as_of: str | None) -> str:
     if total is None:
         total = sum((row.shift_days or row.delay_days or 0) for row in mapping.rows)
     summary = (
-        "<p><b>Go-Live Date Shift</b></p><table>"
-        + _kv_row("Baselined Go-Live Date", _short_date(mapping.baseline_go_live))
-        + _kv_row("Current Go-Live Date", _short_date(mapping.current_go_live))
-        + _kv_row("Shift In Working Days", _count_or_unavailable(gross))
+        "<p><b>Project Deadline</b></p><table>"
+        + _kv_row("Project Deadline", _short_date(mapping.current_go_live))
+        + _kv_row("Baseline Deadline", _short_date(mapping.baseline_go_live))
+        + _kv_row("Identified Deadline Impact", _wd_or_unavailable(actual))
+        + _kv_row("Working-day span", _count_or_unavailable(gross))
         + _kv_row("Holidays In Above Duration", _count_or_unavailable(mapping.holidays))
-        + _kv_row("Actual Shift In Working Days", _count_or_unavailable(actual))
         + "</table>"
     )
     if mapping.calendar_source == "weekdays_fallback":
@@ -283,7 +283,7 @@ def _delay_mapping(facts: WsrPlanFacts, as_of: str | None) -> str:
             "<p class='muted'>Working days use the system weekday calendar "
             "(project calendar unavailable).</p>"
         )
-    if mapping.matching_requires_validation and mapping.reconciliation_warning:
+    if mapping.reconciliation_warning:
         summary += f"<p><b>{html.escape(mapping.reconciliation_warning)}</b></p>"
     return summary + _register_table(mapping.rows, total)
 
@@ -291,12 +291,12 @@ def _delay_mapping(facts: WsrPlanFacts, as_of: str | None) -> str:
 def _register_table(rows, total: int) -> str:
     heading = "<p><b>Delay Mapping</b></p>"
     if not rows:
-        return heading + "<p>No Delay or Additional tasks from Baseline Finish versus Finish</p>"
+        return heading + "<p>No tasks in this MPP contribute to the project deadline.</p>"
     header = (
         "<tr><td><b>Task Name</b></td><td><b>Task Type</b></td>"
-        "<td><b>Baseline Finish</b></td><td><b>Finish</b></td>"
-        "<td><b>Shift Days Count</b></td><td><b>Go-Live Impact</b></td>"
-        "<td><b>Owner</b></td></tr>"
+        "<td><b>Start</b></td><td><b>Baseline Finish</b></td><td><b>Finish</b></td>"
+        "<td><b>Delay / Impact Days</b></td><td><b>Predecessors</b></td>"
+        "<td><b>Owner</b></td><td><b>Impact Reason</b></td></tr>"
     )
     body = [header]
     last_phase = object()
@@ -304,10 +304,10 @@ def _register_table(rows, total: int) -> str:
         phase = row.parent_name or "Other"
         if phase != last_phase:
             body.append(
-                f"<tr class='delay-phase'><td colspan='7'>{html.escape(phase)}</td></tr>"
+                f"<tr class='delay-phase'><td colspan='9'>{html.escape(phase)}</td></tr>"
             )
             last_phase = phase
-        task_type = (row.task_type or "").capitalize() or "Unavailable"
+        task_type = "DELAYED" if row.task_type == "delay" else "ADDITIONAL" if row.task_type == "additional" else (row.task_type or "Unavailable").upper()
         type_class = (
             "delay-type"
             if row.task_type == "delay"
@@ -323,27 +323,29 @@ def _register_table(rows, total: int) -> str:
             else ""
         )
         style = f"color:{color};font-weight:bold;" if color else ""
-        days = row.shift_days if row.shift_days is not None else row.delay_days
-        if row.task_type == "additional":
-            day_label = "N/A"
-        else:
-            day_label = "Unavailable" if days is None else str(days)
         impact = row.go_live_impact_days
-        impact_label = "Unavailable" if impact is None else str(impact)
+        if row.task_type == "additional":
+            impact_label = "N/A" if not impact else f"+{impact} WD"
+        else:
+            impact_label = "Unavailable" if impact is None else f"+{impact} WD"
+        baseline = "N/A" if row.task_type == "additional" else _short_date(row.planned_finish)
+        preds = ", ".join(row.predecessor_names) if row.predecessor_names else "Unavailable"
         body.append(
             f"<tr class='{type_class}'>"
             f"<td style='{style}'>{html.escape(row.name)}</td>"
             f"<td style='{style}'>{html.escape(task_type)}</td>"
-            f"<td>{html.escape(_short_date(row.planned_finish))}</td>"
+            f"<td>{html.escape(_short_date(row.revised_start))}</td>"
+            f"<td>{html.escape(baseline)}</td>"
             f"<td>{html.escape(_short_date(row.revised_finish))}</td>"
-            f"<td>{html.escape(day_label)}</td>"
             f"<td>{html.escape(impact_label)}</td>"
+            f"<td>{html.escape(preds)}</td>"
             f"<td>{html.escape(row.owner or 'Unavailable')}</td>"
+            f"<td>{html.escape(row.evidence_reason or row.primary_reason or 'Unavailable')}</td>"
             "</tr>"
         )
     body.append(
         f"<tr><td><b>Total</b></td><td></td><td></td><td></td><td></td>"
-        f"<td><b>{total}</b></td><td></td></tr>"
+        f"<td><b>{total}</b></td><td></td><td></td><td></td></tr>"
     )
     return heading + f"<table>{''.join(body)}</table>"
 
@@ -357,6 +359,13 @@ def _kv_row(label: str, value: str) -> str:
 
 def _count_or_unavailable(value: int | None) -> str:
     return "Unavailable" if value is None else str(value)
+
+
+def _wd_or_unavailable(value: int | None) -> str:
+    if value is None:
+        return "Unavailable"
+    sign = "+" if value > 0 else ""
+    return f"{sign}{value} Working Days"
 
 
 def _progress(facts: WsrPlanFacts) -> str:

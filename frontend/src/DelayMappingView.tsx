@@ -13,7 +13,7 @@ import { ShellMetaContext } from "./shellMeta";
 import type { FileRecord } from "./types";
 import { shortDate, unavailable } from "./wsrFormat";
 
-type SortKey = "taskName" | "taskType" | "shiftDays" | "impact" | "owner" | "finish";
+type SortKey = "taskName" | "taskType" | "impact" | "owner" | "finish";
 type DrawerState =
   | { kind: "row"; item: DelayMappingItem }
   | { kind: "goLive" }
@@ -21,28 +21,24 @@ type DrawerState =
 
 export function DelayMappingView() {
   const setPageMeta = useContext(ShellMetaContext);
-  const [baselineFile, setBaselineFile] = useState<FileRecord | null>(null);
-  const [currentFile, setCurrentFile] = useState<FileRecord | null>(null);
+  const [planFile, setPlanFile] = useState<FileRecord | null>(null);
   const [result, setResult] = useState<CompareMppResult>(emptyComparison());
   const [loading, setLoading] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<"All" | DelayTaskType>("All");
   const [ownerFilter, setOwnerFilter] = useState("All");
-  const [phaseFilter, setPhaseFilter] = useState("All");
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("finish");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("asc");
   const [drawer, setDrawer] = useState<DrawerState>(null);
 
   useEffect(() => {
-    setPageMeta(
-      [baselineFile?.filename, currentFile?.filename].filter(Boolean).join(" → ") || "",
-    );
+    setPageMeta(planFile?.filename || "");
     return () => setPageMeta("");
-  }, [baselineFile?.filename, currentFile?.filename, setPageMeta]);
+  }, [planFile?.filename, setPageMeta]);
 
   useEffect(() => {
-    if (!currentFile) {
+    if (!planFile) {
       setResult(emptyComparison());
       setLoading(false);
       setCompareError(null);
@@ -50,7 +46,7 @@ export function DelayMappingView() {
     }
     let cancelled = false;
     setLoading(true);
-    compareDelayMapping(currentFile.id, baselineFile?.id)
+    compareDelayMapping(planFile.id)
       .then((mapping) => {
         if (cancelled) {
           return;
@@ -61,7 +57,7 @@ export function DelayMappingView() {
       .catch((error: unknown) => {
         if (!cancelled) {
           setResult(emptyComparison());
-          setCompareError(error instanceof Error ? error.message : "Could not compare the MPP files.");
+          setCompareError(error instanceof Error ? error.message : "Could not read the MPP file.");
         }
       })
       .finally(() => {
@@ -72,7 +68,7 @@ export function DelayMappingView() {
     return () => {
       cancelled = true;
     };
-  }, [baselineFile?.id, currentFile?.id]);
+  }, [planFile?.id]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -89,7 +85,6 @@ export function DelayMappingView() {
     () => unique(allRows.map((row) => row.owner).filter((value): value is string => Boolean(value))),
     [allRows],
   );
-  const phases = useMemo(() => unique(allRows.map((row) => row.phase).filter(Boolean)), [allRows]);
   const contributors = useMemo(() => contributingItems(result), [result]);
 
   const rows = useMemo(() => {
@@ -101,19 +96,15 @@ export function DelayMappingView() {
       if (ownerFilter !== "All" && row.owner !== ownerFilter) {
         return false;
       }
-      if (phaseFilter !== "All" && row.phase !== phaseFilter) {
-        return false;
-      }
       if (!needle) {
         return true;
       }
-      return [row.taskName, row.owner, row.phase].some((value) =>
+      return [row.taskName, row.owner, row.phase, joinNames(row.predecessors)].some((value) =>
         (value || "").toLowerCase().includes(needle),
       );
     });
-    const sorted = [...filtered].sort((a, b) => compareRows(a, b, sortKey, sortDir));
-    return sorted;
-  }, [allRows, ownerFilter, phaseFilter, query, sortDir, sortKey, typeFilter]);
+    return [...filtered].sort((a, b) => compareRows(a, b, sortKey, sortDir));
+  }, [allRows, ownerFilter, query, sortDir, sortKey, typeFilter]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -125,7 +116,7 @@ export function DelayMappingView() {
   }
 
   const shift = result.summary.goLiveShift;
-  const canExport = Boolean(currentFile);
+  const canExport = Boolean(planFile);
   const listedImpactTotal = rows.reduce((sum, row) => sum + (row.goLiveImpact || 0), 0);
 
   return (
@@ -134,7 +125,7 @@ export function DelayMappingView() {
         <div>
           <p className="dms-kicker">Delay Mapping</p>
           <h1>DELAY MAPPING</h1>
-          <p className="dms-sub">Baseline vs Current Schedule Variance</p>
+          <p className="dms-sub">Tasks that move the project deadline</p>
         </div>
         <div className="dms-actions dms-no-print">
           <button type="button" className="btn btn-outline" onClick={() => setDrawer({ kind: "goLive" })}>
@@ -157,43 +148,29 @@ export function DelayMappingView() {
         </div>
       </div>
 
-      <div className="dms-uploads dms-no-print">
+      <div className="dms-uploads dms-uploads-single dms-no-print">
         <MppSlot
-          title="Baseline MPP"
-          hint="Original approved plan"
-          file={baselineFile}
-          onUploaded={setBaselineFile}
-          onClear={() => setBaselineFile(null)}
-          onError={setCompareError}
-        />
-        <MppSlot
-          title="Current MPP"
-          hint="Latest project plan"
-          file={currentFile}
-          onUploaded={setCurrentFile}
-          onClear={() => setCurrentFile(null)}
+          title="Project MPP"
+          hint="Complete current plan, including Baseline Finish"
+          file={planFile}
+          onUploaded={setPlanFile}
+          onClear={() => setPlanFile(null)}
           onError={setCompareError}
         />
       </div>
-      {!currentFile ? (
+      {!planFile ? (
         <p className="dms-sample dms-no-print" role="status">
-          Insert the Current MPP to compare against Baseline Finish. Insert a Baseline MPP to compare two
-          files. Missing values stay Unavailable. Only Delay and Additional tasks that move Go-Live are listed.
-        </p>
-      ) : !baselineFile ? (
-        <p className="dms-note dms-no-print">
-          Comparing against Baseline Finish stored in the Current MPP. Insert a Baseline MPP to compare two
-          versions.
+          Insert one MPP. Delay Mapping uses Baseline Finish, Finish, and predecessor links from that file.
+          Only DELAYED and ADDITIONAL tasks that reach Go-Live are listed.
         </p>
       ) : null}
       {compareError ? <p className="error">{compareError}</p> : null}
-      {loading ? <p className="dms-loading dms-no-print">Comparing Baseline vs Current…</p> : null}
+      {loading ? <p className="dms-loading dms-no-print">Reading the project schedule…</p> : null}
 
       <div className="dms-kpis">
-        <Kpi label="Baseline Go-Live" value={shortDate(result.summary.baselineGoLive)} />
-        <Kpi label="Current Go-Live" value={shortDate(result.summary.currentGoLive)} />
+        <Kpi label="Project Deadline" value={shortDate(result.summary.currentGoLive)} />
         <Kpi
-          label="Go-Live Shift"
+          label="Identified Deadline Impact"
           value={shift == null ? "Unavailable" : `${shift > 0 ? "+" : ""}${shift} Working Days`}
           emphasis
         />
@@ -209,8 +186,8 @@ export function DelayMappingView() {
             Task Type
             <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as "All" | DelayTaskType)}>
               <option>All</option>
-              <option>Delay</option>
-              <option>Additional</option>
+              <option value="DELAYED">DELAYED</option>
+              <option value="ADDITIONAL">ADDITIONAL</option>
             </select>
           </label>
           <label>
@@ -219,15 +196,6 @@ export function DelayMappingView() {
               <option>All</option>
               {owners.map((owner) => (
                 <option key={owner}>{owner}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Phase
-            <select value={phaseFilter} onChange={(event) => setPhaseFilter(event.target.value)}>
-              <option>All</option>
-              {phases.map((phase) => (
-                <option key={phase}>{phase}</option>
               ))}
             </select>
           </label>
@@ -248,19 +216,18 @@ export function DelayMappingView() {
               <tr>
                 <SortHeader label="Task Name" active={sortKey === "taskName"} dir={sortDir} onClick={() => toggleSort("taskName")} />
                 <SortHeader label="Task Type" active={sortKey === "taskType"} dir={sortDir} onClick={() => toggleSort("taskType")} />
+                <th>Start</th>
+                <th>Baseline Finish</th>
+                <SortHeader label="Finish" active={sortKey === "finish"} dir={sortDir} onClick={() => toggleSort("finish")} />
                 <SortHeader
-                  label="Shift Days Count"
-                  active={sortKey === "shiftDays"}
-                  dir={sortDir}
-                  onClick={() => toggleSort("shiftDays")}
-                />
-                <SortHeader
-                  label="Go-Live Impact"
+                  label="Delay / Impact Days"
                   active={sortKey === "impact"}
                   dir={sortDir}
                   onClick={() => toggleSort("impact")}
                 />
+                <th>Predecessors</th>
                 <SortHeader label="Owner" active={sortKey === "owner"} dir={sortDir} onClick={() => toggleSort("owner")} />
+                <th>Impact Reason</th>
               </tr>
             </thead>
             <tbody>
@@ -268,26 +235,30 @@ export function DelayMappingView() {
                 rows.map((row) => (
                   <tr
                     key={row.id}
-                    className={row.taskType === "Delay" ? "dms-row-delay" : "dms-row-additional"}
+                    className={row.taskType === "DELAYED" ? "dms-row-delay" : "dms-row-additional"}
                     onClick={() => setDrawer({ kind: "row", item: row })}
                   >
                     <td>{row.taskName}</td>
                     <td>
-                      <span className={row.taskType === "Delay" ? "dms-badge dms-badge-delay" : "dms-badge dms-badge-additional"}>
-                        {row.taskType === "Delay" ? "Delay" : "Add."}
+                      <span className={row.taskType === "DELAYED" ? "dms-badge dms-badge-delay" : "dms-badge dms-badge-additional"}>
+                        {row.taskType}
                       </span>
                     </td>
-                    <td>{shiftCell(row)}</td>
-                    <td>{row.goLiveImpact > 0 ? row.goLiveImpact : "0"}</td>
+                    <td>{shortDate(row.currentStart)}</td>
+                    <td>{row.taskType === "ADDITIONAL" ? "N/A" : shortDate(row.baselineFinish)}</td>
+                    <td>{shortDate(row.currentFinish)}</td>
+                    <td>{impactCell(row)}</td>
+                    <td>{joinNames(row.predecessors)}</td>
                     <td>{unavailable(row.owner)}</td>
+                    <td>{row.evidence}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="dms-empty">
+                  <td colSpan={9} className="dms-empty">
                     {allRows.length === 0
-                      ? "No driving Delay or Additional tasks caused this Go-Live shift."
-                      : "No driving Delay or Additional tasks match the current filters."}
+                      ? "No DELAYED or ADDITIONAL tasks contribute to the project deadline."
+                      : "No tasks match the current filters."}
                   </td>
                 </tr>
               )}
@@ -298,7 +269,11 @@ export function DelayMappingView() {
                   <td>Total</td>
                   <td />
                   <td />
-                  <td>{listedImpactTotal}</td>
+                  <td />
+                  <td />
+                  <td>{listedImpactTotal > 0 ? `+${listedImpactTotal} WD` : listedImpactTotal}</td>
+                  <td />
+                  <td />
                   <td />
                 </tr>
               </tfoot>
@@ -415,12 +390,12 @@ function SortHeader({
 }
 
 function RowDrawer({ item, onClose }: { item: DelayMappingItem; onClose: () => void }) {
-  const delay = item.taskType === "Delay";
+  const delayed = item.taskType === "DELAYED";
   return (
     <>
       <header className="dms-drawer-head">
         <div>
-          <p className="dms-kicker">{delay ? "Delay details" : "Additional task"}</p>
+          <p className="dms-kicker">{delayed ? "Delayed task" : "Additional task"}</p>
           <h2>{item.taskName}</h2>
         </div>
         <button type="button" className="dms-icon-btn" onClick={onClose} aria-label="Close">
@@ -428,36 +403,17 @@ function RowDrawer({ item, onClose }: { item: DelayMappingItem; onClose: () => v
         </button>
       </header>
       <dl className="dms-facts">
-        <Fact label="Classification" value={item.taskType.toUpperCase()} />
-        {delay ? (
-          <>
-            <Fact label="Baseline Finish" value={shortDate(item.baselineFinish)} />
-            <Fact label="Current Finish" value={shortDate(item.currentFinish)} />
-            <Fact
-              label="Task Shift"
-              value={item.shiftDays == null ? "Unavailable" : `+${item.shiftDays} Working Days`}
-            />
-          </>
-        ) : (
-          <>
-            <Fact label="Baseline" value="Not Found" />
-            <Fact label="Current Start" value={shortDate(item.currentStart)} />
-            <Fact label="Current Finish" value={shortDate(item.currentFinish)} />
-            <Fact
-              label="Task Shift"
-              value={item.shiftDays == null ? "N/A" : `+${item.shiftDays} Working Days`}
-            />
-          </>
-        )}
+        <Fact label="Task Type" value={item.taskType} />
+        <Fact label="Start" value={shortDate(item.currentStart)} />
+        <Fact label="Baseline Finish" value={delayed ? shortDate(item.baselineFinish) : "N/A"} />
+        <Fact label="Finish" value={shortDate(item.currentFinish)} />
         <Fact
-          label="Go-Live Impact"
-          value={item.goLiveImpact > 0 ? `+${item.goLiveImpact} Working Days` : "0 Working Days"}
+          label="Delay / Impact Days"
+          value={item.goLiveImpact > 0 ? `+${item.goLiveImpact} Working Days` : delayed ? "0 Working Days" : "N/A"}
         />
         <Fact label="Owner" value={unavailable(item.owner)} />
-        <Fact label="Predecessor" value={joinNames(item.predecessors)} />
-        <Fact label="Successor" value={joinNames(item.successors)} />
-        <Fact label="Match Status" value={item.matchStatus || (delay ? "MATCHED" : "ADDITIONAL")} />
-        <Fact label={delay ? "Evidence" : "Reason"} value={item.evidence} />
+        <Fact label="Predecessors" value={joinNames(item.predecessors)} />
+        <Fact label="Impact Reason" value={item.evidence} />
       </dl>
     </>
   );
@@ -487,10 +443,10 @@ function GoLiveDrawer({
         </button>
       </header>
       <dl className="dms-facts">
-        <Fact label="Baseline Go-Live" value={shortDate(result.goLiveImpact.baselineGoLive)} />
-        <Fact label="Current Go-Live" value={shortDate(result.goLiveImpact.currentGoLive)} />
+        <Fact label="Project Deadline" value={shortDate(result.goLiveImpact.currentGoLive)} />
+        <Fact label="Baseline Deadline" value={shortDate(result.goLiveImpact.baselineGoLive)} />
         <Fact
-          label="Total Shift"
+          label="Identified Deadline Impact"
           value={shift == null ? "Unavailable" : `+${shift} Working Days`}
         />
       </dl>
@@ -500,7 +456,7 @@ function GoLiveDrawer({
           {contributors.map((item) => (
             <li key={item.id}>
               <button type="button" onClick={() => onOpen(item)}>
-                <span className={item.taskType === "Delay" ? "dms-dot dms-dot-delay" : "dms-dot dms-dot-additional"} />
+                <span className={item.taskType === "DELAYED" ? "dms-dot dms-dot-delay" : "dms-dot dms-dot-additional"} />
                 <span>{item.taskName}</span>
                 <strong>+{item.goLiveImpact} days</strong>
               </button>
@@ -511,13 +467,12 @@ function GoLiveDrawer({
         <p className="dms-empty">No contributing activities are available from the plan.</p>
       )}
       <p className="dms-total">
-        Total Go-Live Impact:{" "}
+        Identified Deadline Impact:{" "}
         <strong>{shift == null ? "Unavailable" : `+${shift} Working Days`}</strong>
       </p>
       <p className="dms-note">
-        Shift Days Count is that task’s own working-day slip (N/A for Additional). Go-Live Impact is unique
-        working days on the driving path, capped at the Go-Live shift, so later tasks in the same chain are not
-        counted twice.
+        Sequential tasks on the same chain are not added together. Impact is the unique working-day
+        contribution to the project deadline.
       </p>
     </>
   );
@@ -532,11 +487,11 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function shiftCell(row: DelayMappingItem): string {
-  if (row.taskType === "Additional") {
-    return "N/A";
+function impactCell(row: DelayMappingItem): string {
+  if (row.goLiveImpact > 0) {
+    return `+${row.goLiveImpact} WD`;
   }
-  return row.shiftDays == null ? "Unavailable" : String(row.shiftDays);
+  return row.taskType === "ADDITIONAL" ? "N/A" : "0";
 }
 
 function joinNames(values: string[]): string {
@@ -549,9 +504,6 @@ function unique(values: string[]): string[] {
 
 function compareRows(a: DelayMappingItem, b: DelayMappingItem, key: SortKey, dir: "asc" | "desc"): number {
   const sign = dir === "asc" ? 1 : -1;
-  if (key === "shiftDays") {
-    return sign * ((a.shiftDays ?? -1) - (b.shiftDays ?? -1));
-  }
   if (key === "impact") {
     return sign * ((a.goLiveImpact ?? 0) - (b.goLiveImpact ?? 0));
   }

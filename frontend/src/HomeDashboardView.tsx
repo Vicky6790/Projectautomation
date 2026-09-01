@@ -19,8 +19,8 @@ const STEPS = [
     to: "/delay-mapping",
     icon: "table_view",
     title: "Delay Mapping",
-    hint: "Baseline vs current variance",
-    detail: "Compare Baseline and Current MPP files to list Delay and Additional tasks, with Go-Live impact kept separate from task shift days.",
+    hint: "Deadline impact from one MPP",
+    detail: "Upload the current MPP. Delay Mapping lists DELAYED and ADDITIONAL tasks that reach Go-Live, without double-counting sequential delays.",
   },
 ] as const;
 
