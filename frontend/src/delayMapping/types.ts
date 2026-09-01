@@ -2,9 +2,7 @@ export type DelayTaskType = "DELAYED" | "ADDITIONAL";
 
 export type DelayMappingItem = {
   id: string;
-  taskId: string;
   taskName: string;
-  wbs: string | null;
   phase: string;
   taskType: DelayTaskType;
   baselineFinish: string | null;
@@ -34,9 +32,6 @@ export type DelayMappingSummary = {
   goLiveShift: number | null;
   delayedTaskCount: number;
   additionalTaskCount: number;
-  tasksRead: number;
-  baselineFinishNaCount: number;
-  delaySheetRows: number;
   holidays: number | null;
   calendarNote: string | null;
   validationWarning: string | null;

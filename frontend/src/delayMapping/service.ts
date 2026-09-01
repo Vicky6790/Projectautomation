@@ -61,8 +61,11 @@ export function compareMPP(_input?: {
 }
 
 export function fromWsrDelayMapping(mapping: DelayMappingSheet): CompareMppResult {
-  const items = (mapping.rows ?? []).map((row) => toLiveItem(row, mapping));
-  const additionalTasks = items;
+  const items = (mapping.rows ?? [])
+    .filter((row) => row.task_type === "delay" || row.task_type === "additional")
+    .map((row) => toLiveItem(row, mapping));
+  const delayedTasks = items.filter((item) => item.taskType === "DELAYED");
+  const additionalTasks = items.filter((item) => item.taskType === "ADDITIONAL");
   const totalShift = mapping.actual_shift_working_days ?? mapping.net_working_day_shift ?? null;
   const goLiveImpact: GoLiveImpact = {
     baselineGoLive: mapping.baseline_go_live ?? null,
@@ -73,17 +76,17 @@ export function fromWsrDelayMapping(mapping: DelayMappingSheet): CompareMppResul
     baselineGoLive: mapping.baseline_go_live ?? null,
     currentGoLive: mapping.current_go_live ?? null,
     goLiveShift: totalShift,
-    delayedTaskCount: 0,
+    delayedTaskCount: delayedTasks.length,
     additionalTaskCount: additionalTasks.length,
-    tasksRead: mapping.current_task_count ?? 0,
-    baselineFinishNaCount: mapping.additional_task_count ?? additionalTasks.length,
-    delaySheetRows: additionalTasks.length,
     holidays: mapping.holidays ?? null,
-    calendarNote: null,
+    calendarNote:
+      mapping.calendar_source === "weekdays_fallback"
+        ? "Working days use the system weekday calendar (project calendar unavailable)."
+        : null,
     validationWarning: mapping.reconciliation_warning ?? null,
   };
   return {
-    delayedTasks: [],
+    delayedTasks,
     additionalTasks,
     unchangedTasks: [],
     goLiveImpact,
@@ -118,9 +121,6 @@ export function emptyComparison(): CompareMppResult {
       goLiveShift: null,
       delayedTaskCount: 0,
       additionalTaskCount: 0,
-      tasksRead: 0,
-      baselineFinishNaCount: 0,
-      delaySheetRows: 0,
       holidays: null,
       calendarNote: null,
       validationWarning: null,
@@ -238,9 +238,6 @@ function mockComparison(): CompareMppResult {
       goLiveShift,
       delayedTaskCount: delayedTasks.length,
       additionalTaskCount: additionalTasks.length,
-      tasksRead: delayedTasks.length + additionalTasks.length,
-      baselineFinishNaCount: additionalTasks.length,
-      delaySheetRows: additionalTasks.length,
       holidays: null,
       calendarNote: null,
       validationWarning: null,
@@ -270,9 +267,7 @@ function item(input: {
   const shiftDays = isAdditional ? null : classified.shiftDays;
   return {
     id: input.id,
-    taskId: input.id,
     taskName: input.taskName,
-    wbs: null,
     phase: input.phase,
     taskType: input.taskType,
     baselineFinish: input.baselineFinish,
@@ -299,9 +294,7 @@ function toLiveItem(row: DelayMappingRow, mapping: DelayMappingSheet): DelayMapp
   const goLiveImpact = row.go_live_impact_days ?? 0;
   return {
     id: String(row.current_task_id ?? `${row.wbs || ""}-${row.name}`),
-    taskId: String(row.current_task_id ?? ""),
     taskName: row.name,
-    wbs: row.wbs ?? row.outline_number ?? null,
     phase: row.parent_name?.trim() || "Other",
     taskType: isAdditional ? "ADDITIONAL" : "DELAYED",
     baselineFinish: row.planned_finish ?? null,

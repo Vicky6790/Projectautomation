@@ -80,7 +80,7 @@ def project_from_mpxj(project) -> ProjectPlanData:
         if unique_id is None:
             continue
         baseline_start = iso_date(task.getBaselineStart())
-        baseline_finish = _baseline_finish_value(task)
+        baseline_finish = iso_date(task.getBaselineFinish())
         scheduled_start = iso_date(task.getStart())
         scheduled_finish = iso_date(task.getFinish())
         actual_start = iso_date(task.getActualStart())
@@ -254,37 +254,6 @@ def iso_date(value) -> str | None:
     if " " in text and len(text) >= 10:
         return text[:10]
     return text[:10] if len(text) >= 10 else text
-
-
-def _baseline_finish_is_na_token(text: str) -> bool:
-    return text.strip().upper() in {"NA", "N/A", "N.A."}
-
-
-def _baseline_finish_value(task) -> str | None:
-    """Keep explicit NA text. Dates stay ISO. Blank/null stay empty — not NA."""
-    raw = _task_value(task, "getBaselineFinish")
-    if raw is None:
-        raw = _task_field(task, "BASELINE_FINISH")
-    if raw is None:
-        return None
-    text = str(raw).strip()
-    if not text or text.casefold() in {"none", "null"}:
-        return None
-    if _baseline_finish_is_na_token(text):
-        return text
-    return iso_date(raw)
-
-
-def _task_field(task, field_name: str):
-    try:
-        from org.mpxj import TaskField
-
-        field = getattr(TaskField, field_name, None)
-        if field is None:
-            return None
-        return task.get(field)
-    except Exception:  # noqa: BLE001 - optional MPXJ field lookup
-        return None
 
 
 def _successor_task(relation):
