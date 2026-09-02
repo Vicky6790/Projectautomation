@@ -1,5 +1,5 @@
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AUTH_LOST_EVENT, getCurrentOperator, getHealth, signOut } from "./api";
 import type { HealthResponse, Operator } from "./types";
 import { DelayMappingView } from "./DelayMappingView";
@@ -52,6 +52,10 @@ function readNavHidden(): boolean {
   }
 }
 
+function openedAwayFromHome(): boolean {
+  return window.location.pathname !== "/";
+}
+
 export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
@@ -59,6 +63,8 @@ export default function App() {
   const [pageMeta, setPageMeta] = useState("");
   const [navHidden, setNavHidden] = useState(readNavHidden);
   const location = useLocation();
+  const landOnDashboard = useRef(openedAwayFromHome());
+  const sentHome = useRef(false);
 
   useEffect(() => {
     setPageMeta("");
@@ -105,6 +111,11 @@ export default function App() {
   const locked = Boolean(health?.auth_required && sessionChecked && !operator);
   const title = TITLES[location.pathname] ?? "Project Automation";
 
+  if (!locked && landOnDashboard.current && !sentHome.current && location.pathname !== "/") {
+    sentHome.current = true;
+    return <Navigate to="/" replace />;
+  }
+
   if (locked) {
     return (
       <div className="shell-login">
@@ -119,10 +130,7 @@ export default function App() {
         <aside className="sidebar" aria-hidden={navHidden} inert={navHidden}>
           <Link to="/" className="brand" aria-label="ProjectPulse home">
             <ProjectPulseLogo variant="mark" className="brand-logo" decorative />
-            <div>
-              <strong>ProjectPulse</strong>
-              <p>Project Intelligence Platform</p>
-            </div>
+            <p className="brand-slogan">Project Intelligence Platform</p>
           </Link>
           <nav>
             {MODULES.map((module) => (
@@ -160,6 +168,7 @@ export default function App() {
               <Glyph name="left_panel_close" />
               Hide navigation
             </button>
+            <p className="sidebar-credit">Powered By Vinayak Tathe</p>
           </div>
         </aside>
         <div className="shell-main">

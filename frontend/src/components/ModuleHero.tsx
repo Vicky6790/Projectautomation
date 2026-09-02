@@ -2,6 +2,24 @@ import type { ReactNode } from "react";
 
 export type ModuleTone = "sow" | "wsr" | "delay";
 
+const PREVIEWS: Record<ModuleTone, { icon: string; label: string; hint: string; fill: string }[]> = {
+  sow: [
+    { icon: "warning", label: "Risks", hint: "Flagged in the signed SOW", fill: "78%" },
+    { icon: "quiz", label: "Questions", hint: "Need a decision before delivery", fill: "64%" },
+    { icon: "account_tree", label: "Dependencies", hint: "External waits in the contract", fill: "52%" },
+  ],
+  wsr: [
+    { icon: "event", label: "Go-Live", hint: "Baseline vs Current shift", fill: "82%" },
+    { icon: "percent", label: "Progress", hint: "Plan-backed completion", fill: "61%" },
+    { icon: "timeline", label: "Timeline", hint: "This week and next week", fill: "48%" },
+  ],
+  delay: [
+    { icon: "event_busy", label: "Delay", hint: "Tagged in the project plan", fill: "74%" },
+    { icon: "add_circle", label: "Additional", hint: "Inserted work on the path", fill: "58%" },
+    { icon: "flag", label: "Go-Live", hint: "Working-day impact", fill: "40%" },
+  ],
+};
+
 export function ModuleHero({
   tone,
   icon,
@@ -19,9 +37,7 @@ export function ModuleHero({
 }) {
   return (
     <header className={`mod-hero mod-hero-${tone}`}>
-      <span className="mod-orb" aria-hidden="true">
-        <span className="mod-orb-ring" />
-        <span className="mod-orb-ring" />
+      <span className="mod-icon" aria-hidden="true">
         <span className="material-symbols-outlined">{icon}</span>
       </span>
       <div className="mod-hero-copy">
@@ -48,7 +64,7 @@ export function ModuleLanding({
       <article className="mod-landing-copy">
         <ol className="mod-steps">
           {steps.map((step, index) => (
-            <li key={step.title} style={{ animationDelay: `${index * 90}ms` }}>
+            <li key={step.title} style={{ animationDelay: `${index * 80}ms` }}>
               <span className="mod-step-icon" aria-hidden="true">
                 <span className="material-symbols-outlined">{step.icon}</span>
               </span>
@@ -64,56 +80,25 @@ export function ModuleLanding({
 }
 
 function ModuleShowcase({ tone }: { tone: ModuleTone }) {
-  if (tone === "sow") {
-    return (
-      <aside className="mod-showcase" aria-hidden="true">
-        <div className="mod-float mod-float-a">
-          <span className="material-symbols-outlined">warning</span>
-          Risks
-        </div>
-        <div className="mod-float mod-float-b">
-          <span className="material-symbols-outlined">quiz</span>
-          Questions
-        </div>
-        <div className="mod-float mod-float-c">
-          <span className="material-symbols-outlined">account_tree</span>
-          Dependencies
-        </div>
-      </aside>
-    );
-  }
-  if (tone === "wsr") {
-    return (
-      <aside className="mod-showcase" aria-hidden="true">
-        <div className="mod-float mod-float-a">
-          <span className="material-symbols-outlined">event</span>
-          Go-Live
-        </div>
-        <div className="mod-float mod-float-b">
-          <span className="material-symbols-outlined">percent</span>
-          Progress
-        </div>
-        <div className="mod-float mod-float-c">
-          <span className="material-symbols-outlined">timeline</span>
-          Timeline
-        </div>
-      </aside>
-    );
-  }
   return (
-    <aside className="mod-showcase" aria-hidden="true">
-      <div className="mod-float mod-float-a">
-        <span className="material-symbols-outlined">event_busy</span>
-        Delay
-      </div>
-      <div className="mod-float mod-float-b">
-        <span className="material-symbols-outlined">add_circle</span>
-        Additional
-      </div>
-      <div className="mod-float mod-float-c">
-        <span className="material-symbols-outlined">flag</span>
-        Go-Live
-      </div>
+    <aside className="mod-preview">
+      <p className="mod-preview-kicker">What you get</p>
+      <ul>
+        {PREVIEWS[tone].map((item, index) => (
+          <li key={item.label} style={{ animationDelay: `${120 + index * 90}ms` }}>
+            <span className="mod-preview-icon" aria-hidden="true">
+              <span className="material-symbols-outlined">{item.icon}</span>
+            </span>
+            <div>
+              <strong>{item.label}</strong>
+              <span>{item.hint}</span>
+              <span className="mod-preview-bar">
+                <i style={{ width: item.fill, animationDelay: `${280 + index * 90}ms` }} />
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
     </aside>
   );
 }
