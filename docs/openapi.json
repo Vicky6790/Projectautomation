@@ -218,6 +218,17 @@
             ],
             "title": "Calculation Status"
           },
+          "critical": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Critical"
+          },
           "current_task_id": {
             "anyOf": [
               {
@@ -320,7 +331,8 @@
                   "matched",
                   "additional",
                   "removed",
-                  "ambiguous"
+                  "ambiguous",
+                  "new_task"
                 ],
                 "type": "string"
               },
@@ -469,6 +481,17 @@
             ],
             "title": "Shift Days"
           },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
           "successor_ids": {
             "items": {
               "type": "integer"
@@ -487,6 +510,7 @@
             "enum": [
               "delay",
               "additional",
+              "new_task",
               "unchanged",
               "ahead",
               "removed",
@@ -546,6 +570,17 @@
             "default": 0,
             "title": "Ambiguous Task Count",
             "type": "integer"
+          },
+          "as_of_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
           },
           "attributed_shift_days": {
             "default": 0,
@@ -667,6 +702,11 @@
               }
             ],
             "title": "Net Working Day Shift"
+          },
+          "new_task_count": {
+            "default": 0,
+            "title": "New Task Count",
+            "type": "integer"
           },
           "owner_attribution": {
             "items": {

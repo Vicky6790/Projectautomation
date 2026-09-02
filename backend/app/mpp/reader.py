@@ -15,6 +15,7 @@ from app.models import (
 )
 from app.mpp.bridge import ensure_jvm
 from app.wsr.facts import select_phase_summaries
+from app.wsr.outline import is_project_or_phase_code
 
 
 def read_mpp_bytes(content: bytes, filename: str = "plan.mpp") -> ProjectPlanData:
@@ -52,6 +53,9 @@ def project_from_mpxj(project) -> ProjectPlanData:
     owner = _first_text(props.getManager(), props.getAuthor())
     status_date = iso_date(props.getStatusDate())
     gate_field = _gate_field(project)
+    delay_field = _custom_field_by_alias(
+        project, _DELAY_OR_ADDITIONAL_ALIASES, contains=True
+    )
     calendar = project.getDefaultCalendar()
 
     resources: list[PlanResourceData] = []
@@ -81,6 +85,9 @@ def project_from_mpxj(project) -> ProjectPlanData:
             continue
         baseline_start = iso_date(task.getBaselineStart())
         baseline_finish = iso_date(task.getBaselineFinish())
+        baseline0_finish = _baseline0_finish(task)
+        duration_days = _duration_days(_task_value(task, "getDuration"), calendar)
+        baseline0_duration_days = _duration_days(_baseline0_duration(task), calendar)
         scheduled_start = iso_date(task.getStart())
         scheduled_finish = iso_date(task.getFinish())
         actual_start = iso_date(task.getActualStart())
@@ -129,6 +136,7 @@ def project_from_mpxj(project) -> ProjectPlanData:
         tasks.append(
             PlanTaskData(
                 id=int(unique_id),
+                guid=_task_guid(task),
                 name=str(task_name),
                 wbs=_wbs_code(task),
                 outline_level=int(task.getOutlineLevel()) if task.getOutlineLevel() is not None else 1,
@@ -138,6 +146,7 @@ def project_from_mpxj(project) -> ProjectPlanData:
                 gate=_gate_value(task, gate_field),
                 baseline_start=baseline_start,
                 baseline_finish=baseline_finish,
+                baseline0_finish=baseline0_finish,
                 scheduled_start=scheduled_start,
                 scheduled_finish=scheduled_finish,
                 actual_start=actual_start,
@@ -155,6 +164,9 @@ def project_from_mpxj(project) -> ProjectPlanData:
                 total_slack_days=_slack_days(task, calendar),
                 critical=_critical(task),
                 calendar_name=_calendar_name(task, calendar),
+                delay_or_additional=_custom_value(task, delay_field),
+                duration_days=duration_days,
+                baseline0_duration_days=baseline0_duration_days,
             )
         )
     by_id = {task.id: task for task in tasks}
@@ -334,6 +346,107 @@ def duration_hours(duration, calendar=None) -> float | None:
         return None
 
 
+def _duration_days(duration, calendar=None) -> float | None:
+    if duration is None:
+        return None
+    try:
+        from org.mpxj import TimeUnit
+    except Exception:  # noqa: BLE001 - unit tests may call without JVM
+        return None
+    units = duration.getUnits()
+    amount = float(duration.getDuration())
+    if units in (TimeUnit.DAYS, TimeUnit.ELAPSED_DAYS):
+        return amount
+    hours = duration_hours(duration, calendar)
+    if hours is None:
+        return None
+    return round(hours / 8.0, 4)
+
+
+def _baseline0_duration(task):
+    baseline = _baseline_record(task, 0)
+    if baseline is None:
+        return None
+    return _call(baseline, "getDuration") or _task_value(baseline, "getDuration")
+
+
+_DELAY_OR_ADDITIONAL_ALIASES = frozenset(
+    {
+        "delay and or additional",
+        "delay and or additional tasks",
+        "delay and/or additional",
+        "delay or additional",
+        "delay and additional",
+    }
+)
+
+
+def _norm_alias(value: str) -> str:
+    return " ".join(value.replace("/", " ").casefold().split())
+
+
+def _field_label_matches(label: str, aliases: frozenset[str] | set[str], *, contains: bool) -> bool:
+    norm = _norm_alias(label)
+    if not norm:
+        return False
+    wanted = {_norm_alias(item) for item in aliases}
+    if norm in wanted:
+        return True
+    if not contains:
+        return False
+    return any(token in norm for token in wanted)
+
+
+def _custom_field_by_alias(project, aliases: frozenset[str] | set[str], *, contains: bool = False):
+    wanted = aliases
+    try:
+        fields = project.getCustomFields()
+    except Exception:  # noqa: BLE001 - custom fields are optional
+        return None
+    if fields is None:
+        return None
+    try:
+        iterable = list(fields)
+    except TypeError:
+        iterable = []
+        try:
+            iterator = fields.iterator()
+            while iterator.hasNext():
+                iterable.append(iterator.next())
+        except Exception:  # noqa: BLE001
+            return None
+    for field in iterable:
+        labels: list[str] = []
+        for getter in ("getAlias", "getName"):
+            try:
+                raw = getattr(field, getter)()
+            except Exception:  # noqa: BLE001
+                continue
+            text = str(raw or "").strip()
+            if text:
+                labels.append(text)
+        if not any(_field_label_matches(label, wanted, contains=contains) for label in labels):
+            continue
+        try:
+            return field.getFieldType()
+        except Exception:  # noqa: BLE001
+            return None
+    return None
+
+
+def _custom_value(task, field) -> str | None:
+    if field is None:
+        return None
+    try:
+        raw = task.get(field)
+    except Exception:  # noqa: BLE001
+        return None
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    return text or None
+
+
 def _percent(value) -> float:
     if value is None:
         return 0.0
@@ -359,7 +472,7 @@ def _wbs_code(task) -> str | None:
         if text and text.lower() != "none":
             codes.append(text)
     for text in codes:
-        if _is_project_or_phase_wbs(text):
+        if is_project_or_phase_code(text):
             return text
     return codes[0] if codes else None
 
@@ -374,12 +487,83 @@ def _task_value(task, method: str):
         return None
 
 
-def _is_project_or_phase_wbs(value: str) -> bool:
-    text = value.strip()
-    if text == "1":
-        return True
-    parts = text.split(".")
-    return len(parts) == 2 and parts[0] == "1" and parts[1].isdigit()
+def _task_guid(task) -> str | None:
+    raw = _task_value(task, "getGUID")
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text or text.casefold() in {"none", "null"}:
+        return None
+    return text
+
+
+def _baseline0_finish(task) -> str | None:
+    """Planned Finish for Delay Mapping: Baseline 0 finish only (task.getBaseline(0).getFinish())."""
+    baseline = _baseline_record(task, 0)
+    if baseline is None:
+        return None
+    return iso_date(
+        _call(baseline, "getFinish")
+        or _call(baseline, "getFinishDate")
+        or _task_value(baseline, "getFinish")
+    )
+
+
+def _baseline_record(task, index: int):
+    getter = getattr(task, "getBaseline", None)
+    if getter is not None:
+        try:
+            hit = getter(index)
+            if hit is not None:
+                return hit
+        except Exception:  # noqa: BLE001 - MPXJ overloads Integer vs int
+            pass
+        try:
+            from java.lang import Integer
+
+            hit = getter(Integer(index))
+            if hit is not None:
+                return hit
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            from org.mpxj import BaselineType
+
+            types = [
+                BaselineType.BASELINE,
+                BaselineType.BASELINE1,
+                BaselineType.BASELINE2,
+                BaselineType.BASELINE3,
+                BaselineType.BASELINE4,
+                BaselineType.BASELINE5,
+                BaselineType.BASELINE6,
+                BaselineType.BASELINE7,
+                BaselineType.BASELINE8,
+                BaselineType.BASELINE9,
+                BaselineType.BASELINE10,
+            ]
+            if 0 <= index < len(types):
+                hit = getter(types[index])
+                if hit is not None:
+                    return hit
+        except Exception:  # noqa: BLE001
+            pass
+    baselines = _task_value(task, "getBaselines")
+    if not baselines:
+        return None
+    try:
+        items = list(baselines)
+    except TypeError:
+        items = []
+        try:
+            iterator = baselines.iterator()
+            while iterator.hasNext():
+                items.append(iterator.next())
+        except Exception:  # noqa: BLE001
+            return None
+    if 0 <= index < len(items):
+        return items[index]
+    return None
 
 
 def _first_text(*values) -> str | None:
@@ -406,46 +590,11 @@ def _text_field(task, index: int) -> str | None:
 
 
 def _gate_field(project):
-    try:
-        fields = project.getCustomFields()
-    except Exception:  # noqa: BLE001 - custom fields are optional
-        return None
-    if fields is None:
-        return None
-    try:
-        iterable = list(fields)
-    except TypeError:
-        iterable = []
-        try:
-            iterator = fields.iterator()
-            while iterator.hasNext():
-                iterable.append(iterator.next())
-        except Exception:  # noqa: BLE001
-            return None
-    for field in iterable:
-        try:
-            alias = str(field.getAlias() or "").strip().lower()
-        except Exception:  # noqa: BLE001
-            continue
-        if alias == "gate":
-            try:
-                return field.getFieldType()
-            except Exception:  # noqa: BLE001
-                return None
-    return None
+    return _custom_field_by_alias(project, {"gate"})
 
 
 def _gate_value(task, gate_field) -> str | None:
-    if gate_field is None:
-        return None
-    try:
-        raw = task.get(gate_field)
-    except Exception:  # noqa: BLE001
-        return None
-    if raw is None:
-        return None
-    text = str(raw).strip()
-    return text or None
+    return _custom_value(task, gate_field)
 
 
 def _assignment(assignment, calendar) -> PlanAssignmentData | None:

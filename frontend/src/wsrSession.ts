@@ -1,4 +1,4 @@
-import type { FileRecord, ProcessingResponse, StatusReport } from "./types";
+import type { FileRecord, ProcessingResponse, ProjectWsrDashboard, StatusReport } from "./types";
 
 const WSR_SESSION_KEY = "pa-wsr-session";
 
@@ -77,17 +77,40 @@ export function asWsrReport(result: ProcessingResponse["result"]): StatusReport 
     return null;
   }
   const data = result as StatusReport;
+  const risks = data.risks ?? [];
+  const facts = data.facts ?? null;
+  const projects = data.projects?.length ? data.projects : facts ? [legacyBoard(data, facts, risks)] : [];
   return {
     as_of_date: data.as_of_date ?? null,
     generated_at: data.generated_at ?? null,
     planned_only: Boolean(data.planned_only),
     exportable: Boolean(data.exportable),
     project_health: data.project_health ?? data.facts?.project_health ?? null,
-    facts: data.facts ?? null,
+    facts,
+    portfolio_name: data.portfolio_name ?? data.portfolio?.name ?? null,
+    portfolio: data.portfolio ?? null,
+    projects,
     progress: data.progress ?? [],
     milestones: data.milestones ?? [],
     client_needs: data.client_needs ?? [],
-    risks: data.risks ?? [],
+    risks,
+    issues: data.issues ?? [],
+    dependencies: data.dependencies ?? [],
+    management_attention: data.management_attention ?? [],
+    decisions_required: data.decisions_required ?? [],
+    next_7_day_priorities: data.next_7_day_priorities ?? [],
+  };
+}
+
+function legacyBoard(data: StatusReport, facts: NonNullable<StatusReport["facts"]>, risks: StatusReport["risks"]): ProjectWsrDashboard {
+  return {
+    project_code: facts.project_code || "1",
+    project_name: facts.project_name,
+    facts,
+    progress: data.progress ?? [],
+    milestones: data.milestones ?? [],
+    client_needs: data.client_needs ?? [],
+    risks,
     issues: data.issues ?? [],
     dependencies: data.dependencies ?? [],
     management_attention: data.management_attention ?? [],

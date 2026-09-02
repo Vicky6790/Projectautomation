@@ -40,15 +40,15 @@ async def upload_wsr(file: UploadFile = File(...)) -> FileRecord:
 def compare_delay_mapping(body: DelayMappingCompareRequest) -> DelayMappingSheet:
     current_id = body.current_file_id.strip()
     if not current_id:
-        raise AppError(400, "CURRENT_MPP_REQUIRED", "Insert a Current MPP to compare.")
-    current = storage_mod.store.get_plan(current_id)
-    baseline = None
-    baseline_id = (body.baseline_file_id or "").strip()
-    if baseline_id:
-        baseline = storage_mod.store.get_plan(baseline_id)
-    from app.wsr.facts import delay_mapping_from_plans
+        raise AppError(400, "CURRENT_MPP_REQUIRED", "Insert an MPP to build Delay Mapping.")
+    record, blob = storage_mod.store.get_file(current_id)
+    if blob.is_file() and blob.name == "input.bin":
+        current = read_mpp_bytes(blob.read_bytes(), record.filename)
+    else:
+        current = storage_mod.store.get_plan(current_id)
+    from app.wsr.mpp_delay_sheet import build_delay_sheet
 
-    return delay_mapping_from_plans(current, baseline)
+    return build_delay_sheet(current)
 
 
 @router.post("/requests/{handle}/generate", response_model=ProcessingResponse)

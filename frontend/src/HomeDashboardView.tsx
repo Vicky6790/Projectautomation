@@ -1,130 +1,148 @@
 import { Link } from "react-router-dom";
+import { ProjectPulseLogo } from "./components/ProjectPulseLogo";
 
-const STEPS = [
+const MODULES = [
   {
     to: "/sow",
+    tone: "sow",
     icon: "analytics",
+    kicker: "Start here",
     title: "SOW Analyzer",
-    hint: "Read the signed statement of work",
-    detail: "Extract risks, gray areas, missing requirements, and clarification questions from the SOW.",
+    detail: "Turn the signed statement of work into risks, gray areas, and questions the team can act on.",
+    points: ["Gray areas & gaps", "Delivery risks", "Clarification questions"],
+    cta: "Analyze SOW",
   },
   {
     to: "/wsr",
+    tone: "wsr",
     icon: "insights",
+    kicker: "Weekly pulse",
     title: "WSR & Insights",
-    hint: "Report from the live plan",
-    detail: "Upload the current MPP to produce the weekly status and Go-Live shift.",
+    detail: "Upload the current MPP and publish a weekly status grounded in Baseline vs Current.",
+    points: ["Go-Live shift", "Narrative insights", "MPP-backed facts"],
+    cta: "Generate WSR",
   },
   {
     to: "/delay-mapping",
+    tone: "delay",
     icon: "table_view",
+    kicker: "Go-Live drivers",
     title: "Delay Mapping",
-    hint: "Baseline vs current variance",
-    detail: "Compare Baseline and Current MPP files to list Delay and Additional tasks, with Go-Live impact kept separate from task shift days.",
+    detail: "List Delay and Additional tasks that actually move Go-Live, with working-day impact.",
+    points: ["Delay vs Additional", "Working-day shift", "Exportable sheet"],
+    cta: "Map delays",
   },
+] as const;
+
+const SIGNALS = [
+  { icon: "verified", label: "MPP as source of truth" },
+  { icon: "bolt", label: "Weekly status in minutes" },
+  { icon: "timeline", label: "Go-Live shift, not guesswork" },
 ] as const;
 
 export function HomeDashboardView() {
   return (
     <section className="home-dash">
-      <div className="home-hero">
-        <div className="home-hero-mark" aria-hidden="true">
-          <span className="material-symbols-outlined">dashboard</span>
+      <div className="home-stage">
+        <div className="home-aurora" aria-hidden="true">
+          <span className="home-blob home-blob-a" />
+          <span className="home-blob home-blob-b" />
+          <span className="home-blob home-blob-c" />
+          <span className="home-orbit" />
         </div>
-        <div>
-          <p className="home-kicker">Project Automation</p>
-          <h1>Welcome to Project Management Dashboard</h1>
+        <div className="home-stage-copy">
+          <div className="home-hero-mark" aria-hidden="true">
+            <ProjectPulseLogo variant="mark" decorative />
+          </div>
+          <p className="home-kicker">ProjectPulse workspace</p>
+          <h1>
+            See the delivery path <em>before</em> it slips.
+          </h1>
           <p className="home-lead">
-            One workspace for the delivery path: analyze the SOW, publish the weekly status, and map
-            Go-Live delay from Baseline vs Current.
+            One place to read the SOW, publish the weekly status, and map the tasks that move Go-Live.
+            Facts stay tied to the project plan — missing values stay Unavailable.
           </p>
+          <ul className="home-signals">
+            {SIGNALS.map((signal) => (
+              <li key={signal.label}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {signal.icon}
+                </span>
+                {signal.label}
+              </li>
+            ))}
+          </ul>
         </div>
-      </div>
-
-      <div className="home-scene" aria-hidden="true">
-        <svg viewBox="0 0 960 160" role="presentation">
-          <defs>
-            <linearGradient id="home-line" x1="0" x2="1">
-              <stop offset="0%" stopColor="#6366f1" />
-              <stop offset="50%" stopColor="#10b981" />
-              <stop offset="100%" stopColor="#f59e0b" />
-            </linearGradient>
-          </defs>
-          <path
-            className="home-scene-path"
-            d="M160 80 H800"
-            fill="none"
-            stroke="url(#home-line)"
-            strokeWidth="3"
-            strokeDasharray="8 10"
-            strokeLinecap="round"
-          />
-          <g transform="translate(160 80)">
-            <g className="home-scene-node">
-              <circle r="28" fill="#eef2ff" stroke="#4f46e5" strokeWidth="2" />
-              <text textAnchor="middle" y="6" fontSize="13" fontWeight="700" fill="#4338ca">
-                SOW
-              </text>
-            </g>
-          </g>
-          <g transform="translate(480 80)">
-            <g className="home-scene-node">
-              <circle r="28" fill="#d1fae5" stroke="#059669" strokeWidth="2" />
-              <text textAnchor="middle" y="6" fontSize="13" fontWeight="700" fill="#047857">
-                WSR
-              </text>
-            </g>
-          </g>
-          <g transform="translate(800 80)">
-            <g className="home-scene-node">
-              <circle r="28" fill="#e0f2fe" stroke="#0284c7" strokeWidth="2" />
-              <text textAnchor="middle" y="6" fontSize="11" fontWeight="700" fill="#0369a1">
-                Delay
-              </text>
-            </g>
-          </g>
-        </svg>
-      </div>
-
-      <ol className="home-flow" aria-label="Application workflow">
-        {STEPS.map((step, index) => (
-          <li key={step.to} className="home-flow-item" style={{ animationDelay: `${index * 120}ms` }}>
-            <Link to={step.to} className="home-step">
-              <span className="home-step-icon" aria-hidden="true">
-                <span className="material-symbols-outlined">{step.icon}</span>
-              </span>
-              <span className="home-step-copy">
-                <strong>{step.title}</strong>
-                <em>{step.hint}</em>
-                <span>{step.detail}</span>
-              </span>
-            </Link>
-            {index < STEPS.length - 1 ? (
-              <span className="home-flow-arrow" aria-hidden="true">
-                <span className="material-symbols-outlined">arrow_forward</span>
-              </span>
-            ) : null}
+        <ul className="home-floaters" aria-hidden="true">
+          <li className="home-float home-float-sow">
+            <span className="material-symbols-outlined">quiz</span>
+            Clarifications
           </li>
-        ))}
-      </ol>
+          <li className="home-float home-float-wsr">
+            <span className="material-symbols-outlined">calendar_month</span>
+            Weekly status
+          </li>
+          <li className="home-float home-float-delay">
+            <span className="material-symbols-outlined">event_busy</span>
+            Go-Live shift
+          </li>
+        </ul>
+      </div>
 
-      <ul className="home-tiles">
-        {STEPS.map((step) => (
-          <li key={`${step.to}-tile`}>
-            <Link to={step.to} className="home-tile">
-              <span className="home-tile-art" aria-hidden="true" data-step={step.to.slice(1)}>
-                <span className="material-symbols-outlined">{step.icon}</span>
+      <ul className="home-modules">
+        {MODULES.map((module, index) => (
+          <li key={module.to} style={{ animationDelay: `${140 + index * 90}ms` }}>
+            <Link to={module.to} className={`home-mod home-mod-${module.tone}`}>
+              <span className="home-mod-orb" aria-hidden="true">
+                <span className="home-mod-ring" />
+                <span className="material-symbols-outlined">{module.icon}</span>
               </span>
-              <strong>{step.title}</strong>
-              <span>{step.detail}</span>
-              <span className="home-tile-cta">
-                Open
-                <span className="material-symbols-outlined">chevron_right</span>
+              <span className="home-mod-num">{String(index + 1).padStart(2, "0")}</span>
+              <p className="home-mod-kicker">{module.kicker}</p>
+              <strong>{module.title}</strong>
+              <span className="home-mod-detail">{module.detail}</span>
+              <ul>
+                {module.points.map((point) => (
+                  <li key={point}>
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      check_circle
+                    </span>
+                    {point}
+                  </li>
+                ))}
+              </ul>
+              <span className="home-mod-cta">
+                {module.cta}
+                <span className="material-symbols-outlined">arrow_forward</span>
               </span>
             </Link>
           </li>
         ))}
       </ul>
+
+      <ol className="home-path" aria-label="How the workspace flows">
+        <li>
+          <span className="home-path-icon" aria-hidden="true">
+            <span className="material-symbols-outlined">description</span>
+          </span>
+          <strong>Read the SOW</strong>
+          <span>Surface gaps before they become schedule noise.</span>
+        </li>
+        <li>
+          <span className="home-path-icon" aria-hidden="true">
+            <span className="material-symbols-outlined">upload_file</span>
+          </span>
+          <strong>Upload the live MPP</strong>
+          <span>Weekly status and delay mapping both read the same plan.</span>
+        </li>
+        <li>
+          <span className="home-path-icon" aria-hidden="true">
+            <span className="material-symbols-outlined">share</span>
+          </span>
+          <strong>Share the facts</strong>
+          <span>Download the WSR or export the Go-Live delay sheet.</span>
+        </li>
+      </ol>
     </section>
   );
 }

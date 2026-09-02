@@ -12,6 +12,9 @@ import { RetrospectiveView } from "./RetrospectiveView";
 import { WsrDashboardView } from "./WsrDashboardView";
 import { ShellMetaContext } from "./shellMeta";
 import { requestWsrReset } from "./wsrSession";
+import { ProjectPulseLogo } from "./components/ProjectPulseLogo";
+
+const NAV_HIDDEN_KEY = "projectpulse.nav-hidden";
 
 const MODULES: { path: string; label: string; icon: string; resetWsr?: boolean }[] = [
   { path: "/sow", label: "SOW Analyzer", icon: "analytics" },
@@ -41,12 +44,20 @@ function Glyph({ name, filled }: { name: string; filled?: boolean }) {
   );
 }
 
+function readNavHidden(): boolean {
+  try {
+    return localStorage.getItem(NAV_HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [healthError, setHealthError] = useState<string | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [pageMeta, setPageMeta] = useState("");
+  const [navHidden, setNavHidden] = useState(readNavHidden);
   const location = useLocation();
 
   useEffect(() => {
@@ -56,9 +67,7 @@ export default function App() {
   useEffect(() => {
     getHealth()
       .then(setHealth)
-      .catch((error: unknown) => {
-        setHealthError(error instanceof Error ? error.message : "API unreachable");
-      });
+      .catch(() => setHealth(null));
   }, []);
 
   useEffect(() => {
@@ -81,13 +90,20 @@ export default function App() {
     return () => window.removeEventListener(AUTH_LOST_EVENT, onLost);
   }, []);
 
+  function toggleNav() {
+    setNavHidden((hidden) => {
+      const next = !hidden;
+      try {
+        localStorage.setItem(NAV_HIDDEN_KEY, next ? "1" : "0");
+      } catch {
+        // Ignore storage errors; the toggle still works for this session.
+      }
+      return next;
+    });
+  }
+
   const locked = Boolean(health?.auth_required && sessionChecked && !operator);
   const title = TITLES[location.pathname] ?? "Project Automation";
-  const sessionLabel = operator
-    ? operator.username
-    : health?.auth_mode === "disabled"
-      ? "Local session"
-      : "";
 
   if (locked) {
     return (
@@ -99,12 +115,12 @@ export default function App() {
 
   return (
     <ShellMetaContext.Provider value={setPageMeta}>
-      <div className="shell">
-        <aside className="sidebar">
-          <Link to="/" className="brand" aria-label="Project Management Dashboard">
-            <span className="brand-mark">P</span>
+      <div className={navHidden ? "shell nav-hidden" : "shell"}>
+        <aside className="sidebar" aria-hidden={navHidden} inert={navHidden}>
+          <Link to="/" className="brand" aria-label="ProjectPulse home">
+            <ProjectPulseLogo variant="mark" className="brand-logo" decorative />
             <div>
-              <strong>Project Automation</strong>
+              <strong>ProjectPulse</strong>
               <p>Project Intelligence Platform</p>
             </div>
           </Link>
@@ -140,42 +156,45 @@ export default function App() {
             ) : null}
           </nav>
           <div className="sidebar-foot">
-            <span className="nav-item muted-item">
-              <Glyph name="notifications" />
-              Notifications
-            </span>
-            <span className="nav-item muted-item">
-              <Glyph name="help" />
-              Help
-            </span>
-            <span className="nav-item muted-item">
-              <Glyph name="account_circle" />
-              User Profile
-            </span>
-            <p className="status">{health ? `API ${health.status}` : (healthError ?? "Checking API…")}</p>
-            <span className="nav-item muted-item">{sessionLabel || "Signed in locally"}</span>
-            {operator ? (
-              <button
-                type="button"
-                className="linkish"
-                onClick={() => {
-                  signOut().finally(() => setOperator(null));
-                }}
-              >
-                Sign out
-              </button>
-            ) : null}
+            <button type="button" className="nav-hide" onClick={toggleNav}>
+              <Glyph name="left_panel_close" />
+              Hide navigation
+            </button>
           </div>
         </aside>
         <div className="shell-main">
           <header className="shell-top">
             <div className="shell-top-lead">
+              <button
+                type="button"
+                className="shell-nav-toggle"
+                onClick={toggleNav}
+                aria-pressed={navHidden}
+                aria-label={navHidden ? "Show navigation" : "Hide navigation"}
+              >
+                <span className="material-symbols-outlined">
+                  {navHidden ? "left_panel_open" : "left_panel_close"}
+                </span>
+              </button>
               <Link to="/" className="shell-home" aria-label="Project Management Dashboard">
                 <span className="material-symbols-outlined">dashboard</span>
               </Link>
               <span className="shell-tab">{title}</span>
             </div>
-            <p className="status">{pageMeta || sessionLabel}</p>
+            <div className="shell-top-end">
+              {pageMeta ? <p className="status">{pageMeta}</p> : null}
+              {operator ? (
+                <button
+                  type="button"
+                  className="linkish"
+                  onClick={() => {
+                    signOut().finally(() => setOperator(null));
+                  }}
+                >
+                  Sign out
+                </button>
+              ) : null}
+            </div>
           </header>
           <main className="shell-content">
             {health?.auth_required && !sessionChecked ? <p>Checking session…</p> : null}

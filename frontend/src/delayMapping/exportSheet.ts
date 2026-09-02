@@ -1,47 +1,51 @@
-import { shortDate, unavailable } from "../wsrFormat";
+import { delaySheetDate } from "../wsrFormat";
 import type { CompareMppResult, DelayMappingItem } from "./types";
 
 export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMappingItem[]): void {
+  const asOf = result.summary.asOf ? delaySheetDate(result.summary.asOf) : "Unavailable";
+  const groups: { phase: string; rows: DelayMappingItem[] }[] = [];
+  for (const row of rows) {
+    const phase = row.parentName || "Other";
+    const last = groups[groups.length - 1];
+    if (last && last.phase === phase) {
+      last.rows.push(row);
+    } else {
+      groups.push({ phase, rows: [row] });
+    }
+  }
+  const total = rows.reduce((sum, row) => sum + (row.delayDays ?? 0), 0);
+  const body = groups
+    .flatMap((group) => [
+      `<tr><td colspan="4"><b>${esc(group.phase)}</b></td></tr>`,
+      ...group.rows.map(
+        (row) => `<tr>
+        <td>${esc(row.taskName)}</td>
+        <td>${esc(row.taskType)}</td>
+        <td>${row.delayDays == null ? "Unavailable" : String(row.delayDays)}</td>
+        <td>${esc(row.owner || "Unavailable")}</td>
+      </tr>`,
+      ),
+    ])
+    .join("");
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
 <head><meta charset="UTF-8" /></head>
 <body>
 <table border="1">
-  <tr><th colspan="5">DELAY MAPPING</th></tr>
-  <tr><td colspan="5">Baseline vs Current Schedule Variance</td></tr>
-  <tr></tr>
-  <tr><td>Baseline Go-Live</td><td>${esc(shortDate(result.summary.baselineGoLive))}</td></tr>
-  <tr><td>Current Go-Live</td><td>${esc(shortDate(result.summary.currentGoLive))}</td></tr>
-  <tr><td>Go-Live Shift</td><td>${shiftLabel(result.summary.goLiveShift)}</td></tr>
-  <tr><td>Delayed Tasks</td><td>${result.summary.delayedTaskCount}</td></tr>
-  <tr><td>Additional Tasks</td><td>${result.summary.additionalTaskCount}</td></tr>
+  <tr><th colspan="2">Delay Mapping Sheet</th></tr>
+  <tr><td>Baselined Go-Live Date</td><td>${esc(delaySheetDate(result.summary.baselineGoLive))}</td></tr>
+  <tr><td>Current Go-Live Date (As On ${esc(asOf)})</td><td>${esc(delaySheetDate(result.summary.currentGoLive))}</td></tr>
+  <tr><td>Shift In Working Days (As On ${esc(asOf)})</td><td>${esc(shiftLabel(result.summary.shiftWorkingDays))}</td></tr>
+  <tr><td>Holidays In Above Duration</td><td>${esc(countLabel(result.summary.holidays))}</td></tr>
+  <tr><td>Actual Shift In Working Days (As On ${esc(asOf)})</td><td>${esc(shiftLabel(result.summary.actualShiftWorkingDays))}</td></tr>
   <tr></tr>
   <tr>
     <th>Task Name</th>
-    <th>Task Type</th>
+    <th>Task Type?</th>
     <th>Shift Days Count</th>
-    <th>Go-Live Impact</th>
     <th>Owner</th>
   </tr>
-  ${rows
-    .map((row) => {
-      const fill = row.taskType === "Delay" ? "#FEF2F2" : "#FFF7ED";
-      const shift = row.taskType === "Additional" ? "N/A" : row.shiftDays == null ? "Unavailable" : String(row.shiftDays);
-      return `<tr>
-        <td style="background:${fill}">${esc(row.taskName)}</td>
-        <td style="background:${fill}">${esc(row.taskType)}</td>
-        <td style="background:${fill}">${shift}</td>
-        <td style="background:${fill}">${String(row.goLiveImpact)}</td>
-        <td style="background:${fill}">${esc(unavailable(row.owner))}</td>
-      </tr>`;
-    })
-    .join("")}
-  <tr>
-    <td><b>Total</b></td>
-    <td></td>
-    <td></td>
-    <td><b>${rows.reduce((sum, row) => sum + (row.goLiveImpact || 0), 0)}</b></td>
-    <td></td>
-  </tr>
+  ${body}
+  <tr><td colspan="2"><b>Total Count</b></td><td><b>${total}</b></td><td></td></tr>
 </table>
 </body>
 </html>`;
@@ -64,10 +68,11 @@ export function printDelayMappingSheet(): void {
 }
 
 function shiftLabel(value: number | null): string {
-  if (value == null) {
-    return "Unavailable";
-  }
-  return value > 0 ? `+${value} Working Days` : `${value} Working Days`;
+  return value == null ? "Unavailable" : `${value} days shift`;
+}
+
+function countLabel(value: number | null): string {
+  return value == null ? "Unavailable" : String(value);
 }
 
 function esc(value: string): string {

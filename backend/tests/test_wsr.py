@@ -97,6 +97,8 @@ def test_generate_uses_publish_date_not_mpp_status_date(client: TestClient, monk
     assert result["exportable"] is True
     assert result["progress"] == ["Build"]
     assert result["milestones"] == []
+    assert len(result["projects"]) == 1
+    assert result["projects"][0]["facts"]["project_name"] == result["facts"]["project_name"]
     status = client.get(f"/api/v1/wsr/requests/{handle}")
     assert status.json()["status"] == "succeeded"
     again = client.post(f"/api/v1/wsr/requests/{handle}/generate")
@@ -182,6 +184,114 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     assert overview
     compact = " ".join(text.split())
     assert " ".join(overview.split()) in compact
+
+
+def test_generate_multi_project_mpp_returns_one_dashboard_per_project(
+    client: TestClient, monkeypatch
+) -> None:
+    as_of = date.fromisoformat("2026-08-22")
+    plan = ProjectPlanData(
+        name="Portfolio MPP",
+        owner="Alex PM",
+        status_date="2026-08-22",
+        has_actuals=True,
+        planned_only=False,
+        tasks=[
+            PlanTaskData(
+                id=1,
+                name="All Accounts",
+                wbs="0",
+                outline_level=0,
+                is_summary=True,
+                percent_complete=42,
+            ),
+            PlanTaskData(id=2, name="Core Banking", wbs="1", outline_level=1, is_summary=True),
+            PlanTaskData(
+                id=3,
+                name="UX Phase",
+                wbs="1.1",
+                outline_level=2,
+                is_summary=True,
+                scheduled_start=as_of.isoformat(),
+                scheduled_finish=(as_of + timedelta(days=3)).isoformat(),
+            ),
+            PlanTaskData(
+                id=4,
+                name="Build portal",
+                wbs="1.1.1",
+                outline_level=3,
+                scheduled_start=as_of.isoformat(),
+                scheduled_finish=(as_of + timedelta(days=3)).isoformat(),
+                planned_work_hours=100,
+                actual_work_hours=40,
+            ),
+            PlanTaskData(
+                id=5,
+                name="Go Live",
+                wbs="1.2",
+                outline_level=2,
+                is_milestone=True,
+                scheduled_finish=(as_of + timedelta(days=20)).isoformat(),
+            ),
+            PlanTaskData(id=6, name="Payments Hub", wbs="2", outline_level=1, is_summary=True),
+            PlanTaskData(
+                id=7,
+                name="API Phase",
+                wbs="2.1",
+                outline_level=2,
+                is_summary=True,
+                scheduled_start=(as_of + timedelta(days=10)).isoformat(),
+                scheduled_finish=(as_of + timedelta(days=14)).isoformat(),
+            ),
+            PlanTaskData(
+                id=8,
+                name="Build API",
+                wbs="2.1.1",
+                outline_level=3,
+                scheduled_start=(as_of + timedelta(days=10)).isoformat(),
+                scheduled_finish=(as_of + timedelta(days=14)).isoformat(),
+                planned_work_hours=100,
+                actual_work_hours=20,
+            ),
+            PlanTaskData(
+                id=9,
+                name="Go Live",
+                wbs="2.2",
+                outline_level=2,
+                is_milestone=True,
+                scheduled_finish=(as_of + timedelta(days=69)).isoformat(),
+            ),
+        ],
+    )
+    handle = _upload(client, monkeypatch, plan)
+    _publish_on(monkeypatch)
+    monkeypatch.setattr("app.orchestration.wsr.analyze_wsr", _empty_ai)
+    response = client.post(f"/api/v1/wsr/requests/{handle}/generate")
+    assert response.status_code == 200, response.text
+    result = response.json()["result"]
+    assert result["portfolio_name"] == "All Accounts"
+    assert result["portfolio"]["name"] == "All Accounts"
+    assert result["portfolio"]["countdown_days"] == 20
+    assert result["portfolio"]["overall_progress"] == 30.0
+    assert result["projects"][0]["facts"]["countdown_days"] is None
+    assert result["projects"][1]["facts"]["countdown_days"] is None
+    assert result["projects"][0]["facts"]["overall_progress"] == 40.0
+    assert result["projects"][1]["facts"]["overall_progress"] == 20.0
+    names = [board["project_name"] for board in result["projects"]]
+    assert names == ["Core Banking", "Payments Hub"]
+    assert result["facts"]["project_name"] == "Core Banking"
+    first_phases = [phase["wbs"] for phase in result["projects"][0]["facts"]["phase_statuses"]]
+    second_phases = [phase["wbs"] for phase in result["projects"][1]["facts"]["phase_statuses"]]
+    assert first_phases == ["1.1", "1.2"]
+    assert second_phases == ["2.1", "2.2"]
+    assert result["projects"][0]["progress"] == ["Build portal"]
+    assert result["projects"][1]["progress"] == []
+    pdf = client.get(f"/api/v1/wsr/requests/{handle}/report")
+    text = pdf_text(pdf.content)
+    assert "Core Banking" in text
+    assert "Payments Hub" in text
+    assert "All Accounts" in text
+    assert "This project" in text
 
 
 def test_delay_mapping_pdf_is_a_standalone_sheet(client: TestClient, monkeypatch) -> None:
@@ -361,9 +471,7 @@ def test_evidence_is_isolated_to_the_request(client: TestClient, monkeypatch) ->
     assert patched.status_code == 404
 
 
-def test_delay_mapping_compares_baseline_and_current_mpp(client: TestClient, monkeypatch) -> None:
-    as_of = date.fromisoformat("2026-08-22")
-    baseline = _plan(status_date="2026-08-22")
+def test_delay_mapping_sheet_from_current_mpp(client: TestClient, monkeypatch) -> None:
     current = ProjectPlanData(
         name="Demo",
         owner="Alex PM",
@@ -374,73 +482,60 @@ def test_delay_mapping_compares_baseline_and_current_mpp(client: TestClient, mon
             PlanTaskData(
                 id=1,
                 name="Kickoff",
-                scheduled_finish=(as_of - timedelta(days=10)).isoformat(),
-                baseline_finish=(as_of - timedelta(days=10)).isoformat(),
-                percent_complete=100,
-                actual_finish="2026-08-10",
+                baseline0_finish="2026-08-10",
+                scheduled_finish="2026-08-10",
+                delay_or_additional="Delay",
+                critical=False,
             ),
             PlanTaskData(
                 id=2,
                 name="Build",
-                scheduled_finish=(as_of + timedelta(days=3)).isoformat(),
-                baseline_finish=(as_of + timedelta(days=3)).isoformat(),
-            ),
-            PlanTaskData(
-                id=4,
-                name="Unplanned review round",
-                scheduled_start="2026-09-14",
-                scheduled_finish="2026-09-18",
-                predecessor_ids=[2],
-                assignments=[],
+                baseline0_finish="2026-08-20",
+                scheduled_finish="2026-08-27",
+                delay_or_additional="Delay",
+                critical=True,
             ),
             PlanTaskData(
                 id=3,
                 name="Go Live",
                 is_milestone=True,
-                scheduled_finish="2026-09-22",
-                baseline_finish="2026-09-11",
-                predecessor_ids=[4],
+                baseline0_finish="2026-08-20",
+                scheduled_finish="2026-09-01",
+                predecessor_ids=[2],
             ),
         ],
     )
-    queued = [baseline, current]
     monkeypatch.setattr(
         "app.routers.wsr.read_mpp_bytes",
-        lambda _content, _name: queued.pop(0),
+        lambda _content, _name: current,
     )
-    baseline_id = client.post(
-        "/api/v1/wsr/uploads",
-        files={"file": ("baseline.mpp", mpp_stub_bytes(), "application/vnd.ms-project")},
-    ).json()["id"]
     current_id = client.post(
         "/api/v1/wsr/uploads",
         files={"file": ("current.mpp", mpp_stub_bytes(), "application/vnd.ms-project")},
     ).json()["id"]
     response = client.post(
         "/api/v1/wsr/delay-mapping",
-        json={"baseline_file_id": baseline_id, "current_file_id": current_id},
+        json={"current_file_id": current_id},
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["baseline_go_live"] == "2026-09-11"
-    assert body["current_go_live"] == "2026-09-22"
     names = [row["name"] for row in body["rows"]]
-    assert "Unplanned review round" in names
-    assert {row["task_type"] for row in body["rows"] if row["name"] == "Unplanned review round"} == {
-        "additional"
-    }
-    assert all(
-        isinstance(row["go_live_impact_days"], int) and row["go_live_impact_days"] > 0
-        for row in body["rows"]
-        if row["name"] == "Unplanned review round"
-    )
+    assert names == ["Build"]
+    assert body["rows"][0]["task_type"] == "delay"
+    assert body["rows"][0]["shift_days"] == 5
+    assert body["rows"][0]["planned_finish"] == "2026-08-20"
+    assert body["rows"][0]["revised_finish"] == "2026-08-27"
+    assert body["delayed_task_count"] == 1
+    assert body["baseline_go_live"] == "2026-08-20"
+    assert body["current_go_live"] == "2026-09-01"
 
 
 def test_delay_mapping_current_mpp_without_baseline_file(client: TestClient, monkeypatch) -> None:
     handle = _upload(client, monkeypatch, _plan(status_date="2026-08-22"))
     response = client.post("/api/v1/wsr/delay-mapping", json={"current_file_id": handle})
     assert response.status_code == 200, response.text
-    assert response.json()["current_go_live"] == "2026-09-11"
+    assert response.json()["rows"] == []
+    assert response.json()["delayed_task_count"] == 0
 
 
 def test_delay_mapping_compare_requires_current_mpp(client: TestClient) -> None:

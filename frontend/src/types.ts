@@ -118,7 +118,7 @@ export type DelayMappingRow = {
   name: string;
   parent_name?: string | null;
   wbs?: string | null;
-  task_type?: "delay" | "additional" | "unchanged" | "ahead" | "removed" | "unavailable" | null;
+  task_type?: "delay" | "additional" | "new_task" | "unchanged" | "ahead" | "removed" | "unavailable" | null;
   shift_days?: number | null;
   delay_days?: number | null;
   go_live_impact_days?: number | null;
@@ -145,6 +145,8 @@ export type DelayMappingRow = {
   predecessor_names?: string[];
   successor_names?: string[];
   calculation_source?: string | null;
+  source?: string | null;
+  critical?: boolean | null;
 };
 
 export type DelayMappingSheet = {
@@ -162,10 +164,17 @@ export type DelayMappingSheet = {
   additional_shift_days?: number;
   total_delayed_days?: number;
   delayed_task_count?: number;
+  additional_task_count?: number;
+  new_task_count?: number;
+  matched_task_count?: number;
+  unchanged_task_count?: number;
+  baseline_task_count?: number;
+  current_task_count?: number;
   matching_requires_validation?: boolean;
   reconciliation_status?: "reconciled" | "requires_validation" | "unavailable" | null;
   reconciliation_warning?: string | null;
   calendar_source?: "project" | "weekdays_fallback" | null;
+  as_of_date?: string | null;
   phase_attribution?: DelayAttributionBucket[];
   owner_attribution?: DelayAttributionBucket[];
   type_attribution?: DelayAttributionBucket[];
@@ -219,6 +228,7 @@ export type ExecutiveSummary = {
 };
 
 export type WsrPlanFacts = {
+  project_code?: string | null;
   project_name?: string | null;
   project_owner?: string | null;
   as_of_date?: string;
@@ -245,6 +255,28 @@ export type WsrPlanFacts = {
   upcoming_milestones?: MilestoneItem[];
 };
 
+export type PortfolioSummary = {
+  name?: string | null;
+  countdown_days?: number | null;
+  overall_progress?: number | null;
+  planned_go_live_date?: string | null;
+};
+
+export type ProjectWsrDashboard = {
+  project_code: string;
+  project_name?: string | null;
+  facts: WsrPlanFacts;
+  progress: string[];
+  milestones: string[];
+  client_needs: AiDerivedItem[];
+  risks: AiDerivedItem[];
+  issues: AiDerivedItem[];
+  dependencies: AiDerivedItem[];
+  management_attention: AiDerivedItem[];
+  decisions_required: AiDerivedItem[];
+  next_7_day_priorities: AiDerivedItem[];
+};
+
 export type StatusReport = {
   request_handle?: string | null;
   as_of_date?: string | null;
@@ -253,6 +285,9 @@ export type StatusReport = {
   exportable?: boolean;
   project_health?: string | null;
   facts?: WsrPlanFacts | null;
+  portfolio_name?: string | null;
+  portfolio?: PortfolioSummary | null;
+  projects: ProjectWsrDashboard[];
   progress: string[];
   milestones: string[];
   client_needs: AiDerivedItem[];

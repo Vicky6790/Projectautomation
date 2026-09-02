@@ -77,6 +77,7 @@ class PlanRelationData(BaseModel):
 
 class PlanTaskData(BaseModel):
     id: int
+    guid: str | None = None
     name: str
     wbs: str | None = None
     outline_level: int = 1
@@ -86,6 +87,7 @@ class PlanTaskData(BaseModel):
     gate: str | None = None
     baseline_start: str | None = None
     baseline_finish: str | None = None
+    baseline0_finish: str | None = None
     scheduled_start: str | None = None
     scheduled_finish: str | None = None
     actual_start: str | None = None
@@ -103,6 +105,9 @@ class PlanTaskData(BaseModel):
     total_slack_days: float | None = None
     critical: bool | None = None
     calendar_name: str | None = None
+    delay_or_additional: str | None = None
+    duration_days: float | None = None
+    baseline0_duration_days: float | None = None
 
 
 class ProjectPlanData(BaseModel):
@@ -267,7 +272,7 @@ class DelayMappingRow(BaseModel):
     parent_name: str | None = None
     wbs: str | None = None
     hierarchy_path: str | None = None
-    task_type: Literal["delay", "additional", "unchanged", "ahead", "removed", "unavailable"]
+    task_type: Literal["delay", "additional", "new_task", "unchanged", "ahead", "removed", "unavailable"]
     shift_days: int | None = None
     delay_days: int | None = None
     go_live_impact_days: int | None = None
@@ -290,7 +295,7 @@ class DelayMappingRow(BaseModel):
     predecessor_ids: list[int] = Field(default_factory=list)
     successor_ids: list[int] = Field(default_factory=list)
     go_live_path_impact: bool = False
-    match_status: Literal["matched", "additional", "removed", "ambiguous"] | None = None
+    match_status: Literal["matched", "additional", "removed", "ambiguous", "new_task"] | None = None
     calculation_status: (
         Literal[
             "calculated",
@@ -305,6 +310,8 @@ class DelayMappingRow(BaseModel):
     ) = None
     evidence_reason: str | None = None
     calculation_source: str | None = None
+    source: str | None = None
+    critical: bool | None = None
 
 
 class DelayMappingSheet(BaseModel):
@@ -325,6 +332,7 @@ class DelayMappingSheet(BaseModel):
     total_delayed_days: int = 0
     delayed_task_count: int = 0
     additional_task_count: int = 0
+    new_task_count: int = 0
     matched_task_count: int = 0
     removed_task_count: int = 0
     unchanged_task_count: int = 0
@@ -336,6 +344,7 @@ class DelayMappingSheet(BaseModel):
     reconciliation_status: Literal["reconciled", "requires_validation", "unavailable"] | None = None
     reconciliation_warning: str | None = None
     calendar_source: Literal["project", "weekdays_fallback"] | None = None
+    as_of_date: str | None = None
     phase_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
     owner_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
     type_attribution: list[DelayAttributionBucket] = Field(default_factory=list)
@@ -415,7 +424,17 @@ class ExecutiveSummary(BaseModel):
     )
 
 
+class PortfolioSummary(BaseModel):
+    """WBS 0 program card for a multi-project MPP: name, shared Go-Live countdown, all-project progress."""
+
+    name: str | None = None
+    countdown_days: int | None = None
+    overall_progress: float | None = None
+    planned_go_live_date: str | None = None
+
+
 class WsrPlanFacts(BaseModel):
+    project_code: str | None = None
     project_name: str | None = None
     project_owner: str | None = None
     as_of_date: str
@@ -460,6 +479,23 @@ class WsrEvidenceResponse(BaseModel):
     evidence_references: list[EvidenceReference]
 
 
+class ProjectWsrDashboard(BaseModel):
+    """One project's WSR. A multi-project MPP yields one dashboard per integer outline code."""
+
+    project_code: str
+    project_name: str | None = None
+    facts: WsrPlanFacts
+    progress: list[str] = Field(default_factory=list)
+    milestones: list[str] = Field(default_factory=list)
+    client_needs: list[AiDerivedItem] = Field(default_factory=list)
+    risks: list[AiDerivedItem] = Field(default_factory=list)
+    issues: list[AiDerivedItem] = Field(default_factory=list)
+    dependencies: list[AiDerivedItem] = Field(default_factory=list)
+    management_attention: list[AiDerivedItem] = Field(default_factory=list)
+    decisions_required: list[AiDerivedItem] = Field(default_factory=list)
+    next_7_day_priorities: list[AiDerivedItem] = Field(default_factory=list)
+
+
 class StatusReport(BaseModel):
     request_handle: str | None = None
     as_of_date: str | None = None
@@ -468,6 +504,9 @@ class StatusReport(BaseModel):
     exportable: bool = False
     project_health: str | None = None
     facts: WsrPlanFacts | None = None
+    portfolio_name: str | None = None
+    portfolio: PortfolioSummary | None = None
+    projects: list[ProjectWsrDashboard] = Field(default_factory=list)
     progress: list[str] = Field(default_factory=list)
     milestones: list[str] = Field(default_factory=list)
     client_needs: list[AiDerivedItem] = Field(default_factory=list)

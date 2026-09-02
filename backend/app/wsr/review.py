@@ -16,6 +16,9 @@ def iter_items(report: StatusReport) -> list[AiDerivedItem]:
     items: list[AiDerivedItem] = []
     for key in STORED_AI_SECTIONS:
         items.extend(getattr(report, key))
+    for board in report.projects:
+        for key in STORED_AI_SECTIONS:
+            items.extend(getattr(board, key))
     return items
 
 
@@ -24,6 +27,10 @@ def find_item(report: StatusReport, item_id: str) -> AiDerivedItem | None:
         if item.id == item_id:
             return item
     return None
+
+
+def find_items(report: StatusReport, item_id: str) -> list[AiDerivedItem]:
+    return [item for item in iter_items(report) if item.id == item_id]
 
 
 def _loaded_report(handle: str) -> tuple[ProcessingResponse, StatusReport]:
@@ -41,8 +48,8 @@ def _loaded_report(handle: str) -> tuple[ProcessingResponse, StatusReport]:
 
 def review_item(handle: str, item_id: str, body: WsrItemDecision) -> ProcessingResponse:
     _job, report = _loaded_report(handle)
-    item = find_item(report, item_id)
-    if item is None:
+    items = find_items(report, item_id)
+    if not items:
         raise AppError(404, "ITEM_NOT_FOUND", "No WSR insight exists for this request")
     as_of = report.as_of_date
     generated_at = report.generated_at
@@ -54,11 +61,13 @@ def review_item(handle: str, item_id: str, body: WsrItemDecision) -> ProcessingR
                 "INVALID_REVIEW",
                 "An edited insight must include replacement content",
             )
-        item.content = text
-        item.review_status = "edited"
+        for item in items:
+            item.content = text
+            item.review_status = "edited"
     else:
-        item.review_status = body.decision
-    report.exportable = items_exportable(*[getattr(report, key) for key in AI_SECTIONS])
+        for item in items:
+            item.review_status = body.decision
+    report.exportable = items_exportable(*_ai_section_values(report))
     report.as_of_date = as_of
     report.generated_at = generated_at
     return storage_mod.store.set_status(
@@ -80,3 +89,10 @@ def item_evidence(handle: str, item_id: str) -> WsrEvidenceResponse:
         review_status=item.review_status,
         evidence_references=item.evidence_references,
     )
+
+
+def _ai_section_values(report: StatusReport) -> list[list[AiDerivedItem]]:
+    rows = [getattr(report, key) for key in AI_SECTIONS]
+    for board in report.projects:
+        rows.extend(getattr(board, key) for key in AI_SECTIONS)
+    return rows

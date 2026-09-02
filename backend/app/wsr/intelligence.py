@@ -33,7 +33,11 @@ def build_executive_summary_input(
     as_of: str,
 ) -> dict[str, Any]:
     as_of_d = date.fromisoformat(as_of)
-    phases_rows = select_phase_summaries(plan.tasks, project_name=facts.project_name or plan.name)
+    phases_rows = select_phase_summaries(
+        plan.tasks,
+        project_name=facts.project_name or plan.name,
+        project_code=facts.project_code,
+    )
     go_live_task = _go_live_task(plan.tasks, as_of_d)
     go_live_date = parse_date(facts.planned_go_live_date)
     progress = work_based_progress(plan.tasks)

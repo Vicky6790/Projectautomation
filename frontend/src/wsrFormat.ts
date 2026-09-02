@@ -55,6 +55,19 @@ export function phaseState(value: string | null | undefined): string {
   return unavailable(value);
 }
 
+export function delaySheetDate(value: string | null | undefined): string {
+  if (!value) {
+    return "Unavailable";
+  }
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Unavailable";
+  }
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = parsed.toLocaleDateString("en-GB", { month: "short" }).replace(".", "");
+  return `${day}-${month}-${parsed.getFullYear()}`;
+}
+
 export function shortDate(value: string | null | undefined): string {
   if (!value) {
     return "Unavailable";

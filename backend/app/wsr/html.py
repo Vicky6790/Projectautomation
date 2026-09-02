@@ -5,6 +5,7 @@ from datetime import date, datetime
 
 from app.models import (
     AiDerivedItem,
+    ProjectWsrDashboard,
     StatusReport,
     WsrPlanFacts,
 )
@@ -51,15 +52,57 @@ table { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
 
 
 def render_wsr_html(handle: str, payload: StatusReport) -> str:
+    boards = list(payload.projects)
+    if not boards:
+        boards = [_legacy_board(payload)]
+    parts: list[str] = []
+    shared = len(boards) > 1
+    if payload.portfolio:
+        parts.append(_portfolio_hero(payload))
+    elif payload.portfolio_name:
+        parts.append(f"<p class='muted'>{html.escape(payload.portfolio_name)}</p>")
+    for index, board in enumerate(boards):
+        if index:
+            parts.append('<div style="page-break-before: always"></div>')
+        parts.append(_project_body(payload, board, show_title=shared, compact=shared))
+    return _html_document("WSR & Insights", "".join(parts), handle)
+
+
+def _legacy_board(payload: StatusReport) -> ProjectWsrDashboard:
     facts = payload.facts or WsrPlanFacts(
         as_of_date=payload.as_of_date or "",
         generated_at=payload.generated_at or "",
         project_health=payload.project_health or "unavailable",
     )
+    return ProjectWsrDashboard(
+        project_code=facts.project_code or "1",
+        project_name=facts.project_name,
+        facts=facts,
+        progress=payload.progress,
+        milestones=payload.milestones,
+        client_needs=payload.client_needs,
+        risks=payload.risks,
+        issues=payload.issues,
+        dependencies=payload.dependencies,
+        management_attention=payload.management_attention,
+        decisions_required=payload.decisions_required,
+        next_7_day_priorities=payload.next_7_day_priorities,
+    )
+
+
+def _project_body(
+    payload: StatusReport,
+    board: ProjectWsrDashboard,
+    *,
+    show_title: bool,
+    compact: bool = False,
+) -> str:
+    facts = board.facts
     health = facts.project_health or payload.project_health or "unavailable"
-    body = "".join(
+    heading = f"<h2>{_esc(board.project_name)}</h2>" if show_title else ""
+    return heading + "".join(
         [
-            _hero(payload, facts, health),
+            _hero(payload, facts, health, compact=compact),
             _kpi_grid(facts),
             _section(1, "Executive Summary", _overview(facts)),
             _section(2, "Project Timeline", _timeline(facts)),
@@ -67,12 +110,11 @@ def render_wsr_html(handle: str, payload: StatusReport) -> str:
             _section(4, "Progress of current week", _progress(facts)),
             _section(5, "Upcoming Milestones Of Next Week", _milestones(facts, payload.as_of_date)),
             *[
-                _section(index + 6, label, _insights(getattr(payload, key)))
+                _section(index + 6, label, _insights(getattr(board, key)))
                 for index, (key, label) in enumerate(_AI_SECTIONS)
             ],
         ]
     )
-    return _html_document("WSR & Insights", body, handle)
 
 
 def render_delay_mapping_html(handle: str, payload: StatusReport) -> str:
@@ -111,12 +153,31 @@ def _html_document(title: str, body: str, handle: str) -> str:
 """
 
 
-def _hero(payload: StatusReport, facts: WsrPlanFacts, _health: str) -> str:
+def _hero(payload: StatusReport, facts: WsrPlanFacts, _health: str, *, compact: bool = False) -> str:
+    stamp = f"WSR Publish Date: {_short_date(payload.as_of_date)}"
+    progress = _percent(facts.overall_progress)
+    progress_cell = f"""
+<td width="27%" align="center">
+<p class="ring">{html.escape(progress if progress != "Unavailable" else "—")}</p>
+<p class="muted">Overall Progress</p>
+<p class="muted">This project</p>
+</td>
+"""
+    if compact:
+        return f"""
+<table class="hero">
+<tr>
+<td width="73%">
+<h2>{_esc(facts.project_name)}</h2>
+<p class="muted">{stamp}</p>
+</td>
+{progress_cell}
+</tr>
+</table>
+"""
     countdown = (
         str(facts.countdown_days) if facts.countdown_days is not None else "Unavailable"
     )
-    progress = _percent(facts.overall_progress)
-    stamp = f"WSR Publish Date: {_short_date(payload.as_of_date)}"
     return f"""
 <table class="hero">
 <tr>
@@ -133,6 +194,37 @@ def _hero(payload: StatusReport, facts: WsrPlanFacts, _health: str) -> str:
 <p class="ring">{html.escape(progress if progress != "Unavailable" else "—")}</p>
 <p class="muted">Overall Progress</p>
 <p class="muted">By work completion</p>
+</td>
+</tr>
+</table>
+"""
+
+
+def _portfolio_hero(payload: StatusReport) -> str:
+    summary = payload.portfolio
+    if summary is None:
+        return ""
+    countdown = (
+        str(summary.countdown_days) if summary.countdown_days is not None else "Unavailable"
+    )
+    progress = _percent(summary.overall_progress)
+    stamp = f"WSR Publish Date: {_short_date(payload.as_of_date)}"
+    return f"""
+<table class="hero">
+<tr>
+<td width="46%">
+<h2>{_esc(summary.name)}</h2>
+<p class="muted">{stamp}</p>
+</td>
+<td width="27%" align="center">
+<p class="label">Countdown</p>
+<p class="countdown">{html.escape(countdown)}</p>
+<p class="muted">Days to Go-Live</p>
+</td>
+<td width="27%" align="center">
+<p class="ring">{html.escape(progress if progress != "Unavailable" else "—")}</p>
+<p class="muted">Overall Progress</p>
+<p class="muted">All projects</p>
 </td>
 </tr>
 </table>

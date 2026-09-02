@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { generateWsr, retryJob } from "./api";
 import { FileUploader } from "./components/FileUploader";
+import { ModuleHero, ModuleLanding } from "./components/ModuleHero";
 import { WsrGantt } from "./components/WsrGantt";
 import { WsrProgressRing } from "./components/WsrProgressRing";
 import { ShellMetaContext } from "./shellMeta";
@@ -11,6 +12,7 @@ import type {
   PhaseStatus,
   ProcessingResponse,
   ProgressItem,
+  ProjectWsrDashboard,
   WsrPlanFacts,
 } from "./types";
 import {
@@ -54,6 +56,270 @@ function isSameDay(date: string | null | undefined, asOf: string | null | undefi
     return false;
   }
   return date.slice(0, 10) === asOf.slice(0, 10);
+}
+
+function WsrProjectBoard({
+  board,
+  asOf,
+  active,
+  sharedProgramMetrics,
+}: {
+  board: ProjectWsrDashboard;
+  asOf?: string | null;
+  active: boolean;
+  sharedProgramMetrics?: boolean;
+}) {
+  const facts = board.facts;
+  const deployed = facts.resources_deployed ?? facts.people_planned;
+  const kpis = [
+    {
+      label: "Phases to Go-Live",
+      value: unavailable(facts.phase_count),
+      hint: "Across project lifecycle",
+    },
+    {
+      label: "Resources Deployed",
+      value: unavailable(deployed),
+      hint: "From Resource Sheet",
+    },
+    {
+      label: "Person-Days Planned",
+      value: personDaysLabel(facts.person_days_planned),
+      hint: "Total effort estimated",
+    },
+    {
+      label: "Work Items Complete",
+      value: unavailable(facts.completed_work_items),
+      hint:
+        facts.planned_work_items != null
+          ? `of ${facts.planned_work_items} planned`
+          : "of planned work items",
+    },
+  ];
+  return (
+    <div className={active ? "dashboard wsr-project-pane is-active" : "dashboard wsr-project-pane"}>
+      <WsrHero
+        name={facts.project_name}
+        asOf={asOf}
+        countdownDays={sharedProgramMetrics ? null : facts.countdown_days}
+        overallProgress={facts.overall_progress}
+        hideCountdown={Boolean(sharedProgramMetrics)}
+        progressHint={sharedProgramMetrics ? "This project" : "By work completion"}
+      />
+
+      <div className="kpi-grid">
+        {kpis.map((kpi, index) => (
+          <KpiCard
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value}
+            hint={kpi.hint}
+            icon={KPI_ICONS[index]}
+            tone={KPI_TONES[index]}
+          />
+        ))}
+      </div>
+
+      <Section n={1} title="Executive Summary" flush>
+        <p className="overview-copy">
+          {unavailable(facts.executive_summary?.summary || facts.executive_overview)}
+        </p>
+      </Section>
+
+      <Section
+        n={2}
+        title="Project Timeline"
+        hint="Phases from project planning to Go-Live. The dashed marker shows today's position; hover any bar for full dates."
+      >
+        {facts.timeline?.length ? (
+          <WsrGantt phases={facts.timeline} asOf={asOf} />
+        ) : (
+          <p>A timeline cannot be generated</p>
+        )}
+      </Section>
+
+      <Section n={3} title="Phase-Wise Status">
+        {facts.phase_statuses?.length ? (
+          <table className="phase-table">
+            <thead>
+              <tr>
+                <th>WBS</th>
+                <th>Phases</th>
+                <th>Start Date</th>
+                <th>Planned End</th>
+                <th>Deviated Date</th>
+                <th>Progress</th>
+              </tr>
+            </thead>
+            <tbody>
+              {facts.phase_statuses.map((phase: PhaseStatus, index) => {
+                const inFlight = phase.state !== "not_started";
+                const startDate = shortDate(phase.planned_start || phase.actual_start);
+                const plannedEnd = shortDate(phase.planned_finish);
+                const currentFinish = shortDate(phase.actual_finish);
+                const hasDeviation = Boolean(phase.actual_finish) && plannedEnd !== currentFinish;
+                return (
+                  <tr key={`${phase.name}-${index}`} className={inFlight ? "phase-active" : undefined}>
+                    <td className="mono">{phaseWbs(phase, index)}</td>
+                    <td>
+                      {phase.name}
+                      {phase.state === "in_progress" ? <span className="status-badge">In Progress</span> : null}
+                    </td>
+                    <td className="mono">{startDate}</td>
+                    <td className="mono">{plannedEnd}</td>
+                    <td className={`mono${hasDeviation ? " phase-deviated" : ""}`}>
+                      {hasDeviation ? currentFinish : "—"}
+                    </td>
+                    <td>
+                      {phase.state === "not_started" && !phase.progress ? (
+                        <div className="phase-progress muted">
+                          <div className="phase-bar state-not_started" />
+                          <span>Not started</span>
+                        </div>
+                      ) : (
+                        <div className="phase-progress">
+                          <div className={`phase-bar state-${phase.state}`}>
+                            <span style={{ width: `${Math.min(100, Math.max(0, phase.progress ?? 0))}%` }} />
+                          </div>
+                          <strong>
+                            {phase.progress == null ? phaseState(phase.state) : percent(phase.progress)}
+                          </strong>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <p>Unavailable</p>
+        )}
+      </Section>
+
+      <div className="wsr-paired">
+        <Section
+          n={4}
+          title="Progress of current week"
+          hint={`Tasks in the Monday–Sunday week of the WSR publish date (${publishWeekRange(asOf)}).`}
+        >
+          {facts.progress_to_date?.length ? (
+            <table className="milestone-table">
+              <thead>
+                <tr>
+                  <th>Tasks</th>
+                  <th>Start Date</th>
+                  <th>End Date</th>
+                  <th>Complete</th>
+                </tr>
+              </thead>
+              <tbody>
+                {facts.progress_to_date.map((item: ProgressItem, index) => (
+                  <tr key={`${item.name}-${index}`}>
+                    <td>{item.name}</td>
+                    <td className="mono">{shortDate(item.scheduled_start)}</td>
+                    <td className="mono">{shortDate(item.scheduled_finish || item.date)}</td>
+                    <td>{item.progress == null ? "Unavailable" : percent(item.progress)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p>No tasks scheduled in the current week</p>
+          )}
+        </Section>
+
+        <Section
+          n={5}
+          title="Upcoming Milestones Of Next Week"
+          hint={`Incomplete work in the Monday–Sunday week after the WSR publish date (${publishWeekRange(asOf, 1)}).`}
+        >
+          {facts.upcoming_milestones?.length ? (
+            <table className="milestone-table">
+              <thead>
+                <tr>
+                  <th>Start Date</th>
+                  <th>End Date</th>
+                  <th>Milestone / Activity</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {facts.upcoming_milestones.map((item: MilestoneItem, index) => {
+                  const today = isSameDay(item.scheduled_start || item.date, asOf);
+                  return (
+                    <tr key={`${item.name}-${index}`} className={today ? "milestone-today" : undefined}>
+                      <td className="mono">{weekDate(item.scheduled_start)}</td>
+                      <td className="mono">{weekDate(item.scheduled_finish || item.date)}</td>
+                      <td>{item.name}</td>
+                      <td>{today ? <span className="today-badge">Today</span> : null}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p>No upcoming planned tasks</p>
+          )}
+        </Section>
+      </div>
+
+      <Section n={6} title="Risks & Focus Areas">
+        <InsightCards
+          items={visibleInsights(board.risks)}
+          tone="risk"
+          empty="No items identified from the plan"
+        />
+      </Section>
+    </div>
+  );
+}
+
+function WsrHero({
+  name,
+  asOf,
+  countdownDays,
+  overallProgress,
+  hideCountdown,
+  progressHint,
+}: {
+  name?: string | null;
+  asOf?: string | null;
+  countdownDays?: number | null;
+  overallProgress?: number | null;
+  hideCountdown?: boolean;
+  progressHint?: string;
+}) {
+  return (
+    <section className={`wsr-hero${hideCountdown ? " wsr-hero-no-countdown" : ""}`}>
+      <div className="hero-identity">
+        <h3>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            account_balance
+          </span>
+          {unavailable(name)}
+        </h3>
+        <p className="hero-publish">WSR Publish Date: {shortDate(asOf)}</p>
+      </div>
+      {hideCountdown ? null : (
+        <div className="hero-countdown">
+          <p className="metric-label">Countdown</p>
+          <p className={`countdown-value ${countdownDays != null ? "tone-bad" : ""}`}>
+            {countdownDays != null ? countdownDays : "Unavailable"}
+            {countdownDays != null ? <span>Days</span> : null}
+          </p>
+          <p className="metric-hint">to Go-Live</p>
+        </div>
+      )}
+      <div className="hero-progress">
+        <WsrProgressRing value={overallProgress} />
+        <div>
+          <p className="metric-label">Overall Progress</p>
+          <p className="metric-hint">{progressHint || "By work completion"}</p>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function Section({
@@ -161,12 +427,15 @@ export function WsrDashboardView() {
     "Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.",
   );
 
+  const [activeCode, setActiveCode] = useState<string | null>(null);
+
   useEffect(() => {
     const reset = () => {
       setUploaded(null);
       setJob(null);
       setBusy(false);
       setStage(0);
+      setActiveCode(null);
       setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
     };
     window.addEventListener(WSR_RESET_EVENT, reset);
@@ -174,13 +443,27 @@ export function WsrDashboardView() {
   }, []);
 
   const report = asReport(job?.result ?? null);
-  const facts: WsrPlanFacts = report?.facts ?? {};
+  const boards = report?.projects ?? [];
+  const activeBoard = boards.find((board) => board.project_code === activeCode) ?? boards[0];
+  const facts: WsrPlanFacts = activeBoard?.facts ?? report?.facts ?? {};
 
   useEffect(() => {
-    const identity = [facts.project_name, facts.project_owner].filter(Boolean).join(" · ");
+    if (!boards.length) {
+      setActiveCode(null);
+      return;
+    }
+    if (!boards.some((board) => board.project_code === activeCode)) {
+      setActiveCode(boards[0].project_code);
+    }
+  }, [activeCode, boards]);
+
+  useEffect(() => {
+    const identity = [report?.portfolio_name, facts.project_name, facts.project_owner]
+      .filter(Boolean)
+      .join(" · ");
     setPageMeta(identity);
     return () => setPageMeta("");
-  }, [facts.project_name, facts.project_owner, setPageMeta]);
+  }, [facts.project_name, facts.project_owner, report?.portfolio_name, setPageMeta]);
 
   useEffect(() => {
     if (!busy) {
@@ -232,39 +515,15 @@ export function WsrDashboardView() {
     window.setTimeout(() => window.print(), 50);
   }
 
-  const deployed = facts.resources_deployed ?? facts.people_planned;
-  const kpis = [
-    {
-      label: "Phases to Go-Live",
-      value: unavailable(facts.phase_count),
-      hint: "Across project lifecycle",
-    },
-    {
-      label: "Resources Deployed",
-      value: unavailable(deployed),
-      hint: "From Resource Sheet",
-    },
-    {
-      label: "Person-Days Planned",
-      value: personDaysLabel(facts.person_days_planned),
-      hint: "Total effort estimated",
-    },
-    {
-      label: "Work Items Complete",
-      value: unavailable(facts.completed_work_items),
-      hint:
-        facts.planned_work_items != null
-          ? `of ${facts.planned_work_items} planned`
-          : "of planned work items",
-    },
-  ];
-
   return (
     <section className="wsr-page">
-      <header className="wsr-page-head">
-        <h2>WSR & Insights</h2>
-        <p>Generate comprehensive status reports from your project plan.</p>
-      </header>
+      <ModuleHero
+        tone="wsr"
+        icon="insights"
+        kicker="WSR & Insights"
+        title="Weekly status from the live plan"
+        subtitle="Upload the current MPP. Go-Live, progress, timeline, and insights come from the plan — missing values stay Unavailable."
+      />
 
       <div className="wsr-upload-card">
         <div className="wsr-upload-inner">
@@ -285,6 +544,7 @@ export function WsrDashboardView() {
                 onClick={() => {
                   setUploaded(null);
                   setJob(null);
+                  setActiveCode(null);
                   clearWsrSession();
                   setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
                 }}
@@ -303,6 +563,7 @@ export function WsrDashboardView() {
               onUploaded={(file) => {
                 setUploaded(file);
                 setJob(null);
+                setActiveCode(null);
                 clearWsrSession();
                 setMessage("File ready. Generate WSR & Insights to build the dashboard.");
               }}
@@ -353,214 +614,55 @@ export function WsrDashboardView() {
       ) : null}
 
       {report ? (
-        <div className="dashboard">
-          <section className="wsr-hero">
-            <div className="hero-identity">
-              <h3>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  account_balance
-                </span>
-                {unavailable(facts.project_name)}
-              </h3>
-              <p className="hero-publish">WSR Publish Date: {shortDate(report.as_of_date)}</p>
-            </div>
-            <div className="hero-countdown">
-              <p className="metric-label">Countdown</p>
-              <p className={`countdown-value ${facts.countdown_days != null ? "tone-bad" : ""}`}>
-                {facts.countdown_days != null ? facts.countdown_days : "Unavailable"}
-                {facts.countdown_days != null ? <span>Days</span> : null}
-              </p>
-              <p className="metric-hint">to Go-Live</p>
-            </div>
-            <div className="hero-progress">
-              <WsrProgressRing value={facts.overall_progress} />
-              <div>
-                <p className="metric-label">Overall Progress</p>
-                <p className="metric-hint">By work completion</p>
-              </div>
-            </div>
-          </section>
-
-          <div className="kpi-grid">
-            {kpis.map((kpi, index) => (
-              <KpiCard
-                key={kpi.label}
-                label={kpi.label}
-                value={kpi.value}
-                hint={kpi.hint}
-                icon={KPI_ICONS[index]}
-                tone={KPI_TONES[index]}
-              />
-            ))}
-          </div>
-
-          <Section n={1} title="Executive Summary" flush>
-            <p className="overview-copy">
-              {unavailable(facts.executive_summary?.summary || facts.executive_overview)}
-            </p>
-          </Section>
-
-          <Section
-            n={2}
-            title="Project Timeline"
-            hint="Phases from project planning to Go-Live. The dashed marker shows today's position; hover any bar for full dates."
-          >
-            {facts.timeline?.length ? (
-              <WsrGantt phases={facts.timeline} asOf={report.as_of_date} />
-            ) : (
-              <p>A timeline cannot be generated</p>
-            )}
-          </Section>
-
-          <Section n={3} title="Phase-Wise Status">
-            {facts.phase_statuses?.length ? (
-              <table className="phase-table">
-                <thead>
-                  <tr>
-                    <th>WBS</th>
-                    <th>Phases</th>
-                    <th>Start Date</th>
-                    <th>Planned End</th>
-                    <th>Deviated Date</th>
-                    <th>Progress</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {facts.phase_statuses.map((phase: PhaseStatus, index) => {
-                    const active = phase.state !== "not_started";
-                    const startDate = shortDate(phase.planned_start || phase.actual_start);
-                    const plannedEnd = shortDate(phase.planned_finish);
-                    const currentFinish = shortDate(phase.actual_finish);
-                    const hasDeviation =
-                      Boolean(phase.actual_finish) && plannedEnd !== currentFinish;
-                    return (
-                      <tr key={`${phase.name}-${index}`} className={active ? "phase-active" : undefined}>
-                        <td className="mono">{phaseWbs(phase, index)}</td>
-                        <td>
-                          {phase.name}
-                          {phase.state === "in_progress" ? (
-                            <span className="status-badge">In Progress</span>
-                          ) : null}
-                        </td>
-                        <td className="mono">{startDate}</td>
-                        <td className="mono">{plannedEnd}</td>
-                        <td className={`mono${hasDeviation ? " phase-deviated" : ""}`}>
-                          {hasDeviation ? currentFinish : "—"}
-                        </td>
-                        <td>
-                          {phase.state === "not_started" && !phase.progress ? (
-                            <div className="phase-progress muted">
-                              <div className="phase-bar state-not_started" />
-                              <span>Not started</span>
-                            </div>
-                          ) : (
-                            <div className="phase-progress">
-                              <div className={`phase-bar state-${phase.state}`}>
-                                <span
-                                  style={{
-                                    width: `${Math.min(100, Math.max(0, phase.progress ?? 0))}%`,
-                                  }}
-                                />
-                              </div>
-                              <strong>
-                                {phase.progress == null ? phaseState(phase.state) : percent(phase.progress)}
-                              </strong>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <p>Unavailable</p>
-            )}
-          </Section>
-
-          <div className="wsr-paired">
-            <Section
-              n={4}
-              title="Progress of current week"
-              hint={`Tasks in the Monday–Sunday week of the WSR publish date (${publishWeekRange(report.as_of_date)}).`}
-            >
-              {facts.progress_to_date?.length ? (
-                <table className="milestone-table">
-                  <thead>
-                    <tr>
-                      <th>Tasks</th>
-                      <th>Start Date</th>
-                      <th>End Date</th>
-                      <th>Complete</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {facts.progress_to_date.map((item: ProgressItem, index) => (
-                      <tr key={`${item.name}-${index}`}>
-                        <td>{item.name}</td>
-                        <td className="mono">{shortDate(item.scheduled_start)}</td>
-                        <td className="mono">{shortDate(item.scheduled_finish || item.date)}</td>
-                        <td>{item.progress == null ? "Unavailable" : percent(item.progress)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p>No tasks scheduled in the current week</p>
-              )}
-            </Section>
-
-            <Section
-              n={5}
-              title="Upcoming Milestones Of Next Week"
-              hint={`Incomplete work in the Monday–Sunday week after the WSR publish date (${publishWeekRange(report.as_of_date, 1)}).`}
-            >
-              {facts.upcoming_milestones?.length ? (
-                <table className="milestone-table">
-                  <thead>
-                    <tr>
-                      <th>Start Date</th>
-                      <th>End Date</th>
-                      <th>Milestone / Activity</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {facts.upcoming_milestones.map((item: MilestoneItem, index) => {
-                      const today = isSameDay(
-                        item.scheduled_start || item.date,
-                        report.as_of_date,
-                      );
-                      return (
-                        <tr key={`${item.name}-${index}`} className={today ? "milestone-today" : undefined}>
-                          <td className="mono">{weekDate(item.scheduled_start)}</td>
-                          <td className="mono">{weekDate(item.scheduled_finish || item.date)}</td>
-                          <td>{item.name}</td>
-                          <td>{today ? <span className="today-badge">Today</span> : null}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                <p>No upcoming planned tasks</p>
-              )}
-            </Section>
-          </div>
-
-          <Section n={6} title="Risks & Focus Areas">
-            <InsightCards
-              items={visibleInsights(report.risks)}
-              tone="risk"
-              empty="No items identified from the plan"
+        <div className="wsr-report">
+          {report.portfolio ? (
+            <WsrHero
+              name={report.portfolio.name}
+              asOf={report.as_of_date}
+              countdownDays={report.portfolio.countdown_days}
+              overallProgress={report.portfolio.overall_progress}
+              progressHint="All projects"
             />
-          </Section>
+          ) : null}
+          {boards.length > 1 ? (
+            <div className="wsr-project-tabs" role="tablist" aria-label="Projects">
+              {boards.map((board) => (
+                <button
+                  key={board.project_code}
+                  type="button"
+                  role="tab"
+                  aria-selected={board.project_code === activeBoard?.project_code}
+                  className={
+                    board.project_code === activeBoard?.project_code
+                      ? "wsr-project-tab is-active"
+                      : "wsr-project-tab"
+                  }
+                  onClick={() => setActiveCode(board.project_code)}
+                >
+                  {board.project_name || `Project ${board.project_code}`}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {boards.map((board) => (
+            <WsrProjectBoard
+              key={board.project_code}
+              board={board}
+              asOf={report.as_of_date}
+              active={board.project_code === activeBoard?.project_code}
+              sharedProgramMetrics={Boolean(report.portfolio)}
+            />
+          ))}
         </div>
       ) : busy ? null : (
-        <div className="wsr-empty">
-          <h3>No report yet</h3>
-          <p>Upload a Microsoft Project (.mpp) file, then generate WSR & Insights to open the dashboard.</p>
-        </div>
+        <ModuleLanding
+          tone="wsr"
+          steps={[
+            { icon: "upload_file", title: "Upload the MPP", copy: "Microsoft Project is the single source for dates, work, and Go-Live." },
+            { icon: "insights", title: "Generate the WSR", copy: "Plan facts, phase status, and this week’s work are assembled for the meeting." },
+            { icon: "picture_as_pdf", title: "Share the dashboard", copy: "Download to PDF when the report is ready for the weekly review." },
+          ]}
+        />
       )}
     </section>
   );

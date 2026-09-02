@@ -1,6 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { analyzeSow, downloadSowReport, retryJob } from "./api";
 import { FileUploader } from "./components/FileUploader";
+import { ModuleHero, ModuleLanding } from "./components/ModuleHero";
 import { ReportDownloadControl } from "./components/ReportDownloadControl";
 import { ShellMetaContext } from "./shellMeta";
 import type { AnalysisReport, FileRecord, ProcessingResponse, SowFinding } from "./types";
@@ -14,13 +15,13 @@ const ANALYZE_STAGES = [
   "Rendering findings",
 ];
 
-const CATEGORIES: { key: CategoryKey; label: string }[] = [
-  { key: "gray_areas", label: "Gray areas" },
-  { key: "risks", label: "Risks" },
-  { key: "missing_requirements", label: "Missing requirements" },
-  { key: "assumptions", label: "Assumptions" },
-  { key: "dependencies", label: "Dependencies" },
-  { key: "clarification_questions", label: "Clarification questions" },
+const CATEGORIES: { key: CategoryKey; label: string; icon: string }[] = [
+  { key: "gray_areas", label: "Gray areas", icon: "blur_on" },
+  { key: "risks", label: "Risks", icon: "warning" },
+  { key: "missing_requirements", label: "Missing requirements", icon: "playlist_add" },
+  { key: "assumptions", label: "Assumptions", icon: "psychology" },
+  { key: "dependencies", label: "Dependencies", icon: "account_tree" },
+  { key: "clarification_questions", label: "Clarification questions", icon: "quiz" },
 ];
 
 function asFinding(item: string | SowFinding, category: string): SowFinding {
@@ -150,32 +151,20 @@ export function SowAnalyzerView() {
   const selectedFindings = report ? report[selected] : [];
 
   return (
-    <section className="wsr-page">
-      <header className="wsr-page-head">
-        <h2>SOW Analyzer</h2>
-        <p>Upload a Statement of Work and review AI findings by category.</p>
-      </header>
+    <section className="wsr-page sow-page">
+      <ModuleHero
+        tone="sow"
+        icon="analytics"
+        kicker="SOW Analyzer"
+        title="Read the signed statement of work"
+        subtitle="Upload a PDF or Word SOW. Findings stay grouped by gray areas, risks, gaps, assumptions, dependencies, and questions."
+      />
 
       <div className="wsr-action-bar">
         {uploaded ? (
           <div className="file-chip">
             <span className="file-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M14 3v6h6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <span className="material-symbols-outlined">description</span>
             </span>
             <span>{uploaded.filename}</span>
             <button
@@ -196,6 +185,7 @@ export function SowAnalyzerView() {
           <FileUploader
             variant="button"
             disabled={busy}
+            label="Insert SOW (PDF or Word)"
             onUploaded={(file) => {
               setUploaded(file);
               setJob(null);
@@ -216,6 +206,9 @@ export function SowAnalyzerView() {
             disabled={!uploaded || busy}
             onClick={() => uploaded && void runAnalysis(uploaded.id)}
           >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              analytics
+            </span>
             Start analysis
           </button>
         </div>
@@ -263,7 +256,12 @@ export function SowAnalyzerView() {
                   className={selected === category.key ? "active" : ""}
                   onClick={() => setSelected(category.key)}
                 >
-                  <span>{category.label}</span>
+                  <span className="sow-cat-label">
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {category.icon}
+                    </span>
+                    {category.label}
+                  </span>
                   <strong>{counts[category.key] ?? 0}</strong>
                 </button>
               </li>
@@ -296,10 +294,14 @@ export function SowAnalyzerView() {
           </section>
         </div>
       ) : (
-        <div className="wsr-empty">
-          <h3>No analysis yet</h3>
-          <p>Upload a PDF or Word Statement of Work, then start analysis to review findings by category.</p>
-        </div>
+        <ModuleLanding
+          tone="sow"
+          steps={[
+            { icon: "upload_file", title: "Upload the SOW", copy: "PDF or Word. The original file stays the source of truth." },
+            { icon: "auto_awesome", title: "Start analysis", copy: "Text is extracted and findings are grouped into six categories." },
+            { icon: "fact_check", title: "Review and download", copy: "Open a category, then download the analysis report when you are ready." },
+          ]}
+        />
       )}
     </section>
   );

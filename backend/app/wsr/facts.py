@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from datetime import UTC, date, datetime, timedelta
 
 from app.models import (
@@ -8,6 +7,7 @@ from app.models import (
     NamedDateValue,
     PhaseStatus,
     PlanTaskData,
+    PortfolioSummary,
     ProgressItem,
     ProjectPlanData,
     WsrPlanFacts,
@@ -19,10 +19,11 @@ from app.wsr.detection import (
     sign_off_markers,
     upcoming_horizon_days,
 )
+from app.wsr.outline import is_phase_code, parse_outline_code
+
 _LIBRARY_PHASE_NAMES = frozenset(
     " ".join(str(phase["name"]).casefold().split()) for phase in PHASES
 )
-_PHASE_WBS = re.compile(r"^1\.\d+$")
 
 
 def parse_date(value: str | None) -> date | None:
@@ -53,6 +54,7 @@ def derive_wsr_facts(
     as_of: str,
     *,
     generated_at: str | None = None,
+    project_code: str | None = None,
 ) -> WsrPlanFacts:
     as_of_d = date.fromisoformat(as_of)
     now = datetime.now(UTC).replace(microsecond=0).isoformat()
@@ -65,15 +67,23 @@ def derive_wsr_facts(
     completed_count = None
     if planned_count is not None:
         completed_count = sum(1 for task in leaves if _complete(task))
-    phases = _phase_statuses(plan)
+    title = _project_title(plan, project_code)
+    phases = _phase_statuses(plan, project_name=title, project_code=project_code)
+    progress = _overall_progress(leaves)
+    if progress is None:
+        wanted = (project_code or "1").strip()
+        row = next((task for task in plan.tasks if (task.wbs or "").strip() == wanted), None)
+        if row is not None:
+            progress = float(row.percent_complete)
     return WsrPlanFacts(
-        project_name=_project_title(plan),
+        project_code=project_code,
+        project_name=title,
         project_owner=plan.owner,
         as_of_date=as_of,
         generated_at=stamp,
         project_health=health,
         countdown_days=countdown,
-        overall_progress=_overall_progress(leaves),
+        overall_progress=progress,
         planned_work_items=planned_count,
         completed_work_items=completed_count,
         capacity_utilization=_capacity(plan),
@@ -90,6 +100,27 @@ def derive_wsr_facts(
         delay_mapping=_delay_mapping(plan, as_of_d, phases, go_live),
         progress_to_date=_progress_to_date(leaves, as_of_d),
         upcoming_milestones=_next_planned_tasks(leaves, as_of_d),
+    )
+
+
+def derive_portfolio_summary(plan: ProjectPlanData, as_of: str) -> PortfolioSummary:
+    """Name, countdown, and overall % from WBS 0 using the same WSR rules as a project row."""
+
+    as_of_d = date.fromisoformat(as_of)
+    row = next((task for task in plan.tasks if (task.wbs or "").strip() == "0"), None)
+    leaves = [task for task in plan.tasks if not task.is_summary]
+    go_live = _planned_go_live(plan.tasks, as_of_d)
+    if go_live is None and row is not None:
+        go_live = _candidate_date(row)
+    progress = _overall_progress(leaves)
+    if progress is None and row is not None:
+        progress = float(row.percent_complete)
+    name = (row.name or "").strip() if row is not None else ""
+    return PortfolioSummary(
+        name=name or _project_title(plan, "0"),
+        countdown_days=None if go_live is None else (go_live - as_of_d).days,
+        overall_progress=progress,
+        planned_go_live_date=None if go_live is None else go_live.isoformat(),
     )
 
 
@@ -123,9 +154,10 @@ def _planned_go_live(tasks: list[PlanTaskData], as_of: date) -> date | None:
     return min(future) if future else max(dates)
 
 
-def _project_title(plan: ProjectPlanData) -> str | None:
+def _project_title(plan: ProjectPlanData, project_code: str | None = None) -> str | None:
+    wanted = (project_code or "1").strip()
     for task in plan.tasks:
-        if (task.wbs or "").strip() == "1":
+        if (task.wbs or "").strip() == wanted:
             name = (task.name or "").strip()
             if name:
                 return name
@@ -321,16 +353,19 @@ def _next_gate(tasks: list[PlanTaskData], as_of: date) -> NamedDateValue | None:
 def select_phase_summaries(
     tasks: list[PlanTaskData],
     project_name: str | None = None,
+    *,
+    project_code: str | None = None,
 ) -> list[PlanTaskData]:
-    """Select phase rows from WBS 1.x, then naming convention, then outline.
+    """Select phase rows from WBS N.x, then naming convention, then outline.
 
-    WBS ``1`` is the project name. Direct codes ``1.1``, ``1.2``, ``1.3``,
-    ``1.5`` (and any other ``1.<n>``) are phases. Subtasks such as ``1.1.1``
-    are not. Generated plans without those codes still use name/outline rules.
+    Outline ``0`` is the parent of all projects. A single integer (``1``, ``2``)
+    is a project name. Direct codes ``1.1`` / ``2.1`` are phases of that
+    project. Subtasks such as ``1.1.1`` are not. Generated plans without those
+    codes still use name/outline rules.
     """
     if not tasks:
         return []
-    wbs_phases = _wbs_phase_rows(tasks)
+    wbs_phases = _wbs_phase_rows(tasks, project_code=project_code)
     if wbs_phases:
         return wbs_phases
 
@@ -357,21 +392,19 @@ def select_phase_summaries(
     return roots
 
 
-def _wbs_phase_rows(tasks: list[PlanTaskData]) -> list[PlanTaskData]:
-    matched = [task for task in tasks if _is_phase_wbs(task.wbs)]
+def _wbs_phase_rows(
+    tasks: list[PlanTaskData],
+    *,
+    project_code: str | None = None,
+) -> list[PlanTaskData]:
+    matched = [task for task in tasks if is_phase_code(task.wbs, project_code)]
     matched.sort(key=lambda task: (_wbs_index(task.wbs), task.id))
     return matched
 
 
-def _is_phase_wbs(value: str | None) -> bool:
-    return bool(_PHASE_WBS.match((value or "").strip()))
-
-
 def _wbs_index(value: str | None) -> int:
-    try:
-        return int((value or "").strip().split(".")[1])
-    except (IndexError, ValueError):
-        return 0
+    parts = parse_outline_code(value) or (0,)
+    return parts[1] if len(parts) >= 2 else 0
 
 
 def _named_phase_rows(
@@ -465,8 +498,17 @@ def _descendants(tasks: list[PlanTaskData], parent: PlanTaskData) -> list[PlanTa
     return children
 
 
-def _phase_statuses(plan: ProjectPlanData) -> list[PhaseStatus]:
-    rows = select_phase_summaries(plan.tasks, project_name=plan.name)
+def _phase_statuses(
+    plan: ProjectPlanData,
+    *,
+    project_name: str | None = None,
+    project_code: str | None = None,
+) -> list[PhaseStatus]:
+    rows = select_phase_summaries(
+        plan.tasks,
+        project_name=project_name or plan.name,
+        project_code=project_code,
+    )
     if rows:
         return [_phase_from_task(plan.tasks, row) for row in rows]
     return [_phase_status(phase) for phase in plan.phases]

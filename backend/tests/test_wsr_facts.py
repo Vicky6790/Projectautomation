@@ -1,7 +1,7 @@
 from datetime import date
 
 from app.models import PlanAssignmentData, PlanPhaseData, PlanResourceData, PlanTaskData, ProjectPlanData
-from app.wsr.facts import derive_wsr_facts
+from app.wsr.facts import derive_portfolio_summary, derive_wsr_facts
 
 
 def _plan(
@@ -900,4 +900,98 @@ def test_project_name_comes_from_wbs_one() -> None:
     assert facts.project_name == "Core Banking Portal"
     assert facts.countdown_days == (date(2026, 9, 11) - date(2026, 8, 22)).days
     assert facts.planned_go_live_date == "2026-09-11"
+
+
+def test_second_project_uses_integer_wbs_and_single_decimal_phases() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Payments Hub", wbs="2", is_summary=True),
+                PlanTaskData(
+                    id=2,
+                    name="API Phase",
+                    wbs="2.1",
+                    is_summary=True,
+                    percent_complete=40,
+                    scheduled_start="2026-07-01",
+                    scheduled_finish="2026-08-20",
+                ),
+                PlanTaskData(id=3, name="Build API", wbs="2.1.1", percent_complete=40),
+                PlanTaskData(
+                    id=4,
+                    name="Go Live",
+                    wbs="2.2",
+                    is_milestone=True,
+                    scheduled_finish="2026-10-30",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+        project_code="2",
+    )
+    assert facts.project_code == "2"
+    assert facts.project_name == "Payments Hub"
+    assert [phase.wbs for phase in facts.phase_statuses] == ["2.1", "2.2"]
+    assert [phase.name for phase in facts.phase_statuses] == ["API Phase", "Go Live"]
+    assert facts.planned_go_live_date == "2026-10-30"
+
+
+def test_portfolio_summary_uses_wbs_zero_name_and_shared_go_live() -> None:
+    summary = derive_portfolio_summary(
+        _plan(
+            [
+                PlanTaskData(id=1, name="All Accounts", wbs="0", is_summary=True, percent_complete=42),
+                PlanTaskData(id=2, name="Core Banking", wbs="1", is_summary=True),
+                PlanTaskData(
+                    id=3,
+                    name="Build portal",
+                    wbs="1.1.1",
+                    planned_work_hours=100,
+                    actual_work_hours=40,
+                ),
+                PlanTaskData(
+                    id=4,
+                    name="Go Live",
+                    wbs="1.2",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-11",
+                ),
+                PlanTaskData(id=5, name="Payments Hub", wbs="2", is_summary=True),
+                PlanTaskData(
+                    id=6,
+                    name="Build API",
+                    wbs="2.1.1",
+                    planned_work_hours=100,
+                    actual_work_hours=20,
+                ),
+                PlanTaskData(
+                    id=7,
+                    name="Go Live",
+                    wbs="2.2",
+                    is_milestone=True,
+                    scheduled_finish="2026-10-30",
+                ),
+            ]
+        ),
+        "2026-08-22",
+    )
+    assert summary.name == "All Accounts"
+    assert summary.planned_go_live_date == "2026-09-11"
+    assert summary.countdown_days == (date(2026, 9, 11) - date(2026, 8, 22)).days
+    assert summary.overall_progress == 30.0
+
+
+def test_portfolio_summary_falls_back_to_wbs_zero_percent_when_work_missing() -> None:
+    summary = derive_portfolio_summary(
+        _plan(
+            [
+                PlanTaskData(id=1, name="All Accounts", wbs="0", is_summary=True, percent_complete=42),
+                PlanTaskData(id=2, name="Core Banking", wbs="1", is_summary=True),
+                PlanTaskData(id=3, name="Build", wbs="1.1.1"),
+            ]
+        ),
+        "2026-08-22",
+    )
+    assert summary.overall_progress == 42.0
 

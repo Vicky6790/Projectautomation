@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </radialGradient>
+    <linearGradient id="pulse" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.3"/>
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+  <rect fill="url(#bg)" width="1024" height="1024" rx="200"/>
+  <g transform="translate(0, 40)">
+    <path d="M 220 200 L 520 200 A 180 180 0 0 1 700 380 A 180 180 0 0 1 520 560 L 360 560 L 360 820 L 220 820 Z" fill="none" stroke="#38bdf8" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" opacity="0.15"/>
+    <path d="M 220 200 L 520 200 A 180 180 0 0 1 700 380 A 180 180 0 0 1 520 560 L 360 560 L 360 820 L 220 820 Z" fill="none" stroke="#f8fafc" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="520" cy="380" r="140" fill="#0f172a" stroke="#1e293b" stroke-width="8"/>
+    <path d="M 390 380 L 440 380 L 470 320 L 510 460 L 550 300 L 590 420 L 620 380 L 670 380" fill="none" stroke="url(#pulse)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
