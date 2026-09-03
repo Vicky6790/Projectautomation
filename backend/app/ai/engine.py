@@ -36,6 +36,7 @@ def analyze_sow(sow_text: str) -> AnalysisReport:
     if settings.ai_stub:
         snippet = sow_text.strip()[:80] or "uploaded SOW"
         return AnalysisReport(
+            summary="Stub analysis of the uploaded SOW. Findings stay limited to extractable text.",
             gray_areas=[
                 {
                     "category": "gray_areas",
@@ -53,9 +54,10 @@ def analyze_sow(sow_text: str) -> AnalysisReport:
         )
     parsed = _client.complete_json(
         system_prompt=(
-            "You are a PMO analyst. Return JSON only with keys gray_areas, risks, "
+            "You are a PMO analyst. Return JSON only with keys summary, gray_areas, risks, "
             "missing_requirements, assumptions, dependencies, clarification_questions. "
-            "Each value is an array of objects with priority (high, medium, or low), "
+            "summary is 1-2 sentences from the SOW, or an empty string if insufficient. "
+            "Each other value is an array of objects with priority (high, medium, or low), "
             "title, description, and recommendation. Do not invent facts. " + SOW_CRITERIA
         ),
         user_prompt=sow_text,

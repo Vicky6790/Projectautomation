@@ -38,10 +38,10 @@ export function HomeDashboardView() {
     <section className="home-dash">
       <header className="home-hero">
         <p className="home-kicker">Dashboard</p>
-        <h1>Delivery intelligence from the signed SOW to Go-Live</h1>
+        <h1>Delivery Intelligence from the Signed SOW to Go-Live</h1>
         <p className="home-lead">
-          Analyze the contract, publish the weekly status, and map delay from the live project plan.
-          Facts stay tied to the MPP — missing values stay Unavailable.
+          Review the signed SOW, publish weekly status, and map the tasks that actually move Go-Live.
+          Every fact comes from the live MPP — missing values stay Unavailable.
         </p>
       </header>
 

@@ -11,12 +11,21 @@ import { delaySheetDate, unavailable } from "./wsrFormat";
 
 type SortKey = "taskName" | "taskType" | "delayDays" | "owner";
 
+const BUILD_STAGES = [
+  "Reading the plan",
+  "Tracing Go-Live predecessors",
+  "Building the Delay Mapping sheet",
+];
+
 export function DelayMappingView() {
   const setPageMeta = useContext(ShellMetaContext);
   const [mppFile, setMppFile] = useState<FileRecord | null>(null);
   const [result, setResult] = useState<CompareMppResult>(emptyComparison());
+  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [compareError, setCompareError] = useState<string | null>(null);
+  const [stage, setStage] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const [message, setMessage] = useState("Upload a Microsoft Project (.mpp) file, then build Delay Mapping.");
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("taskName");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("asc");
@@ -28,37 +37,45 @@ export function DelayMappingView() {
   }, [mppFile?.filename, setPageMeta]);
 
   useEffect(() => {
-    if (!mppFile) {
-      setResult(emptyComparison());
-      setLoading(false);
-      setCompareError(null);
+    if (!loading) {
+      setStage(0);
       return;
     }
-    let cancelled = false;
+    const timer = window.setInterval(() => {
+      setStage((current) => Math.min(current + 1, BUILD_STAGES.length - 1));
+    }, 900);
+    return () => window.clearInterval(timer);
+  }, [loading]);
+
+  function clearPlan() {
+    setMppFile(null);
+    setResult(emptyComparison());
+    setReady(false);
+    setFailed(false);
+    setLoading(false);
+    setDrawer(null);
+    setMessage("Upload a Microsoft Project (.mpp) file, then build Delay Mapping.");
+  }
+
+  async function runCompare(handle: string) {
     setLoading(true);
-    compareDelayMapping(mppFile.id)
-      .then((mapping) => {
-        if (cancelled) {
-          return;
-        }
-        setResult(fromWsrDelayMapping(mapping));
-        setCompareError(null);
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setResult(emptyComparison());
-          setCompareError(error instanceof Error ? error.message : "Could not build Delay Mapping.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [mppFile?.id]);
+    setFailed(false);
+    setReady(false);
+    setMessage("Reading the plan, tracing Go-Live predecessors, and building the sheet…");
+    try {
+      const mapping = await compareDelayMapping(handle);
+      setResult(fromWsrDelayMapping(mapping));
+      setReady(true);
+      setMessage("Delay Mapping ready.");
+    } catch (error: unknown) {
+      setResult(emptyComparison());
+      setReady(false);
+      setFailed(true);
+      setMessage(error instanceof Error ? error.message : "Could not build Delay Mapping.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -97,87 +114,119 @@ export function DelayMappingView() {
     setSortDir(key === "delayDays" ? "desc" : "asc");
   }
 
-  const canExport = Boolean(mppFile);
+  const canExport = ready && !loading;
   const asOfLabel = result.summary.asOf ? delaySheetDate(result.summary.asOf) : "Unavailable";
 
-  if (!mppFile) {
-    return (
-      <section className="dms-page">
-        <ModuleHero
-          tone="delay"
-          icon="table_view"
-          kicker="Delay Mapping"
-          title="The tasks that actually move Go-Live"
-          subtitle="Only Delay and Additional tasks on the predecessor path are listed. Total Count matches Actual Shift In Working Days."
-        />
-        <ModuleLanding
-          tone="delay"
-          steps={[
-            { icon: "label", title: "Mark the plan", copy: "Set Delay And Or Additional to Delay or Additional." },
-            { icon: "account_tree", title: "Read the chain", copy: "Predecessors, Baseline Finish, Finish, and Duration decide who shifts Go-Live." },
-            { icon: "flag", title: "Match the shift", copy: "The sheet lists the driving tasks so Total Count equals the Go-Live shift." },
-          ]}
-        >
-          <article className="dms-landing-upload">
-            <p className="mod-kicker">Project plan</p>
-            <h2>Insert Microsoft Project (.mpp)</h2>
-            <p>The summary and task table stay empty until a plan is uploaded.</p>
-            <MppSlot
-              title="MPP"
-              hint="Microsoft Project plan"
-              file={mppFile}
-              onUploaded={setMppFile}
-              onClear={() => setMppFile(null)}
-              onError={setCompareError}
-            />
-            {compareError ? <p className="error">{compareError}</p> : null}
-          </article>
-        </ModuleLanding>
-      </section>
-    );
-  }
-
   return (
-    <section className="dms-page">
+    <section className="wsr-page dms-page">
       <ModuleHero
         tone="delay"
         icon="table_view"
         kicker="Delay Mapping"
-        title="Delay Mapping Sheet"
-        subtitle="Delay and Additional tasks that shift Go-Live, from Duration, Baseline Finish, Finish, and Predecessors"
-        actions={
-          <>
+        title="The tasks that actually move Go-Live"
+        subtitle="Only Delay and Additional tasks on the predecessor path are listed. Total Count matches Actual Shift In Working Days."
+      />
+
+      <div className="wsr-upload-card dms-no-print">
+        <div className="wsr-upload-inner">
+          {mppFile ? (
+            <div className="file-chip">
+              <span className="wsr-upload-icon" aria-hidden="true">
+                <span className="material-symbols-outlined">description</span>
+              </span>
+              <div>
+                <p className="wsr-upload-title">{mppFile.filename}</p>
+                <p className="wsr-upload-hint">Microsoft Project (.mpp)</p>
+              </div>
+              <button
+                type="button"
+                className="chip-clear"
+                aria-label="Remove file"
+                disabled={loading}
+                onClick={clearPlan}
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <FileUploader
+              variant="card"
+              disabled={loading}
+              accept=".mpp,application/vnd.ms-project"
+              label="Upload Project Plan"
+              hint="Microsoft Project (.mpp)"
+              endpoint="/api/v1/wsr/uploads"
+              onUploaded={(file) => {
+                setMppFile(file);
+                setResult(emptyComparison());
+                setReady(false);
+                setFailed(false);
+                setMessage("File ready. Build Delay Mapping to list the tasks that shift Go-Live.");
+              }}
+              onError={setMessage}
+            />
+          )}
+          <div className="wsr-action-buttons">
             <button
               type="button"
               className="btn btn-outline"
               disabled={!canExport}
               onClick={() => exportDelayMappingExcel(result, rows)}
             >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                download
+              </span>
               Export Excel
             </button>
-            <button type="button" className="btn btn-outline" disabled={!canExport} onClick={() => printDelayMappingSheet()}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              disabled={!canExport}
+              onClick={() => printDelayMappingSheet()}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                picture_as_pdf
+              </span>
               Export PDF
             </button>
-            <button type="button" className="btn btn-primary" disabled={!canExport} onClick={() => printDelayMappingSheet()}>
-              Print
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!mppFile || loading}
+              onClick={() => mppFile && void runCompare(mppFile.id)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                table_view
+              </span>
+              Build Delay Mapping
             </button>
-          </>
-        }
-      />
-
-      <div className="dms-uploads dms-no-print">
-        <MppSlot
-          title="MPP"
-          hint="Microsoft Project plan"
-          file={mppFile}
-          onUploaded={setMppFile}
-          onClear={() => setMppFile(null)}
-          onError={setCompareError}
-        />
+          </div>
+        </div>
       </div>
-      {compareError ? <p className="error">{compareError}</p> : null}
-      {loading ? <p className="dms-loading dms-no-print">Building Delay Mapping…</p> : null}
 
+      <p className="wsr-status-msg dms-no-print">{message}</p>
+      {loading ? (
+        <ol className="wsr-stages dms-no-print">
+          {BUILD_STAGES.map((label, index) => (
+            <li key={label} className={index <= stage ? "active" : ""}>
+              {label}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {failed ? (
+        <button
+          type="button"
+          className="btn btn-outline dms-no-print"
+          onClick={() => mppFile && void runCompare(mppFile.id)}
+          disabled={loading || !mppFile}
+        >
+          Retry mapping
+        </button>
+      ) : null}
+
+      {ready ? (
+        <>
       <table className="dms-summary">
         <tbody>
           <SummaryRow label="Baselined Go-Live Date" value={delaySheetDate(result.summary.baselineGoLive)} />
@@ -283,6 +332,17 @@ export function DelayMappingView() {
           </aside>
         </div>
       ) : null}
+        </>
+      ) : (
+        <ModuleLanding
+          tone="delay"
+          steps={[
+            { icon: "upload_file", title: "Upload the plan", copy: "Microsoft Project (.mpp). The live file stays the source of truth." },
+            { icon: "account_tree", title: "Build Delay Mapping", copy: "Predecessors, Baseline Finish, Finish, and Duration decide who shifts Go-Live." },
+            { icon: "flag", title: "Review and export", copy: "Total Count matches Actual Shift In Working Days. Export Excel or PDF when you are ready." },
+          ]}
+        />
+      )}
     </section>
   );
 }
@@ -325,52 +385,6 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <th>{label}</th>
       <td>{value}</td>
     </tr>
-  );
-}
-
-function MppSlot({
-  title,
-  hint,
-  file,
-  onUploaded,
-  onClear,
-  onError,
-}: {
-  title: string;
-  hint: string;
-  file: FileRecord | null;
-  onUploaded: (file: FileRecord) => void;
-  onClear: () => void;
-  onError: (message: string) => void;
-}) {
-  return (
-    <article className="dms-upload-slot">
-      <p className="dms-kicker">{title}</p>
-      {file ? (
-        <div className="dms-file">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            draft
-          </span>
-          <div>
-            <strong>{file.filename}</strong>
-            <em>{hint}</em>
-          </div>
-          <button type="button" className="chip-clear" aria-label={`Remove ${title}`} onClick={onClear}>
-            ×
-          </button>
-        </div>
-      ) : (
-        <FileUploader
-          variant="card"
-          accept=".mpp,application/vnd.ms-project"
-          label={`Insert ${title}`}
-          hint="Microsoft Project (.mpp)"
-          endpoint="/api/v1/wsr/uploads"
-          onUploaded={onUploaded}
-          onError={onError}
-        />
-      )}
-    </article>
   );
 }
 

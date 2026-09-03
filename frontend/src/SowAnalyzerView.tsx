@@ -2,7 +2,6 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { analyzeSow, downloadSowReport, retryJob } from "./api";
 import { FileUploader } from "./components/FileUploader";
 import { ModuleHero, ModuleLanding } from "./components/ModuleHero";
-import { ReportDownloadControl } from "./components/ReportDownloadControl";
 import { ShellMetaContext } from "./shellMeta";
 import type { AnalysisReport, FileRecord, ProcessingResponse, SowFinding } from "./types";
 
@@ -160,57 +159,71 @@ export function SowAnalyzerView() {
         subtitle="Upload a PDF or Word SOW. Findings stay grouped by gray areas, risks, gaps, assumptions, dependencies, and questions."
       />
 
-      <div className="wsr-action-bar">
-        {uploaded ? (
-          <div className="file-chip">
-            <span className="file-icon" aria-hidden="true">
-              <span className="material-symbols-outlined">description</span>
-            </span>
-            <span>{uploaded.filename}</span>
+      <div className="wsr-upload-card">
+        <div className="wsr-upload-inner">
+          {uploaded ? (
+            <div className="file-chip">
+              <span className="wsr-upload-icon" aria-hidden="true">
+                <span className="material-symbols-outlined">description</span>
+              </span>
+              <div>
+                <p className="wsr-upload-title">{uploaded.filename}</p>
+                <p className="wsr-upload-hint">PDF or Word (.pdf, .docx)</p>
+              </div>
+              <button
+                type="button"
+                className="chip-clear"
+                aria-label="Remove file"
+                disabled={busy}
+                onClick={() => {
+                  setUploaded(null);
+                  setJob(null);
+                  setMessage("Upload a Statement of Work (PDF or Word), then start analysis.");
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <FileUploader
+              variant="card"
+              disabled={busy}
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              label="Upload Statement of Work"
+              hint="PDF or Word (.pdf, .docx)"
+              endpoint="/api/v1/sow/uploads"
+              onUploaded={(file) => {
+                setUploaded(file);
+                setJob(null);
+                setMessage("File ready. Start analysis to review findings.");
+              }}
+              onError={setMessage}
+            />
+          )}
+          <div className="wsr-action-buttons">
             <button
               type="button"
-              className="chip-clear"
-              aria-label="Remove file"
-              disabled={busy}
-              onClick={() => {
-                setUploaded(null);
-                setJob(null);
-                setMessage("Upload a Statement of Work (PDF or Word), then start analysis.");
-              }}
+              className="btn btn-outline"
+              disabled={job?.status !== "succeeded" || busy}
+              onClick={() => void download()}
             >
-              ×
+              <span className="material-symbols-outlined" aria-hidden="true">
+                download
+              </span>
+              Download analysis report
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!uploaded || busy}
+              onClick={() => uploaded && void runAnalysis(uploaded.id)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                analytics
+              </span>
+              Start analysis
             </button>
           </div>
-        ) : (
-          <FileUploader
-            variant="button"
-            disabled={busy}
-            label="Insert SOW (PDF or Word)"
-            onUploaded={(file) => {
-              setUploaded(file);
-              setJob(null);
-              setMessage("File ready. Start analysis to review findings.");
-            }}
-            onError={setMessage}
-          />
-        )}
-        <div className="wsr-action-buttons">
-          <ReportDownloadControl
-            enabled={job?.status === "succeeded" && !busy}
-            label="Download analysis report"
-            onDownload={() => void download()}
-          />
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!uploaded || busy}
-            onClick={() => uploaded && void runAnalysis(uploaded.id)}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              analytics
-            </span>
-            Start analysis
-          </button>
         </div>
       </div>
 

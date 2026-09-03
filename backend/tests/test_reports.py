@@ -96,6 +96,37 @@ def test_sow_report_lists_every_category() -> None:
     assert text.count("Empty") == 5
 
 
+def test_sow_report_includes_structured_finding() -> None:
+    filename, media, body = export_report(
+        "sow",
+        _job(
+            "sow",
+            "succeeded",
+            {
+                "summary": "The SOW leaves acceptance undefined.",
+                "processed_pages": 2,
+                "risks": [
+                    {
+                        "category": "risks",
+                        "priority": "high",
+                        "title": "No delivery date",
+                        "description": "The vendor shall deliver in a reasonable time.",
+                        "recommendation": "Add a dated go-live and acceptance criteria.",
+                    }
+                ],
+            },
+        ),
+    )
+    text = body.decode()
+    assert filename.endswith(".md")
+    assert media.startswith("text/markdown")
+    assert "Summary: The SOW leaves acceptance undefined." in text
+    assert "Processed pages: 2" in text
+    assert "High" in text
+    assert "No delivery date" in text
+    assert "Recommendation: Add a dated go-live and acceptance criteria." in text
+
+
 def test_wsr_report_matches_dashboard_sections() -> None:
     filename, media, body = export_report(
         "wsr",

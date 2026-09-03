@@ -129,7 +129,7 @@ export default function App() {
       <div className={navHidden ? "shell nav-hidden" : "shell"}>
         <aside className="sidebar" aria-hidden={navHidden} inert={navHidden}>
           <Link to="/" className="brand" aria-label="ProjectPulse home">
-            <ProjectPulseLogo variant="mark" className="brand-logo" decorative />
+            <ProjectPulseLogo className="brand-logo" decorative />
             <p className="brand-slogan">Project Intelligence Platform</p>
           </Link>
           <nav>

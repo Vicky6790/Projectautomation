@@ -21,10 +21,10 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-3 | AI analysis service | `in_review` | WO-28 summary-only outbound; Azure api-key; schema parse retryable |
 | WO-4 | MPP processing | `blocked` | Native write waits on WO-38; WSR reader is WO-40 |
 | WO-40 | WSR MPP reader projection | `in_review` | Identity, dates, Gate alias, assignments; absent values stay unavailable |
-| WO-7 | SOW Analyzer API | `in_review` | Structured findings (priority, title, description, recommendation); six categories always present |
-| WO-11 | SOW Analyzer UI | `in_review` | Upload, start analysis, summary counts, finding cards, report download |
+| WO-7 | SOW Analyzer API | `in_review` | Structured findings; keep AI summary when present; six categories always present |
+| WO-11 | SOW Analyzer UI | `in_review` | WSR-matching upload card, start analysis, summary counts, finding cards, report download |
 | WO-26 | Compose deployment | `in_review` | Local Compose + on-prem overlay; API not published on host |
-| WO-16 | SOW E2E via Compose | `in_review` | Waits on WO-18; proxy path: upload → analyze → report |
+| WO-16 | SOW E2E via Compose | `in_review` | Unblocked after WSR in product; proxy path: upload → analyze → report |
 | WO-23 | Template library content | `completed` | Digital delivery phases, sets, CMS prereq, FS rules |
 | WO-20 | Template library expansion | `in_review` | Deterministic WBS expand; GET /api/v1/plan/library |
 | WO-22 | Phase sequence validation | `in_review` | Empty config, set counts, sequence conflicts |
@@ -59,7 +59,7 @@ Factory clarification 2026-08-25: ship **WSR & Insights** end-to-end before SOW,
 | 5 | WO-18 | Compose E2E (WSR path only) |
 | Shared | WO-1, WO-2, WO-3, WO-6, WO-26, WO-32 | Already implemented enough to run WO-40 |
 
-WO-38 native MPP write does **not** block this slice. WO-39 and WO-41 are cancelled for V1. SOW/Plan/Retro E2E (WO-16, WO-17, WO-19) are blocked by WO-18 until WSR is accepted.
+WO-38 native MPP write does **not** block this slice. WO-39 and WO-41 are cancelled for V1. SOW E2E (WO-16) is unblocked now that WSR is in the product. Plan/Retro E2E (WO-17, WO-19) still wait on native MPP / WO-18 acceptance.
 
 ## Remaining environment check
 

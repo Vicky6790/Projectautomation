@@ -44,7 +44,8 @@ def run_sow_analysis(handle: str, *, force: bool = False) -> ProcessingResponse:
                     item["category"] = key
         total = sum(len(payload[key]) for key in _CATEGORIES)
         payload["processed_pages"] = _processed_pages(record, blob)
-        payload["summary"] = f"{total} findings across six categories."
+        if not str(payload.get("summary") or "").strip():
+            payload["summary"] = f"{total} findings across six categories."
         AnalysisReport.model_validate(payload)
         return store.set_status(handle, "succeeded", result=payload)
     except AppError as exc:

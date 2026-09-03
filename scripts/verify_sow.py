@@ -84,6 +84,7 @@ def main() -> int:
         (
             "Start analysis",
             "Download analysis report",
+            "Upload Statement of Work",
             "Analysis summary",
             "No findings were identified.",
             "AI recommendation",
@@ -128,7 +129,7 @@ def main() -> int:
     if result.get("processed_pages") is None:
         print("processed_pages missing")
         return 1
-    if "findings across six categories" not in (result.get("summary") or ""):
+    if not (result.get("summary") or "").strip():
         print("summary missing")
         return 1
     report = client.get(f"/api/v1/sow/requests/{handle}/report")

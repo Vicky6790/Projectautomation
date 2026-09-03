@@ -63,6 +63,30 @@ def test_analyze_returns_six_categories(client: TestClient, monkeypatch) -> None
     assert status.json()["status"] == "succeeded"
 
 
+def test_analyze_keeps_model_summary(client: TestClient, monkeypatch) -> None:
+    handle = _upload_sow(client)
+    monkeypatch.setattr(
+        "app.orchestration.sow.analyze_sow",
+        lambda _text: AnalysisReport(
+            summary="Acceptance criteria are missing from the signed SOW.",
+            risks=[
+                {
+                    "category": "risks",
+                    "priority": "high",
+                    "title": "Schedule risk",
+                    "description": "No delivery date is stated.",
+                    "recommendation": "Add a dated milestone.",
+                }
+            ],
+        ),
+    )
+    response = client.post(f"/api/v1/sow/requests/{handle}/analyze")
+    assert response.status_code == 200, response.text
+    result = response.json()["result"]
+    assert result["summary"] == "Acceptance criteria are missing from the signed SOW."
+    assert result["risks"][0]["priority"] == "high"
+
+
 def test_analyze_retry_without_reupload(client: TestClient, monkeypatch) -> None:
     handle = _upload_sow(client)
     calls = {"n": 0}
