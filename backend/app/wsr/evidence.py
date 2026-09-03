@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from app.models import AiDerivedItem, EvidenceReference, PlanTaskData, ProjectPlanData
+from app.wsr.facts import _complete
 
 AI_SECTIONS = (
     "risks",
@@ -71,13 +72,29 @@ def items_from_situation_risks(
         evidence_lines = [str(line) for line in (risk.get("evidence") or []) if line]
         if not names:
             names = _names_mentioned(plan, evidence_lines)
+        names = _incomplete_task_names(plan, names)
+        if not names:
+            continue
         title = str(risk.get("title") or "Project risk").strip()
-        detail = " ".join(evidence_lines[:2]).strip()
-        content = f"{title}: {detail}" if detail else title
+        detail = evidence_lines[0] if evidence_lines else ""
+        mitigation = str(risk.get("recommendedMitigation") or "").strip()
+        parts = [part for part in (detail, f"Mitigation: {mitigation}" if mitigation else "") if part]
+        content = f"{title}: {' '.join(parts)}" if parts else title
         item = resolve_item(plan, "risks", content, names)
         if item is not None:
             items.append(item)
     return items
+
+
+def _incomplete_task_names(plan: ProjectPlanData, names: list[str]) -> list[str]:
+    lookup = {task.name.lower(): task for task in plan.tasks if task.name}
+    kept: list[str] = []
+    for name in names:
+        task = lookup.get(name.lower().strip())
+        if task is None or task.is_summary or _complete(task):
+            continue
+        kept.append(task.name)
+    return kept
 
 
 def _names_mentioned(plan: ProjectPlanData, lines: list[str]) -> list[str]:
@@ -101,7 +118,7 @@ def resolve_item(
     evidence: list[EvidenceReference] = []
     for name in names:
         task = lookup.get(name.lower().strip())
-        if task is None:
+        if task is None or task.is_summary or _complete(task):
             continue
         evidence.append(reference_for(task))
     if not evidence or not content.strip():

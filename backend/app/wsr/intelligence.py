@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from app.models import PlanTaskData, ProjectPlanData, WsrPlanFacts
+from app.wsr.delay_engine import _driving_path_ids, _successor_map
 from app.wsr.detection import go_live_markers, sign_off_markers, upcoming_horizon_days
 from app.wsr.facts import (
     _candidate_date,
@@ -14,6 +15,7 @@ from app.wsr.facts import (
     _contains,
     _descendants,
     _due_date,
+    _normalized_percent,
     parse_date,
     select_phase_summaries,
     work_based_progress,
@@ -25,6 +27,8 @@ _HEALTH_HYPHEN = {
     "off_track": "off-track",
     "unavailable": "unavailable",
 }
+
+_SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 
 def build_executive_summary_input(
@@ -180,7 +184,7 @@ def _milestones(
                     "name": task.name,
                     "plannedDate": planned.isoformat(),
                     "daysOverdue": (as_of - planned).days,
-                    "percentComplete": task.percent_complete,
+                    "percentComplete": _normalized_percent(task.percent_complete),
                 }
             )
         elif planned <= horizon:
@@ -190,7 +194,7 @@ def _milestones(
                     "name": task.name,
                     "plannedDate": planned.isoformat(),
                     "daysToMilestone": (planned - as_of).days,
-                    "percentComplete": task.percent_complete,
+                    "percentComplete": _normalized_percent(task.percent_complete),
                 }
             )
     completed.sort(key=lambda item: item.get("actualDate") or "", reverse=True)
@@ -217,7 +221,7 @@ def _completion_evidence(task: PlanTaskData) -> str:
     parts: list[str] = []
     if task.actual_finish:
         parts.append(f"Actual finish {task.actual_finish[:10]}")
-    if task.percent_complete >= 100:
+    if _normalized_percent(task.percent_complete) >= 99.5:
         parts.append("Percent complete 100")
     if (task.gate or "").strip():
         parts.append(f"Gate field: {task.gate.strip()}")
@@ -232,32 +236,39 @@ def _dependencies(
     go_live: PlanTaskData | None,
 ) -> list[dict[str, Any]]:
     by_id = {task.id: task for task in tasks}
-    successors: dict[int, list[int]] = defaultdict(list)
-    for task in tasks:
-        for pred in task.predecessor_ids:
-            successors[pred].append(task.id)
+    successors = _successor_map(tasks)
     go_live_id = None if go_live is None else go_live.id
     rows: list[dict[str, Any]] = []
     for task in tasks:
-        if task.is_summary or not task.predecessor_ids:
+        if task.is_summary or not task.predecessor_ids or _complete(task):
             continue
         for pred_id in task.predecessor_ids:
             predecessor = by_id.get(pred_id)
-            if predecessor is None:
+            if predecessor is None or predecessor.is_summary or _complete(predecessor):
                 continue
             delayed = _is_delayed(predecessor, as_of)
+            if not delayed:
+                continue
+            on_path = _reaches(successors, predecessor.id, go_live_id)
             rows.append(
                 {
                     "predecessorId": str(predecessor.id),
                     "predecessorName": predecessor.name,
                     "successorId": str(task.id),
                     "successorName": task.name,
-                    "delayed": delayed,
-                    "goLiveImpact": _reaches(successors, predecessor.id, go_live_id),
+                    "delayed": True,
+                    "critical": _is_critical(predecessor) or _is_critical(task),
+                    "goLiveImpact": on_path,
                 }
             )
-    delayed_first = sorted(rows, key=lambda item: (not item["delayed"], item["predecessorName"]))
-    return delayed_first[:40]
+    return sorted(
+        rows,
+        key=lambda item: (
+            not item["goLiveImpact"],
+            not item["critical"],
+            item["predecessorName"],
+        ),
+    )[:40]
 
 
 def _is_delayed(task: PlanTaskData, as_of: date) -> bool:
@@ -265,6 +276,12 @@ def _is_delayed(task: PlanTaskData, as_of: date) -> bool:
         return False
     due = _due_date(task) or _candidate_date(task)
     return due is not None and due < as_of
+
+
+def _is_critical(task: PlanTaskData) -> bool:
+    if task.critical is True:
+        return True
+    return task.total_slack_days is not None and task.total_slack_days <= 0
 
 
 def _reaches(successors: dict[int, list[int]], start: int, target: int | None) -> bool:
@@ -296,148 +313,244 @@ def _risks(
     progress: dict[str, float | str | None],
     facts: WsrPlanFacts,
 ) -> list[dict[str, Any]]:
+    _ = phases
+    by_id = {task.id: task for task in plan.tasks}
     leaves = [task for task in plan.tasks if not task.is_summary]
+    successors = _successor_map(plan.tasks)
+    driving_ids = _driving_path_ids(go_live, plan.tasks, successors) if go_live else set()
     risks: list[dict[str, Any]] = []
-    overdue = [
-        task
-        for task in leaves
-        if not _complete(task) and (_due_date(task) or date.max) < as_of
-    ]
-    if overdue:
-        names = [task.name for task in overdue[:6]]
-        extra = len(overdue) - len(names)
-        evidence = [f"{task.name} is incomplete with finish before {as_of.isoformat()}" for task in overdue[:5]]
-        if extra > 0:
-            evidence.append(f"{extra} additional incomplete items finished before the as-of date")
-        phase = _affected_phase(overdue[0], phases, plan.tasks)
-        risks.append(
-            {
-                "id": "r1-overdue",
-                "title": "Overdue work",
-                "severity": "high" if len(overdue) > 2 else "medium",
-                "evidence": evidence,
-                "affectedTasks": names,
-                "affectedPhase": phase,
-                "goLiveImpact": _tasks_affect_go_live(overdue, go_live, plan.tasks),
-                "recommendedMitigation": "Recover overdue incomplete work before successor activities proceed.",
-            }
-        )
-    upcoming_ms = milestones.get("upcoming") or []
-    insufficient = [
-        item
-        for item in upcoming_ms
-        if (item.get("percentComplete") or 0) < 50
-    ]
-    if upcoming_ms:
-        evidence = [
-            f"{item['name']} is due in {item.get('daysToMilestone')} day(s) and is {item.get('percentComplete') or 0}% complete"
-            for item in upcoming_ms[:5]
-        ]
-        risks.append(
-            {
-                "id": "r2-upcoming",
-                "title": "Upcoming delivery window",
-                "severity": "high" if insufficient else "medium",
-                "evidence": evidence,
-                "affectedTasks": [item["name"] for item in upcoming_ms[:6]],
-                "goLiveImpact": any(
-                    go_live is not None and item["id"] == str(go_live.id) for item in upcoming_ms
-                ),
-                "recommendedMitigation": "Focus delivery on incomplete milestones due within the configured upcoming period.",
-            }
-        )
-    delayed_deps = [item for item in dependencies if item["delayed"]]
-    if delayed_deps:
-        preds = sorted({item["predecessorName"] for item in delayed_deps})
-        succs = sorted({item["successorName"] for item in delayed_deps})
-        evidence = [
-            f"{item['predecessorName']} is delayed and {item['successorName']} depends on it"
-            for item in delayed_deps[:5]
-        ]
-        go_live_hit = any(item["goLiveImpact"] for item in delayed_deps)
-        risks.append(
-            {
-                "id": "r3-dependency",
-                "title": "Upstream delay affecting downstream work",
-                "severity": "high" if go_live_hit or len(preds) > 1 else "medium",
-                "evidence": evidence,
-                "affectedTasks": (preds + succs)[:8],
-                "goLiveImpact": go_live_hit,
-                "recommendedMitigation": "Unblock delayed predecessors so downstream successor activities can proceed.",
-            }
-        )
-    if facts.project_health in {"at_risk", "off_track"} or any(
-        phase["status"] in {"at-risk", "off-track"} for phase in phases
+    seen: set[str] = set()
+
+    for task in sorted(
+        (item for item in leaves if _is_overdue(item, as_of)),
+        key=lambda item: (_due_date(item) or date.min, item.name),
     ):
-        evidence = [
-            f"Project health is {facts.project_health.replace('_', '-')}",
-        ]
-        slipped = [phase["name"] for phase in phases if phase["status"] in {"at-risk", "off-track"}]
-        if slipped:
-            evidence.append("Phases with schedule pressure: " + ", ".join(slipped[:5]))
-        if overdue:
-            evidence.append(f"{len(overdue)} incomplete items have finish dates before the as-of date")
+        if not _matters_for_risk(task, driving_ids, go_live, plan.tasks):
+            continue
+        key = f"overdue:{task.id}"
+        if key in seen:
+            continue
+        seen.add(key)
+        finish = _due_date(task) or _candidate_date(task)
+        days = (as_of - finish).days if finish else None
+        succ_names = _direct_successor_names(task, plan.tasks)
+        on_path = task.id in driving_ids
         risks.append(
             {
-                "id": "r4-schedule",
-                "title": "Schedule pressure",
-                "severity": "critical" if facts.project_health == "off_track" else "high",
-                "evidence": evidence,
-                "affectedTasks": slipped[:6] or [task.name for task in overdue[:4]],
-                "goLiveImpact": go_live_date is not None and go_live_date <= as_of + timedelta(days=upcoming_horizon_days()),
-                "recommendedMitigation": "Review remaining critical-path work against the planned finish and Go-Live date.",
+                "id": key,
+                "title": "Overdue work",
+                "severity": "critical" if on_path and days and days > 7 else ("high" if on_path else "medium"),
+                "evidence": [_overdue_line(task, as_of, days)],
+                "affectedTasks": [task.name, *succ_names[:2]],
+                "goLiveImpact": on_path or _tasks_affect_go_live([task], go_live, plan.tasks),
+                "recommendedMitigation": _mitigate_overdue(task, succ_names),
             }
         )
-    if go_live is not None and go_live_date is not None:
-        go_live_risks = [
-            risk
-            for risk in risks
-            if risk.get("goLiveImpact")
-        ]
-        delayed_to_live = [item for item in delayed_deps if item["goLiveImpact"]]
-        incomplete_live = not _complete(go_live) and go_live_date < as_of
-        if go_live_risks or delayed_to_live or incomplete_live:
-            evidence = [f"Go-Live is identified as {go_live.name} on {go_live_date.isoformat()}"]
-            if incomplete_live:
-                evidence.append("Go-Live is incomplete and earlier than the as-of date")
-            for item in delayed_to_live[:3]:
-                evidence.append(
-                    f"{item['predecessorName']} delay can affect {item['successorName']} on the path to Go-Live"
+
+    for dep in dependencies:
+        pred = by_id.get(int(dep["predecessorId"]))
+        succ = by_id.get(int(dep["successorId"]))
+        if pred is None or succ is None or _complete(pred) or _complete(succ):
+            continue
+        if not dep.get("goLiveImpact") and not dep.get("critical"):
+            continue
+        key = f"dep:{pred.id}:{succ.id}"
+        if key in seen:
+            continue
+        seen.add(key)
+        risks.append(
+            {
+                "id": key,
+                "title": "Critical dependency blocked",
+                "severity": "critical" if dep.get("goLiveImpact") else "high",
+                "evidence": [
+                    f"{pred.name} is incomplete with finish before {as_of.isoformat()}; "
+                    f"{succ.name} depends on it"
+                ],
+                "affectedTasks": [pred.name, succ.name],
+                "goLiveImpact": bool(dep.get("goLiveImpact")),
+                "recommendedMitigation": (
+                    f"Complete {pred.name} to unblock {succ.name} on the schedule."
+                ),
+            }
+        )
+
+    for item in milestones.get("upcoming") or []:
+        task = by_id.get(int(item["id"]))
+        if task is None or _complete(task):
+            continue
+        pct = float(item.get("percentComplete") or 0)
+        if pct >= 50:
+            continue
+        if not _matters_for_risk(task, driving_ids, go_live, plan.tasks):
+            continue
+        key = f"upcoming:{task.id}"
+        if key in seen:
+            continue
+        seen.add(key)
+        risks.append(
+            {
+                "id": key,
+                "title": "Upcoming milestone at risk",
+                "severity": "high" if task.id in driving_ids else "medium",
+                "evidence": [
+                    f"{task.name} is due in {item.get('daysToMilestone')} day(s) "
+                    f"and is {int(pct)}% complete"
+                ],
+                "affectedTasks": [task.name],
+                "goLiveImpact": go_live is not None and str(task.id) == str(go_live.id),
+                "recommendedMitigation": (
+                    f"Advance {task.name} to completion before {item.get('plannedDate')}."
+                ),
+            }
+        )
+
+    for item in milestones.get("overdue") or []:
+        task = by_id.get(int(item["id"]))
+        if task is None or _complete(task):
+            continue
+        if not _matters_for_risk(task, driving_ids, go_live, plan.tasks):
+            continue
+        key = f"milestone-overdue:{task.id}"
+        if key in seen:
+            continue
+        seen.add(key)
+        risks.append(
+            {
+                "id": key,
+                "title": "Overdue milestone",
+                "severity": "critical" if task.id in driving_ids else "high",
+                "evidence": [
+                    f"{task.name} was due on {item.get('plannedDate')} "
+                    f"and is {int(item.get('percentComplete') or 0)}% complete"
+                ],
+                "affectedTasks": [task.name],
+                "goLiveImpact": task.id in driving_ids,
+                "recommendedMitigation": f"Close {task.name} or re-baseline its finish date.",
+            }
+        )
+
+    if go_live is not None and go_live_date is not None and not _complete(go_live):
+        shift = None
+        mapping = facts.delay_mapping
+        if mapping is not None:
+            shift = mapping.actual_shift_working_days or mapping.net_working_day_shift
+        if go_live_date < as_of or (isinstance(shift, int) and shift > 0):
+            key = f"go-live:{go_live.id}"
+            if key not in seen:
+                seen.add(key)
+                evidence = [f"{go_live.name} is planned on {go_live_date.isoformat()}"]
+                if go_live_date < as_of:
+                    evidence.append(
+                        f"{go_live.name} is incomplete and finish is before the as-of date"
+                    )
+                if isinstance(shift, int) and shift > 0:
+                    evidence.append(f"Delay Mapping shows a {shift}-day Go-Live shift")
+                risks.append(
+                    {
+                        "id": key,
+                        "title": "Go-Live impact",
+                        "severity": "critical" if go_live_date < as_of else "high",
+                        "evidence": evidence,
+                        "affectedTasks": [go_live.name],
+                        "goLiveImpact": True,
+                        "recommendedMitigation": (
+                            "Recover delayed predecessors on the Go-Live path before accepting the current date."
+                        ),
+                    }
                 )
-            risks.append(
-                {
-                    "id": "r5-go-live",
-                    "title": "Go-Live impact",
-                    "severity": "critical" if incomplete_live else "high",
-                    "evidence": evidence,
-                    "affectedTasks": [go_live.name, *[item["predecessorName"] for item in delayed_to_live[:4]]],
-                    "goLiveImpact": True,
-                    "recommendedMitigation": "Protect the Go-Live path by recovering delayed predecessors first.",
-                }
-            )
+
     resource = _resource_health(plan, progress, go_live_date, as_of, facts)
     if resource in {"at-risk", "off-track"} and progress["metric"] == "work":
         remaining = progress["remaining"]
         people = facts.people_planned or facts.resources_deployed
-        if isinstance(remaining, (int, float)) and remaining > 0 and people:
-            evidence = [
-                f"Remaining work is {remaining} hours across leaf tasks",
-                f"Named resource count used for capacity is {people}",
-            ]
-            if go_live_date is not None:
+        if isinstance(remaining, (int, float)) and remaining > 0 and people and go_live_date:
+            key = "resource-pressure"
+            if key not in seen:
+                seen.add(key)
                 days = max((go_live_date - as_of).days, 0)
-                evidence.append(f"Calendar days from as-of to Go-Live: {days}")
-            risks.append(
-                {
-                    "id": "r6-resource",
-                    "title": "Remaining effort pressure",
-                    "severity": "medium" if resource == "at-risk" else "high",
-                    "evidence": evidence,
-                    "goLiveImpact": go_live_date is not None,
-                    "recommendedMitigation": "Check remaining effort against available named resources before Go-Live.",
-                }
-            )
-    return risks
+                risks.append(
+                    {
+                        "id": key,
+                        "title": "Remaining effort pressure",
+                        "severity": "high" if resource == "off-track" else "medium",
+                        "evidence": [
+                            f"Remaining work is {remaining:g} hours across incomplete leaf tasks",
+                            f"Named resources in plan: {people}; calendar days to Go-Live: {days}",
+                        ],
+                        "affectedTasks": _incomplete_critical_names(leaves, driving_ids)[:4],
+                        "goLiveImpact": True,
+                        "recommendedMitigation": (
+                            "Reconcile remaining work hours with named capacity before Go-Live."
+                        ),
+                    }
+                )
+
+    risks.sort(
+        key=lambda row: (
+            _SEVERITY_RANK.get(str(row.get("severity")), 9),
+            0 if row.get("goLiveImpact") else 1,
+            row.get("title") or "",
+        )
+    )
+    return risks[:12]
+
+
+def _is_overdue(task: PlanTaskData, as_of: date) -> bool:
+    if _complete(task):
+        return False
+    finish = _due_date(task)
+    return finish is not None and finish < as_of
+
+
+def _matters_for_risk(
+    task: PlanTaskData,
+    driving_ids: set[int],
+    go_live: PlanTaskData | None,
+    all_tasks: list[PlanTaskData],
+) -> bool:
+    if _complete(task):
+        return False
+    if task.id in driving_ids:
+        return True
+    if _is_critical(task):
+        return True
+    return go_live is not None and _tasks_affect_go_live([task], go_live, all_tasks)
+
+
+def _overdue_line(task: PlanTaskData, as_of: date, days: int | None) -> str:
+    finish = (_due_date(task) or _candidate_date(task) or as_of).isoformat()
+    pct = int(_normalized_percent(task.percent_complete))
+    suffix = f" ({days} day(s) overdue)" if days is not None and days > 0 else ""
+    return f"{task.name} is {pct}% complete with finish {finish}{suffix}"
+
+
+def _mitigate_overdue(task: PlanTaskData, successor_names: list[str]) -> str:
+    if successor_names:
+        joined = ", ".join(successor_names[:2])
+        return f"Complete {task.name} or re-baseline finish before {joined} can proceed."
+    return f"Complete {task.name} or update its finish date in the plan."
+
+
+def _direct_successor_names(task: PlanTaskData, tasks: list[PlanTaskData]) -> list[str]:
+    by_id = {item.id: item for item in tasks}
+    names: list[str] = []
+    for succ_id in task.successor_ids:
+        succ = by_id.get(succ_id)
+        if succ is None or succ.is_summary or _complete(succ):
+            continue
+        names.append(succ.name)
+    return names
+
+
+def _incomplete_critical_names(leaves: list[PlanTaskData], driving_ids: set[int]) -> list[str]:
+    names: list[str] = []
+    for task in leaves:
+        if _complete(task):
+            continue
+        if task.id in driving_ids or _is_critical(task):
+            names.append(task.name)
+    return names
 
 
 def _affected_phase(
@@ -494,9 +607,7 @@ def _max_date(tasks: list[PlanTaskData], field: str) -> str | None:
 
 def _schedule_health(tasks: list[PlanTaskData], as_of: date) -> str:
     leaves = [task for task in tasks if not task.is_summary]
-    overdue = any(
-        not _complete(task) and (_due_date(task) or date.max) < as_of for task in leaves
-    )
+    overdue = any(_is_overdue(task, as_of) for task in leaves)
     dated = any(_due_date(task) for task in leaves)
     if not dated:
         return "unavailable"

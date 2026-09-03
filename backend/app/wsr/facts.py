@@ -124,8 +124,22 @@ def derive_portfolio_summary(plan: ProjectPlanData, as_of: str) -> PortfolioSumm
     )
 
 
+def _normalized_percent(value: float | None) -> float:
+    if value is None:
+        return 0.0
+    try:
+        pct = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if 0 < pct <= 1.0:
+        return pct * 100.0
+    return pct
+
+
 def _complete(task: PlanTaskData) -> bool:
-    return bool(task.actual_finish) or task.percent_complete >= 100
+    if task.actual_finish:
+        return True
+    return _normalized_percent(task.percent_complete) >= 99.5
 
 
 def _due_date(task: PlanTaskData) -> date | None:

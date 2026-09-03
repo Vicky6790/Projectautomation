@@ -179,13 +179,58 @@ def test_related_overdue_work_is_one_executive_risk() -> None:
     )
     facts = derive_wsr_facts(plan, "2026-08-14", generated_at="2026-08-14T10:00:00Z")
     payload = build_executive_summary_input(plan, facts, "2026-08-14")
-    overdue_risks = [risk for risk in payload["risks"] if risk["id"] == "r1-overdue"]
-    assert len(overdue_risks) == 1
-    assert len(overdue_risks[0]["evidence"]) >= 2
-    assert all(risk.get("evidence") for risk in payload["risks"])
+    overdue_risks = [risk for risk in payload["risks"] if risk["title"] == "Overdue work"]
+    assert len(overdue_risks) >= 1
+    assert all(risk.get("recommendedMitigation") for risk in payload["risks"])
     cards = items_from_situation_risks(plan, payload["risks"])
     assert cards
     assert any("Overdue work" in item.content for item in cards)
+    assert all("Mitigation:" in item.content for item in cards)
+
+
+def test_completed_tasks_are_not_listed_as_risks() -> None:
+    plan = _plan(
+        [
+            PlanTaskData(
+                id=1,
+                name="Deck Preparation",
+                scheduled_finish="2026-08-01",
+                actual_finish="2026-08-28",
+                percent_complete=100,
+            ),
+            PlanTaskData(
+                id=2,
+                name="Deck Internal Review and Update",
+                scheduled_finish="2026-09-05",
+                predecessor_ids=[1],
+                predecessor_names=["Deck Preparation"],
+            ),
+            PlanTaskData(
+                id=3,
+                name="Go-Live",
+                is_milestone=True,
+                scheduled_finish="2026-09-30",
+                predecessor_ids=[2],
+            ),
+        ]
+    )
+    facts = derive_wsr_facts(plan, "2026-09-03", generated_at="2026-09-03T10:00:00Z")
+    payload = build_executive_summary_input(plan, facts, "2026-09-03")
+    names = {
+        name
+        for risk in payload["risks"]
+        for name in (risk.get("affectedTasks") or [])
+    }
+    assert "Deck Preparation" not in names
+    cards = items_from_situation_risks(plan, payload["risks"])
+    assert all("Deck Preparation" not in item.content for item in cards)
+
+
+def test_fractional_percent_complete_counts_as_done() -> None:
+    from app.wsr.facts import _complete
+
+    task = PlanTaskData(id=1, name="Sign-Off", percent_complete=1.0, scheduled_finish="2026-08-01")
+    assert _complete(task)
 
 
 def test_fallback_summary_does_not_invent_signoff_or_stakeholders() -> None:

@@ -54,8 +54,10 @@ textarea {
 .shell {
   display: flex;
   min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   max-width: 100%;
-  overflow-x: clip;
+  overflow: hidden;
   background:
     radial-gradient(1200px 480px at -10% -10%, rgba(79, 70, 229, 0.08), transparent 55%),
     radial-gradient(900px 420px at 110% 0%, rgba(16, 185, 129, 0.07), transparent 50%),
@@ -164,9 +166,11 @@ textarea {
   padding: 24px 16px;
   position: sticky;
   top: 0;
+  align-self: flex-start;
   height: 100vh;
-  overflow-x: hidden;
-  overflow-y: auto;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   transition: width 0.28s ease, padding 0.28s ease, opacity 0.2s ease, border-color 0.28s ease;
 }
 
@@ -189,6 +193,7 @@ textarea {
   text-decoration: none;
   color: inherit;
   border-radius: 12px;
+  flex-shrink: 0;
 }
 
 .brand:hover .brand-logo,
@@ -229,6 +234,10 @@ textarea {
   flex-direction: column;
   gap: 6px;
   margin: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .nav-item {
@@ -295,6 +304,7 @@ textarea {
 
 .sidebar-foot {
   margin-top: auto;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -354,8 +364,10 @@ textarea {
 .shell-main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .shell-top {
@@ -365,6 +377,7 @@ textarea {
   gap: 16px;
   padding: 0 var(--content-pad);
   height: 64px;
+  flex-shrink: 0;
   background: #fff;
   border-bottom: 1px solid var(--line);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -446,6 +459,7 @@ textarea {
 
 .shell-content {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 24px var(--content-pad) 48px;
 }
@@ -3117,6 +3131,11 @@ label select {
 
   .shell {
     flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .sidebar {
@@ -3124,6 +3143,18 @@ label select {
     height: auto;
     max-height: none;
     position: static;
+    align-self: stretch;
+    overflow: visible;
+  }
+
+  .sidebar nav {
+    flex: none;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .sidebar-foot {
+    margin-top: 16px;
   }
 
   .shell.nav-hidden .sidebar {
