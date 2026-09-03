@@ -297,7 +297,7 @@ export function DelayMappingView() {
               <tfoot>
                 <tr className="dms-total-row">
                   <td colSpan={2}>Total Count</td>
-                  <td>{totalShift}</td>
+                  <td className="dms-shift-days">{totalShift}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -371,7 +371,7 @@ function PhaseGroup({
               {row.taskType}
             </span>
           </td>
-          <td>{row.delayDays == null ? "Unavailable" : String(row.delayDays)}</td>
+          <td className="dms-shift-days">{row.delayDays == null ? "Unavailable" : String(row.delayDays)}</td>
           <td>{unavailable(row.owner)}</td>
         </tr>
       ))}

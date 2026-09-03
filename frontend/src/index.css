@@ -14,14 +14,22 @@
   --warn: #d97706;
   --good: #10b981;
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --sidebar-width: 260px;
+  --content-pad: 32px;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
   font-family: "Hanken Grotesk", Inter, Segoe UI, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -46,6 +54,8 @@ textarea {
 .shell {
   display: flex;
   min-height: 100vh;
+  max-width: 100%;
+  overflow-x: clip;
   background:
     radial-gradient(1200px 480px at -10% -10%, rgba(79, 70, 229, 0.08), transparent 55%),
     radial-gradient(900px 420px at 110% 0%, rgba(16, 185, 129, 0.07), transparent 50%),
@@ -70,8 +80,8 @@ textarea {
 }
 
 .login-logo {
-  width: 280px;
-  height: 280px;
+  width: min(279px, 70vw, 40vh);
+  height: min(279px, 70vw, 40vh);
   display: block;
   filter: drop-shadow(0 18px 40px rgba(34, 211, 238, 0.28));
 }
@@ -145,7 +155,7 @@ textarea {
 }
 
 .sidebar {
-  width: 260px;
+  width: var(--sidebar-width);
   flex-shrink: 0;
   background: #fff;
   border-right: 1px solid var(--line);
@@ -155,7 +165,8 @@ textarea {
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   transition: width 0.28s ease, padding 0.28s ease, opacity 0.2s ease, border-color 0.28s ease;
 }
 
@@ -192,10 +203,10 @@ textarea {
 }
 
 .brand-logo {
-  width: 220px;
-  height: 220px;
+  width: clamp(112px, 18vh, 219px);
+  height: clamp(112px, 18vh, 219px);
   display: block;
-  border-radius: 44px;
+  border-radius: 22%;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.28);
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
@@ -203,7 +214,7 @@ textarea {
 .brand-slogan {
   margin: 0;
   padding: 10px 8px 0;
-  max-width: 220px;
+  max-width: 100%;
   border-top: 1px solid var(--line);
   font-size: 14px;
   font-weight: 700;
@@ -352,7 +363,7 @@ textarea {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 0 32px;
+  padding: 0 var(--content-pad);
   height: 64px;
   background: #fff;
   border-bottom: 1px solid var(--line);
@@ -417,7 +428,6 @@ textarea {
   white-space: nowrap;
 }
 
-.shell-top h1,
 .shell-tab {
   margin: 0;
   font-size: 14px;
@@ -428,22 +438,49 @@ textarea {
   display: inline-flex;
   align-items: center;
   border-bottom: 2px solid var(--indigo);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shell-content {
   flex: 1;
   overflow: auto;
-  padding: 24px 32px 48px;
+  padding: 24px var(--content-pad) 48px;
 }
 
 .home-dash {
+  width: 100%;
   max-width: 1180px;
 }
 
 .home-hero {
-  max-width: 720px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: min(860px, 100%);
   padding: 8px 0 4px;
   animation: home-fade-up 0.4s ease both;
+}
+
+.home-hero-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--indigo);
+  background: var(--indigo-soft);
+}
+
+.home-hero-icon .material-symbols-outlined {
+  font-size: 26px;
+}
+
+.home-hero-copy {
+  min-width: 0;
 }
 
 .home-kicker {
@@ -457,15 +494,16 @@ textarea {
 
 .home-hero h1 {
   margin: 0;
-  font-size: 34px;
+  font-size: clamp(24px, 3.2vw, 34px);
   line-height: 1.2;
   letter-spacing: -0.03em;
   color: var(--navy);
+  overflow-wrap: break-word;
 }
 
 .home-lead {
   margin: 12px 0 0;
-  max-width: 640px;
+  max-width: min(720px, 100%);
   color: var(--muted);
   font-size: 16px;
   line-height: 1.6;
@@ -490,7 +528,8 @@ textarea {
   flex-direction: column;
   gap: 8px;
   height: 100%;
-  min-height: 320px;
+  min-height: 0;
+  min-width: 0;
   padding: 22px;
   background: #fff;
   border: 1px solid var(--line);
@@ -797,7 +836,60 @@ textarea {
 
 @media (max-width: 1100px) {
   .home-hero h1 {
-    font-size: 28px;
+    font-size: 26px;
+  }
+}
+
+@media (max-width: 1440px) {
+  :root {
+    --sidebar-width: 232px;
+    --content-pad: 24px;
+  }
+}
+
+@media (max-width: 1280px) {
+  :root {
+    --sidebar-width: 216px;
+    --content-pad: 20px;
+  }
+
+  .home-modules,
+  .home-path {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-grid,
+  .sow-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mod-landing,
+  .dms-landing {
+    grid-template-columns: 1fr;
+  }
+
+  .home-hero {
+    flex-wrap: wrap;
+  }
+
+  .wsr-action-buttons {
+    width: 100%;
+  }
+}
+
+@media (max-height: 820px) {
+  .brand {
+    margin-bottom: 12px;
+    gap: 6px;
+  }
+
+  .sidebar {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .brand-slogan {
+    font-size: 12px;
   }
 }
 
@@ -829,6 +921,10 @@ textarea {
 .status {
   color: var(--muted);
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(280px, 40vw);
 }
 
 .panel {
@@ -1004,7 +1100,7 @@ label select {
 
 .btn {
   border-radius: 8px;
-  padding: 10px 20px;
+  padding: 10px 16px;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -1012,7 +1108,9 @@ label select {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 40px;
+  min-height: 40px;
+  height: auto;
+  max-width: 100%;
 }
 
 .btn:disabled {
@@ -1043,7 +1141,7 @@ label select {
 }
 
 .wsr-page {
-  max-width: 1600px;
+  max-width: min(1600px, 100%);
   margin: 0 auto;
 }
 
@@ -1058,16 +1156,17 @@ label select {
 
 .mod-hero-copy {
   flex: 1;
-  min-width: 220px;
+  min-width: min(220px, 100%);
 }
 
 .mod-hero h1,
 .mod-hero h2 {
   margin: 0;
-  font-size: 30px;
+  font-size: clamp(22px, 2.6vw, 30px);
   font-weight: 700;
   color: var(--navy);
   letter-spacing: -0.02em;
+  overflow-wrap: break-word;
 }
 
 .mod-hero-sub {
@@ -1396,6 +1495,8 @@ label select {
   padding: 0;
   text-align: left;
   cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .wsr-upload-trigger:disabled {
@@ -1425,6 +1526,7 @@ label select {
   font-size: 14px;
   font-weight: 600;
   color: var(--navy);
+  overflow-wrap: anywhere;
 }
 
 .wsr-upload-hint {
@@ -1491,7 +1593,8 @@ label select {
 }
 
 .hero-identity {
-  min-width: 240px;
+  min-width: 0;
+  flex: 1 1 220px;
   padding: 0 32px 0 16px;
   border-right: 1px solid var(--line);
 }
@@ -2299,7 +2402,7 @@ label select {
 
 .gantt-exec {
   overflow-x: auto;
-  margin: 0 -32px -24px;
+  margin: 0 calc(-1 * var(--content-pad)) -24px;
 }
 
 .gantt-exec-inner {
@@ -3000,8 +3103,14 @@ label select {
 }
 
 @media (max-width: 800px) {
+  :root {
+    --sidebar-width: 100%;
+    --content-pad: 16px;
+  }
+
   .sow-category-grid,
-  .sow-summary {
+  .sow-summary,
+  .kpi-grid {
     grid-template-columns: 1fr;
     display: grid;
   }
@@ -3013,6 +3122,7 @@ label select {
   .sidebar {
     width: 100%;
     height: auto;
+    max-height: none;
     position: static;
   }
 
@@ -3021,24 +3131,24 @@ label select {
     border-bottom: none;
   }
 
-  .shell-content,
-  .shell-top {
-    padding-left: 16px;
-    padding-right: 16px;
+  .home-hero {
+    flex-direction: column;
   }
 
-  .home-hero h1 {
-    font-size: 26px;
+  .wsr-upload-inner,
+  .mod-hero {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .home-modules,
-  .home-path {
-    grid-template-columns: 1fr;
+  .dms-table th,
+  .dms-table td {
+    white-space: normal;
   }
 }
 
 .dms-page {
-  max-width: 1600px;
+  max-width: min(1600px, 100%);
 }
 
 .dms-head {
@@ -3295,10 +3405,8 @@ label select {
   font-weight: 700;
 }
 
-.dms-total-row td:nth-child(2) {
-  border: 3px solid #0f172a;
-  background: #fff;
-  text-align: center;
+.dms-total-row td.dms-shift-days {
+  text-align: left;
 }
 
 .dms-kpi {

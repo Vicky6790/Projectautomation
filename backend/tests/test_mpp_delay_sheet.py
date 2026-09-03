@@ -23,6 +23,8 @@ def _task(
     baseline0_duration_days: float | None = None,
     predecessor_ids: list[int] | None = None,
     predecessor_names: list[str] | None = None,
+    successor_ids: list[int] | None = None,
+    total_slack_days: float | None = None,
     owner: str | None = None,
 ) -> PlanTaskData:
     assignments = [PlanAssignmentData(resource_name=owner)] if owner else []
@@ -42,6 +44,8 @@ def _task(
         baseline0_duration_days=baseline0_duration_days,
         predecessor_ids=predecessor_ids or [],
         predecessor_names=predecessor_names or [],
+        successor_ids=successor_ids or [],
+        total_slack_days=total_slack_days,
         assignments=assignments,
     )
 
@@ -349,6 +353,127 @@ def test_parallel_inserted_delays_keep_only_go_live_driver() -> None:
     assert mapping.rows[0].shift_days == 5
     assert mapping.actual_shift_working_days == 5
     assert mapping.total_delayed_days == 5
+
+
+def test_inserted_delays_under_unlinked_phase_summary_are_listed() -> None:
+    """Go-Live often depends on a phase summary that has no predecessors.
+
+    Inserted Delay tasks live under earlier WBS branches and only appear after
+    walking the summary's children and those children's predecessor links.
+    """
+    mapping = build_delay_sheet(
+        _plan(
+            [
+                _task(
+                    729,
+                    "Delay In Presenting UX Approach Due Team's unavailability",
+                    wbs="1.2.3.7",
+                    delay_or_additional="Delay",
+                    duration_days=4,
+                    scheduled_finish="2026-09-01",
+                    actual_finish="2026-09-01",
+                    total_slack_days=0,
+                    successor_ids=[733],
+                    owner="Idealake",
+                ),
+                _task(
+                    733,
+                    "Present UX Approach",
+                    wbs="1.2.3.8",
+                    scheduled_finish="2026-09-02",
+                    predecessor_ids=[729],
+                    successor_ids=[561],
+                ),
+                _task(
+                    730,
+                    "Delay in Sharing Walkthrough of Wireframe due Team's unavailbility",
+                    wbs="1.2.4.1.4",
+                    delay_or_additional="Delay",
+                    duration_days=6,
+                    scheduled_finish="2026-09-02",
+                    actual_finish="2026-09-02",
+                    total_slack_days=0,
+                    successor_ids=[36],
+                    owner="Idealake",
+                ),
+                _task(
+                    36,
+                    "Review + Feedback",
+                    wbs="1.2.4.1.5",
+                    scheduled_finish="2026-09-08",
+                    predecessor_ids=[730],
+                    successor_ids=[561],
+                ),
+                _task(
+                    731,
+                    "Additional : Updating IA on Basis Feedback",
+                    wbs="1.2.2.10",
+                    delay_or_additional="Additional",
+                    duration_days=3,
+                    scheduled_finish="2026-09-07",
+                    total_slack_days=141,
+                ),
+                _task(
+                    650,
+                    "Delay In Receiving Feedback On IA",
+                    wbs="1.2.2.5",
+                    delay_or_additional="Delay",
+                    baseline_finish="2026-08-11",
+                    scheduled_finish="2026-08-11",
+                    actual_finish="2026-08-11",
+                    duration_days=34,
+                    total_slack_days=0,
+                ),
+                _task(
+                    560,
+                    "Production Deployment Phase",
+                    wbs="1.15",
+                    is_summary=True,
+                    critical=True,
+                    baseline_finish="2027-03-25",
+                    scheduled_finish="2027-04-07",
+                ),
+                _task(
+                    561,
+                    "Access For Production Server",
+                    wbs="1.15.1",
+                    critical=True,
+                    baseline_finish="2027-03-25",
+                    scheduled_finish="2027-04-07",
+                    predecessor_ids=[36, 733, 650],
+                ),
+                _task(
+                    569,
+                    "Pre-Go-Live Checklist Execution + Acceptance",
+                    wbs="1.16.1",
+                    critical=True,
+                    baseline_finish="2027-03-26",
+                    scheduled_finish="2027-04-08",
+                    predecessor_ids=[560],
+                ),
+                _task(
+                    570,
+                    "Go-Live",
+                    wbs="1.16.2",
+                    is_milestone=True,
+                    baseline_finish="2027-03-26",
+                    scheduled_finish="2027-04-08",
+                    predecessor_ids=[569],
+                ),
+            ]
+        )
+    )
+    names = [row.name for row in mapping.rows]
+    assert "Delay In Presenting UX Approach Due Team's unavailability" in names
+    assert "Delay in Sharing Walkthrough of Wireframe due Team's unavailbility" in names
+    assert "Additional : Updating IA on Basis Feedback" not in names
+    assert "Delay In Receiving Feedback On IA" not in names
+    assert mapping.baseline_go_live == "2027-03-26"
+    assert mapping.current_go_live == "2027-04-08"
+    assert mapping.actual_shift_working_days == 9
+    assert mapping.total_delayed_days == 9
+    assert mapping.delayed_task_count == 2
+    assert sum(row.shift_days or 0 for row in mapping.rows) == 9
 
 
 def test_delay_column_alias_matches_tasks_suffix() -> None:

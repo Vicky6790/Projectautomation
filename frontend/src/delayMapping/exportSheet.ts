@@ -21,7 +21,7 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
         (row) => `<tr>
         <td>${esc(row.taskName)}</td>
         <td>${esc(row.taskType)}</td>
-        <td>${row.delayDays == null ? "Unavailable" : String(row.delayDays)}</td>
+        <td style="text-align:left">${row.delayDays == null ? "Unavailable" : String(row.delayDays)}</td>
         <td>${esc(row.owner || "Unavailable")}</td>
       </tr>`,
       ),
@@ -45,7 +45,7 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
     <th>Owner</th>
   </tr>
   ${body}
-  <tr><td colspan="2"><b>Total Count</b></td><td><b>${total}</b></td><td></td></tr>
+  <tr><td colspan="2"><b>Total Count</b></td><td style="text-align:left"><b>${total}</b></td><td></td></tr>
 </table>
 </body>
 </html>`;

@@ -37,12 +37,18 @@ export function HomeDashboardView() {
   return (
     <section className="home-dash">
       <header className="home-hero">
-        <p className="home-kicker">Dashboard</p>
-        <h1>Delivery Intelligence from the Signed SOW to Go-Live</h1>
-        <p className="home-lead">
-          Review the signed SOW, publish weekly status, and map the tasks that actually move Go-Live.
-          Every fact comes from the live MPP — missing values stay Unavailable.
-        </p>
+        <span className="home-hero-icon" aria-hidden="true">
+          <span className="material-symbols-outlined">visibility</span>
+        </span>
+        <div className="home-hero-copy">
+          <p className="home-kicker">Dashboard</p>
+          <h1>From Signed SOW to Go-Live — Complete Delivery Visibility</h1>
+          <p className="home-lead">
+            Project Pulse transforms project data into actionable delivery intelligence. Analyze the
+            signed SOW, monitor project health, identify risks and delays, and trace the tasks that
+            impact Go-Live — all grounded in the live MPP, with missing data clearly marked Unavailable.
+          </p>
+        </div>
       </header>
 
       <ul className="home-modules">

@@ -37,9 +37,9 @@ Factory statuses were updated in this increment where the MCP allowed it.
 | WO-39 | WSR insight review panel | `cancelled` | Out of V1; dashboard has no Keep/Edit/Remove or View Source |
 | WO-13 | WSR Generator view | `in_review` | Approved dashboard, generation stages, PDF download after generate |
 | WO-18 | WSR E2E via Compose | `in_review` | Proxy path: upload → generate → dashboard → PDF at localhost:8080 |
-| WO-10 | Retrospective API | `in_review` | MPP upload, planned-vs-actual, seven-section report, planned-only flag, retry |
-| WO-14 | Retrospective view | `in_review` | MPP upload, seven-section retrospective, planned-only banner, retry, report download |
-| WO-19 | Retrospective E2E via Compose | `in_review` | Waits on WO-18; proxy path: MPP upload → generate → seven-section report |
+| WO-10 | Retrospective API | `cancelled` | Out of product; module hidden from nav |
+| WO-14 | Retrospective view | `cancelled` | Out of product; module hidden from nav |
+| WO-19 | Retrospective E2E via Compose | `cancelled` | Out of product; no E2E gate |
 | WO-33 | Foundation validation vs blueprints | `in_review` | Health/ready, SPA shells, internal API; notes in docs/FOUNDATION_VALIDATION.md |
 | WO-36 | OpenAPI freeze | `in_review` | docs/openapi.json plus pytest drift check; mapping in docs/OPENAPI_FREEZE.md |
 | WO-31 | On-premise access-control requirements | `in_review` | Feature On-Premise Access Control; mapping in docs/ONPREM_AUTH.md |
@@ -59,7 +59,7 @@ Factory clarification 2026-08-25: ship **WSR & Insights** end-to-end before SOW,
 | 5 | WO-18 | Compose E2E (WSR path only) |
 | Shared | WO-1, WO-2, WO-3, WO-6, WO-26, WO-32 | Already implemented enough to run WO-40 |
 
-WO-38 native MPP write does **not** block this slice. WO-39 and WO-41 are cancelled for V1. SOW E2E (WO-16) is unblocked now that WSR is in the product. Plan/Retro E2E (WO-17, WO-19) still wait on native MPP / WO-18 acceptance.
+WO-38 native MPP write does **not** block this slice. WO-39 and WO-41 are cancelled for V1. Retrospective WOs (**WO-10, WO-14, WO-19**) are cancelled. SOW E2E (WO-16) is unblocked now that WSR is in the product. Plan E2E (WO-17) still waits on native MPP.
 
 ## Remaining environment check
 

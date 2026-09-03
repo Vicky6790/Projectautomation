@@ -2,7 +2,8 @@
 
 Lists only tasks that:
 - are marked Delay or Additional in the MPP column "Delay And Or Additional"
-- sit on the predecessor path to Go-Live, or extend a critical predecessor summary
+- sit on the driving path to Go-Live (predecessor links plus outline children of
+  summaries on that chain — phase summaries often have no predecessors of their own)
 - shift Go-Live because Finish is later than Baseline Finish, Duration grew, or
   an inserted Delay/Additional task has no Baseline Finish
 """
@@ -186,9 +187,26 @@ def _shifting_row(
 
 
 def _predecessor_path_ids(go_live: PlanTaskData | None, tasks: list[PlanTaskData]) -> set[int]:
+    """Predecessor chain plus outline children of summaries on that chain.
+
+    MS Project often links Go-Live to a phase summary that has no predecessors.
+    The Delay/Additional work that moved the date sits under earlier summaries and
+    is reached only by walking those children's predecessor links.
+    """
     if go_live is None:
         return set()
-    preds = {task.id: list(task.predecessor_ids) for task in tasks}
+    wbs_map = {(task.wbs or "").strip(): task for task in tasks if (task.wbs or "").strip()}
+    children: dict[int, list[int]] = {}
+    for task in tasks:
+        parent = wbs_map.get(_parent_wbs(task.wbs))
+        if parent is not None:
+            children.setdefault(parent.id, []).append(task.id)
+    preds: dict[int, list[int]] = {task.id: list(task.predecessor_ids) for task in tasks}
+    for task in tasks:
+        for succ_id in task.successor_ids:
+            bucket = preds.setdefault(succ_id, [])
+            if task.id not in bucket:
+                bucket.append(task.id)
     on: set[int] = set()
     queue = [go_live.id]
     while queue:
@@ -197,7 +215,19 @@ def _predecessor_path_ids(go_live: PlanTaskData | None, tasks: list[PlanTaskData
             continue
         on.add(nid)
         queue.extend(preds.get(nid, []))
+        queue.extend(children.get(nid, []))
     return on
+
+
+def _parent_wbs(wbs: str | None) -> str:
+    text = (wbs or "").strip()
+    if "." not in text:
+        return ""
+    return text.rsplit(".", 1)[0]
+
+
+def _has_float(task: PlanTaskData) -> bool:
+    return task.critical is not True and task.total_slack_days is not None and task.total_slack_days > 0
 
 
 def _shifts_go_live(
@@ -212,7 +242,7 @@ def _shifts_go_live(
             return True
         return task.total_slack_days is not None and task.total_slack_days <= 0
     if task.id in pred_path_ids:
-        return True
+        return not _has_float(task)
     parent = _parent_summary(task, tasks)
     finish = parse_date(task.scheduled_finish) or parse_date(task.actual_finish)
     parent_finish = None
@@ -223,12 +253,13 @@ def _shifts_go_live(
         and finish is not None
         and parent_finish is not None
         and finish == parent_finish
+        and parent.id in pred_path_ids
     )
     if not drives_parent:
         return False
-    if task.critical is True:
-        return True
-    return parent is not None and parent.critical is True
+    if _has_float(task) and task.critical is not True and parent.critical is not True:
+        return False
+    return task.critical is True or parent.critical is True or not _has_float(task)
 
 
 def _fit_to_go_live_shift(rows: list[DelayMappingRow], net: int | None) -> list[DelayMappingRow]:
@@ -252,12 +283,10 @@ def _fit_to_go_live_shift(rows: list[DelayMappingRow], net: int | None) -> list[
         days = row.shift_days or 0
         if days <= 0 or used >= net:
             continue
-        if used > 0 and used + days > net:
-            continue
-        if used == 0 and days > net:
-            row.shift_days = net
-            row.delay_days = net
-            days = net
+        if used + days > net:
+            days = net - used
+            row.shift_days = days
+            row.delay_days = days
         kept.append(row)
         used += days
         if used >= net:
