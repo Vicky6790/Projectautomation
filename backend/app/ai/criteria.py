@@ -1,14 +1,17 @@
 SOW_CRITERIA = (
-    "Classify only from the supplied SOW text. Do not invent facts.\n"
+    "Classify only from the supplied Scope of Work text. Do not invent facts.\n"
     "A passage may support more than one finding if it independently meets each rule.\n"
+    "Every gray-area, risk, assumption, and dependency finding must include evidence: "
+    "a verbatim quote from the document. If you cannot quote it, omit the finding.\n"
     "If evidence is insufficient, leave that category as an empty list. Never omit a key.\n"
-    "- gray_areas: ambiguous, conflicting, or undefined language.\n"
+    "- gray_areas: ambiguous, conflicting, or undefined language actually present in the text.\n"
     "- risks: stated or clearly implied threats to scope, schedule, cost, quality, or compliance.\n"
-    "- missing_requirements: expected SOW content that is absent "
-    "(acceptance criteria, SLAs, RACI, out-of-scope, deliverable definition).\n"
-    "- assumptions: unstated conditions the SOW appears to rely on.\n"
-    "- dependencies: internal or external items the work relies on.\n"
-    "- clarification_questions: questions the PM should ask to resolve ambiguity or gaps.\n"
+    "- missing_requirements: expected Scope of Work content that is absent "
+    "(acceptance criteria, SLAs, RACI, out-of-scope, deliverable definition). "
+    "Only flag a gap when the document is a substantial Scope of Work and the clause is missing.\n"
+    "- assumptions: conditions the document itself states as assumptions.\n"
+    "- dependencies: internal or external items the work relies on, as written.\n"
+    "- clarification_questions: questions the PM should ask to resolve quoted ambiguity or gaps.\n"
 )
 
 WSR_CRITERIA = (

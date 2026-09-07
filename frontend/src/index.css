@@ -973,8 +973,54 @@ textarea {
 
 .uploader-button {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.upload-progress {
+  display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.upload-progress p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.upload-progress-track {
+  flex: 1 1 auto;
+  height: 8px;
+  min-width: 80px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.upload-progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--indigo);
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
+.upload-progress-track span.is-processing {
+  animation: upload-processing 1.1s ease-in-out infinite;
+}
+
+@keyframes upload-processing {
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .wsr-stages {
@@ -2376,6 +2422,14 @@ label select {
   color: #475569;
 }
 
+.overview-copy p {
+  margin: 0 0 12px;
+}
+
+.overview-copy p:last-child {
+  margin-bottom: 0;
+}
+
 .progress-ring {
   position: relative;
   width: 64px;
@@ -2506,14 +2560,28 @@ label select {
   white-space: nowrap;
 }
 
-.gantt-dur-exec {
-  font-size: 12px;
-  font-weight: 700;
-  background: #f1f5f9;
-  color: #475569;
-  border-radius: 4px;
-  text-align: center;
-  padding: 2px 0;
+.gantt-exec.has-progress .gantt-row-exec {
+  grid-template-columns: 200px 120px 48px 92px 1fr;
+}
+
+.gantt-progress-exec {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gantt-progress-exec span {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gantt-progress-exec strong {
+  font-size: 13px;
+  color: var(--navy);
 }
 
 .gantt-bar-exec {
@@ -2587,6 +2655,10 @@ label select {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   background: #f8fafc;
+}
+
+.task-hierarchy {
+  word-break: break-word;
 }
 
 .phase-table th:last-child,
@@ -2990,6 +3062,23 @@ label select {
   color: var(--muted);
 }
 
+.sow-evidence {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--indigo);
+  background: var(--indigo-soft);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sow-evidence strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+
 .sow-recommendation {
   margin-top: 8px;
   color: var(--indigo-dark);
@@ -3029,18 +3118,59 @@ label select {
   html.wsr-printing {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    height: auto !important;
+  }
+
+  html.wsr-printing,
+  html.wsr-printing body {
+    background: #fff !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  html.wsr-printing * {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+    break-before: auto !important;
+    page-break-before: auto !important;
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+
+  html.wsr-printing body * {
+    visibility: hidden;
+  }
+
+  html.wsr-printing .wsr-report,
+  html.wsr-printing .wsr-report * {
+    visibility: visible;
   }
 
   html.wsr-printing .sidebar,
   html.wsr-printing .shell-top,
+  html.wsr-printing .mod-hero,
+  html.wsr-printing .mod-landing,
   html.wsr-printing .wsr-page-head,
   html.wsr-printing .wsr-upload-card,
   html.wsr-printing .wsr-status-msg,
   html.wsr-printing .wsr-stages,
   html.wsr-printing .wsr-project-tabs,
+  html.wsr-printing .wsr-action-buttons,
   html.wsr-printing .delay-head-actions,
-  html.wsr-printing .delay-head .btn {
+  html.wsr-printing .delay-head .btn,
+  html.wsr-printing .wsr-page > .btn {
     display: none !important;
+  }
+
+  html.wsr-printing .wsr-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    overflow: visible;
   }
 
   html.wsr-printing .shell,
@@ -3050,25 +3180,23 @@ label select {
     display: block;
     width: 100%;
     min-height: 0;
+    height: auto !important;
     margin: 0;
     padding: 0;
     background: #fff;
     box-shadow: none;
+    overflow: visible !important;
   }
 
   html.wsr-printing .wsr-hero {
     margin: 0 0 10px;
     box-shadow: none;
-    break-inside: avoid;
-    page-break-inside: avoid;
   }
 
   html.wsr-printing .kpi-grid {
     margin: 0 0 10px;
     gap: 12px;
     box-shadow: none;
-    break-inside: auto;
-    page-break-inside: auto;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 
@@ -3076,34 +3204,19 @@ label select {
     margin: 0 0 10px;
     box-shadow: none;
     overflow: visible;
-    break-inside: auto;
-    page-break-inside: auto;
-    break-before: auto;
-    page-break-before: auto;
-    break-after: auto;
-    page-break-after: auto;
   }
 
   html.wsr-printing .kpi-card,
   html.wsr-printing .insight-card {
-    break-inside: avoid;
-    page-break-inside: avoid;
     box-shadow: none;
   }
 
   html.wsr-printing .wsr-project-pane {
     display: none !important;
-    page-break-after: auto;
   }
 
   html.wsr-printing .wsr-project-pane.is-active {
     display: block !important;
-  }
-
-  html.wsr-printing .phase-table tr,
-  html.wsr-printing .gantt-row-exec {
-    break-inside: avoid;
-    page-break-inside: avoid;
   }
 
   html.wsr-printing .gantt-exec {

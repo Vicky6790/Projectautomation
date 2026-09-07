@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Module = Literal["sow", "wsr", "retrospective", "plan"]
 JobStatus = Literal["queued", "running", "succeeded", "failed"]
@@ -67,6 +67,9 @@ class PlanPhaseData(BaseModel):
     baseline_finish: str | None = None
     actual_start: str | None = None
     percent_complete: float = 0
+    percent_work_complete: float | None = None
+    planned_work_hours: float | None = None
+    actual_work_hours: float | None = None
 
 
 class PlanRelationData(BaseModel):
@@ -93,6 +96,7 @@ class PlanTaskData(BaseModel):
     actual_start: str | None = None
     actual_finish: str | None = None
     percent_complete: float = 0
+    percent_work_complete: float | None = None
     predecessor_ids: list[int] = Field(default_factory=list)
     predecessor_names: list[str] = Field(default_factory=list)
     predecessor_links: list[PlanRelationData] = Field(default_factory=list)
@@ -161,6 +165,7 @@ class SowFinding(BaseModel):
     title: str
     description: str
     recommendation: str = ""
+    evidence: str = ""
 
 
 def _coerce_sow_findings(value: object, category: str) -> list[dict[str, object]]:
@@ -177,6 +182,7 @@ def _coerce_sow_findings(value: object, category: str) -> list[dict[str, object]
                     "title": item[:120],
                     "description": item,
                     "recommendation": "",
+                    "evidence": "",
                 }
             )
             continue
@@ -187,6 +193,7 @@ def _coerce_sow_findings(value: object, category: str) -> list[dict[str, object]
             data.setdefault("title", description[:120] or "Finding")
             data.setdefault("description", description or str(data.get("title") or ""))
             data.setdefault("recommendation", "")
+            data.setdefault("evidence", "")
             findings.append(data)
             continue
         findings.append(item)  # type: ignore[arg-type]
@@ -359,6 +366,15 @@ class ProgressItem(BaseModel):
     scheduled_start: str | None = None
     scheduled_finish: str | None = None
     progress: float | None = None
+    phase_name: str | None = None
+    parent_name: str | None = None
+    label: str = ""
+
+    @model_validator(mode="after")
+    def _default_label(self):
+        if not str(self.label or "").strip():
+            object.__setattr__(self, "label", self.name)
+        return self
 
 
 class MilestoneItem(BaseModel):
@@ -366,6 +382,15 @@ class MilestoneItem(BaseModel):
     date: str | None = None
     scheduled_start: str | None = None
     scheduled_finish: str | None = None
+    phase_name: str | None = None
+    parent_name: str | None = None
+    label: str = ""
+
+    @model_validator(mode="after")
+    def _default_label(self):
+        if not str(self.label or "").strip():
+            object.__setattr__(self, "label", self.name)
+        return self
 
 
 class ExecutiveHighlight(BaseModel):

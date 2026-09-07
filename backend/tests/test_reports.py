@@ -196,7 +196,7 @@ def test_wsr_report_matches_dashboard_sections() -> None:
         "Last Signed-Off Milestone",
     ):
         assert removed not in text
-    assert "No items identified from the plan" in text
+    assert "No material risks identified in the current phase." in text
     assert "A timeline cannot be generated" in text
     assert "Unavailable" in text
 

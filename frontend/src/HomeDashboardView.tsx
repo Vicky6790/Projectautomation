@@ -7,7 +7,7 @@ const MODULES = [
     icon: "analytics",
     kicker: "Start here",
     title: "SOW Analyzer",
-    detail: "Turn the signed statement of work into risks, gray areas, and questions the team can act on.",
+    detail: "Turn the signed Scope of Work into risks, gray areas, and questions the team can act on.",
     points: ["Gray areas & gaps", "Delivery risks", "Clarification questions"],
     cta: "Analyze SOW",
   },
@@ -45,7 +45,7 @@ export function HomeDashboardView() {
           <h1>From Signed SOW to Go-Live — Complete Delivery Visibility</h1>
           <p className="home-lead">
             Project Pulse transforms project data into actionable delivery intelligence. Analyze the
-            signed SOW, monitor project health, identify risks and delays, and trace the tasks that
+            signed Scope of Work, monitor project health, identify risks and delays, and trace the tasks that
             impact Go-Live — all grounded in the live MPP, with missing data clearly marked Unavailable.
           </p>
         </div>

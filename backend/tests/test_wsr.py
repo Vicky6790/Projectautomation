@@ -178,7 +178,7 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
         "Decisions Required",
     ):
         assert removed not in text
-    assert "No items identified from the plan" in text
+    assert "No material risks identified in the current phase." in text
     generated = client.get(f"/api/v1/wsr/requests/{handle}").json()["result"]
     overview = generated["facts"]["executive_summary"]["summary"]
     assert overview

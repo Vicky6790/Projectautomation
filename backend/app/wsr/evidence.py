@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import re
 import uuid
 
 from app.models import AiDerivedItem, EvidenceReference, PlanTaskData, ProjectPlanData
-from app.wsr.facts import _complete
+from app.wsr.facts import _complete, task_labeler
 
 AI_SECTIONS = (
     "risks",
@@ -67,6 +68,7 @@ def items_from_situation_risks(
     """Turn current-plan risk-engine output into dashboard risk cards."""
 
     items: list[AiDerivedItem] = []
+    label = task_labeler(plan.tasks, project_name=plan.name)
     for risk in risks:
         names = [str(name) for name in (risk.get("affectedTasks") or []) if name]
         evidence_lines = [str(line) for line in (risk.get("evidence") or []) if line]
@@ -75,15 +77,99 @@ def items_from_situation_risks(
         names = _incomplete_task_names(plan, names)
         if not names:
             continue
-        title = str(risk.get("title") or "Project risk").strip()
-        detail = evidence_lines[0] if evidence_lines else ""
-        mitigation = str(risk.get("recommendedMitigation") or "").strip()
-        parts = [part for part in (detail, f"Mitigation: {mitigation}" if mitigation else "") if part]
-        content = f"{title}: {' '.join(parts)}" if parts else title
-        item = resolve_item(plan, "risks", content, names)
+        primary = names[0]
+        if str(risk.get("kind") or "") == "focus":
+            bullets = [str(line).strip() for line in (risk.get("evidence") or []) if str(line).strip()]
+            content = "Focus Areas: " + "; ".join(bullets) if bullets else "Focus Areas"
+            item = resolve_item(plan, "risks", content, [primary])
+            if item is not None:
+                items.append(item)
+            continue
+        category = str(risk.get("category") or risk.get("title") or "Current Phase Impact").strip()
+        path = _phase_and_task_path(plan, primary, label)
+        evidence = _mitigation_for_path(
+            evidence_lines[0] if evidence_lines else "",
+            plan,
+            primary,
+            path,
+            label,
+        )
+        impact = _mitigation_for_path(
+            str(risk.get("projectImpact") or "").strip(),
+            plan,
+            primary,
+            path,
+            label,
+        )
+        mitigation = _mitigation_for_path(
+            str(risk.get("recommendedMitigation") or "").strip(),
+            plan,
+            primary,
+            path,
+            label,
+        )
+        owner = str(risk.get("owner") or "").strip() or "Not specified"
+        target = str(risk.get("targetDate") or "").strip() or "Not specified"
+        parts = [
+            part
+            for part in (
+                f"Risk: {path}.",
+                f"Evidence: {evidence}" if evidence else "",
+                f"Impact: {impact}" if impact else "",
+                f"Mitigation: {mitigation}" if mitigation else "",
+                f"Owner: {owner}.",
+                f"Target Date: {target}.",
+            )
+            if part
+        ]
+        content = f"{category}: {' '.join(parts)}" if parts else category
+        item = resolve_item(plan, "risks", content, [primary])
         if item is not None:
             items.append(item)
     return items
+
+
+def _phase_and_task_path(plan: ProjectPlanData, name: str, label) -> str:
+    lookup = {task.name.lower(): task for task in plan.tasks if task.name}
+    task = lookup.get(name.lower().strip())
+    if task is None:
+        return name.strip()
+    parts = [part.strip() for part in label(task).split(" / ") if part.strip()]
+    if len(parts) >= 2:
+        return f"{parts[0]} / {parts[1]}"
+    return parts[0] if parts else task.name
+
+
+def _mitigation_for_path(text: str, plan: ProjectPlanData, name: str, path: str, label) -> str:
+    if not text:
+        return ""
+    lookup = {task.name.lower(): task for task in plan.tasks if task.name}
+    task = lookup.get(name.lower().strip())
+    full = label(task) if task is not None else name
+    rewritten = text
+    for needle in (full, name):
+        if needle:
+            rewritten = rewritten.replace(needle, path)
+    return rewritten
+
+
+def _status_from_evidence(detail: str) -> str:
+    text = (detail or "").strip()
+    if not text:
+        return ""
+    marker = " is "
+    index = text.lower().find(marker)
+    if index != -1:
+        rest = text[index + len(marker) :].strip().rstrip(".")
+        if rest:
+            return f"This work is {rest}."
+    return text if text.endswith(".") else f"{text}."
+
+
+def _without_risk_word(value: str) -> str:
+    text = re.sub(r"\bat[-\s]?risk\b", "", value, flags=re.IGNORECASE)
+    text = re.sub(r"\brisks?\b", "", text, flags=re.IGNORECASE)
+    return " ".join(text.split()).strip(" :-")
 
 
 def _incomplete_task_names(plan: ProjectPlanData, names: list[str]) -> list[str]:

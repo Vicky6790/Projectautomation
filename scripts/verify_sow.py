@@ -84,10 +84,12 @@ def main() -> int:
         (
             "Start analysis",
             "Download analysis report",
-            "Upload Statement of Work",
+            "Upload Scope of Work",
+            "Preparing file",
             "Analysis summary",
             "No findings were identified.",
-            "AI recommendation",
+            "Recommendation:",
+            "From the document:",
             "Processed pages",
         ),
     ):
@@ -131,6 +133,17 @@ def main() -> int:
         return 1
     if not (result.get("summary") or "").strip():
         print("summary missing")
+        return 1
+    if not result.get("gray_areas"):
+        print("expected a gray area for the uploaded 'reasonable time' wording")
+        return 1
+    first = result["gray_areas"][0]
+    quoted = f"{first.get('evidence') or ''} {first.get('description') or ''}".casefold()
+    if "reasonable" not in quoted:
+        print("gray area is not grounded in the uploaded text", first)
+        return 1
+    if "stub analysis" in (result.get("summary") or "").casefold():
+        print("generic stub summary leaked into the report")
         return 1
     report = client.get(f"/api/v1/sow/requests/{handle}/report")
     print("report", report.status_code, report.headers.get("content-type"))

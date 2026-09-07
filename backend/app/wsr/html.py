@@ -260,7 +260,12 @@ def _overview(facts: WsrPlanFacts) -> str:
         text = facts.executive_summary.summary
     else:
         text = facts.executive_overview
-    return f"<p>{_esc(text)}</p>"
+    if not text or not str(text).strip():
+        return "<p>Unavailable</p>"
+    paragraphs = [part.strip() for part in str(text).split("\n\n") if part.strip()]
+    if not paragraphs:
+        return "<p>Unavailable</p>"
+    return "".join(f"<p>{_esc(part)}</p>" for part in paragraphs)
 
 
 def _timeline(facts: WsrPlanFacts) -> str:
@@ -318,8 +323,8 @@ def _phases(facts: WsrPlanFacts) -> str:
         return "<p>Unavailable</p>"
     rows = [
         "<tr><td><b>WBS</b></td><td><b>Phases</b></td>"
-        "<td><b>Start Date</b></td><td><b>Planned End</b></td>"
-        "<td><b>Deviated Date</b></td><td><b>Progress</b></td></tr>"
+        "<td><b>Baseline Start Date</b></td><td><b>Baseline End Date</b></td>"
+        "<td><b>Deviated End Date</b></td><td><b>Progress</b></td></tr>"
     ]
     for index, phase in enumerate(phases, start=1):
         if phase.progress is not None:
@@ -463,7 +468,7 @@ def _progress(facts: WsrPlanFacts) -> str:
     for item in items:
         rows.append(
             "<tr>"
-            f"<td>{html.escape(item.name)}</td>"
+            f"<td>{html.escape(item.label or item.name)}</td>"
             f"<td>{html.escape(_short_date(item.scheduled_start))}</td>"
             f"<td>{html.escape(_short_date(item.scheduled_finish or item.date))}</td>"
             f"<td>{html.escape(_percent(item.progress))}</td>"
@@ -489,7 +494,7 @@ def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
             today = ' <span class="badge">Today</span>'
         start = html.escape(_week_date(item.scheduled_start))
         finish = html.escape(_week_date(item.scheduled_finish or item.date))
-        name = html.escape(item.name)
+        name = html.escape(item.label or item.name)
         rows.append(
             f"<tr><td>{start}</td><td>{finish}</td><td>{name}</td><td>{today}</td></tr>"
         )
@@ -499,7 +504,7 @@ def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
 def _insights(items: list[AiDerivedItem] | None) -> str:
     visible = [item for item in (items or []) if item.review_status != "removed"]
     if not visible:
-        return "<p>No items identified from the plan</p>"
+        return "<p>No material risks identified in the current phase.</p>"
     return "".join(f"<p>{html.escape(item.content)}</p>" for item in visible)
 
 
@@ -551,9 +556,12 @@ def _wbs_label(phase, index: int) -> str:
 def _percent(value: float | None) -> str:
     if value is None:
         return "Unavailable"
-    if float(value).is_integer():
-        return f"{int(value)}%"
-    return f"{value}%"
+    pct = float(value)
+    if 0 < pct < 1.0:
+        pct = pct * 100.0
+    if pct.is_integer():
+        return f"{int(pct)}%"
+    return f"{pct}%"
 
 
 def _count(value: int | float | None, suffix: str = "") -> str:

@@ -168,7 +168,7 @@ export default function App() {
               <Glyph name="left_panel_close" />
               Hide navigation
             </button>
-            <p className="sidebar-credit">Powered By Vinayak Tathe</p>
+            <p className="sidebar-credit">Developed By Vinayak Tathe</p>
           </div>
         </aside>
         <div className="shell-main">

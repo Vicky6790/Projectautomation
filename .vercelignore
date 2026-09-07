@@ -1,0 +1,7 @@
+backend
+data
+onprem-data
+scripts
+.venv
+venv
+node_modules

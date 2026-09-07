@@ -70,7 +70,7 @@ def export_report(
         extra.append(f"Summary: {payload.summary}" if payload.summary else "Summary: Analysis complete.")
         if payload.processed_pages is not None:
             extra.append(f"Processed pages: {payload.processed_pages}")
-        body = _render("SOW analysis report", handle, SOW_SECTIONS, payload, extra)
+        body = _render("Scope of Work analysis report", handle, SOW_SECTIONS, payload, extra)
         return f"sow-analysis-{handle}.md", "text/markdown; charset=utf-8", body.encode("utf-8")
     if module == "wsr":
         from app.wsr.pdf import render_delay_mapping_pdf, render_wsr_pdf
@@ -125,9 +125,12 @@ def _one_line(value: object) -> str:
         title = str(value.get("title") or "").strip()
         description = str(value.get("description") or "").strip()
         recommendation = str(value.get("recommendation") or "").strip()
+        evidence = str(value.get("evidence") or "").strip()
         priority = str(value.get("priority") or "").strip()
         parts = [part for part in (priority.title() if priority else "", title, description) if part]
         line = " — ".join(dict.fromkeys(parts))
+        if evidence:
+            line = f"{line} Evidence: {evidence}" if line else f"Evidence: {evidence}"
         if recommendation:
             line = f"{line} Recommendation: {recommendation}" if line else f"Recommendation: {recommendation}"
         return " ".join(line.split())

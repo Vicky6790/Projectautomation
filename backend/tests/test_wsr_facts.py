@@ -450,7 +450,7 @@ def test_named_phase_convention_adds_nested_and_skips_other_children() -> None:
     assert [phase.name for phase in facts.timeline or []] == names
 
 
-def test_wbs_1_x_rows_are_phases_with_row_percent_complete() -> None:
+def test_wbs_1_x_rows_are_phases_with_row_work_complete() -> None:
     facts = derive_wsr_facts(
         _plan(
             [
@@ -461,6 +461,7 @@ def test_wbs_1_x_rows_are_phases_with_row_percent_complete() -> None:
                     outline_level=0,
                     is_summary=True,
                     percent_complete=40,
+                    percent_work_complete=40,
                 ),
                 PlanTaskData(
                     id=2,
@@ -470,7 +471,8 @@ def test_wbs_1_x_rows_are_phases_with_row_percent_complete() -> None:
                     is_summary=True,
                     scheduled_start="2026-07-27",
                     scheduled_finish="2026-08-14",
-                    percent_complete=100,
+                    percent_complete=10,
+                    percent_work_complete=100,
                 ),
                 PlanTaskData(
                     id=3,
@@ -487,7 +489,8 @@ def test_wbs_1_x_rows_are_phases_with_row_percent_complete() -> None:
                     is_summary=True,
                     scheduled_start="2026-06-15",
                     scheduled_finish="2026-09-25",
-                    percent_complete=62,
+                    percent_complete=10,
+                    percent_work_complete=62,
                 ),
                 PlanTaskData(
                     id=5,
@@ -496,7 +499,8 @@ def test_wbs_1_x_rows_are_phases_with_row_percent_complete() -> None:
                     outline_level=1,
                     scheduled_start="2026-07-01",
                     scheduled_finish="2026-07-02",
-                    percent_complete=0,
+                    percent_complete=99,
+                    percent_work_complete=0,
                 ),
                 PlanTaskData(
                     id=6,
@@ -506,7 +510,8 @@ def test_wbs_1_x_rows_are_phases_with_row_percent_complete() -> None:
                     is_summary=True,
                     scheduled_start="2026-10-01",
                     scheduled_finish="2027-01-29",
-                    percent_complete=15,
+                    percent_complete=50,
+                    percent_work_complete=15,
                 ),
             ]
         ),
@@ -523,6 +528,144 @@ def test_wbs_1_x_rows_are_phases_with_row_percent_complete() -> None:
     ]
     assert [phase.progress for phase in phases] == [100, 62, 0, 15]
     assert facts.phase_count == 4
+
+
+def test_phase_progress_uses_work_complete_not_percent_complete() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Core Banking", wbs="1", is_summary=True),
+                PlanTaskData(
+                    id=2,
+                    name="UX Phase",
+                    wbs="1.1",
+                    is_summary=True,
+                    percent_complete=10,
+                    percent_work_complete=62,
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Research",
+                    wbs="1.1.1",
+                    percent_complete=100,
+                    planned_work_hours=8,
+                    actual_work_hours=8,
+                ),
+                PlanTaskData(
+                    id=4,
+                    name="Design",
+                    wbs="1.1.2",
+                    percent_complete=0,
+                    planned_work_hours=8,
+                    actual_work_hours=0,
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    ux = next(phase for phase in facts.phase_statuses if phase.name == "UX Phase")
+    assert ux.progress == 62.0
+    assert ux.state == "in_progress"
+
+
+def test_phase_progress_unavailable_when_work_complete_missing() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Core Banking", wbs="1", is_summary=True),
+                PlanTaskData(id=2, name="UX Phase", wbs="1.1", is_summary=True, percent_complete=10),
+                PlanTaskData(
+                    id=3,
+                    name="Research",
+                    wbs="1.1.1",
+                    percent_complete=100,
+                    duration_days=3,
+                    scheduled_start="2026-08-01",
+                    scheduled_finish="2026-08-03",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    ux = next(phase for phase in facts.phase_statuses if phase.name == "UX Phase")
+    assert ux.progress is None
+    assert ux.state == "not_started"
+
+
+def test_one_percent_work_complete_is_not_hundred() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Core Banking", wbs="1", is_summary=True),
+                PlanTaskData(
+                    id=2,
+                    name="Documentation Phase",
+                    wbs="1.4",
+                    is_summary=True,
+                    percent_complete=1,
+                    percent_work_complete=1,
+                    scheduled_start="2026-09-01",
+                    scheduled_finish="2026-11-23",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    docs = next(phase for phase in facts.phase_statuses if phase.name == "Documentation Phase")
+    assert docs.progress == 1.0
+    assert docs.state == "in_progress"
+
+
+def test_phase_progress_normalizes_fractional_work_complete() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Core Banking", wbs="1", is_summary=True),
+                PlanTaskData(
+                    id=2,
+                    name="UX Phase",
+                    wbs="1.1",
+                    is_summary=True,
+                    percent_complete=10,
+                    percent_work_complete=0.4,
+                    scheduled_start="2026-06-15",
+                    scheduled_finish="2026-09-25",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    ux = next(phase for phase in facts.phase_statuses if phase.name == "UX Phase")
+    assert ux.progress == 40.0
+    assert ux.state == "in_progress"
+
+
+def test_phase_progress_uses_row_work_hours_when_work_complete_missing() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Core Banking", wbs="1", is_summary=True),
+                PlanTaskData(
+                    id=2,
+                    name="UX Phase",
+                    wbs="1.1",
+                    is_summary=True,
+                    percent_complete=10,
+                    planned_work_hours=80,
+                    actual_work_hours=20,
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    ux = next(phase for phase in facts.phase_statuses if phase.name == "UX Phase")
+    assert ux.progress == 25.0
+    assert ux.state == "in_progress"
 
 
 def test_resources_deployed_counts_resource_sheet() -> None:
@@ -870,6 +1013,45 @@ def test_spanning_task_stays_in_current_week_not_upcoming() -> None:
     )
     assert [item.name for item in facts.progress_to_date] == ["Build across weekend"]
     assert [item.name for item in facts.upcoming_milestones] == []
+
+
+def test_week_task_labels_include_phase_and_parent() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(id=1, name="Core Banking", wbs="1", outline_level=1, is_summary=True),
+                PlanTaskData(id=2, name="UX Phase", wbs="1.1", outline_level=2, is_summary=True),
+                PlanTaskData(id=3, name="Wireframes", wbs="1.1.1", outline_level=3, is_summary=True),
+                PlanTaskData(
+                    id=4,
+                    name="This week build",
+                    wbs="1.1.1.1",
+                    outline_level=4,
+                    scheduled_start="2026-08-17",
+                    scheduled_finish="2026-08-21",
+                    percent_complete=50,
+                ),
+                PlanTaskData(
+                    id=5,
+                    name="Next week review",
+                    wbs="1.1.1.2",
+                    outline_level=4,
+                    scheduled_start="2026-08-25",
+                    scheduled_finish="2026-08-28",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    current = facts.progress_to_date[0]
+    assert current.name == "This week build"
+    assert current.phase_name == "UX Phase"
+    assert current.parent_name == "Wireframes"
+    assert current.label == "UX Phase / Wireframes / This week build"
+    upcoming = facts.upcoming_milestones[0]
+    assert upcoming.name == "Next week review"
+    assert upcoming.label == "UX Phase / Wireframes / Next week review"
 
 
 def test_project_name_comes_from_wbs_one() -> None:

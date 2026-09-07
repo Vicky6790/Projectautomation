@@ -120,13 +120,17 @@ def main() -> int:
         (
             "Download to PDF",
             "Generate WSR & Insights",
+            "Generate Executive Summary",
             "Phases to Go-Live",
             "Person-Days Planned",
             "Work Items Complete",
-            "No items identified from the plan",
+            "No material risks identified in the current phase.",
             "No tasks scheduled in the current week",
             "Reading the file",
             "Creating narrative",
+            "Baseline Start Date",
+            "Baseline End Date",
+            "Deviated End Date",
         ),
     )
     if not page_js_ok:

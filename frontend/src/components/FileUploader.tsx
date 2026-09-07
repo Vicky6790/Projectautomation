@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from "react";
-import { uploadFileWithProgress } from "../api";
+import { uploadFileWithProgress, type UploadProgress } from "../api";
 import type { FileRecord } from "../types";
 
 type Props = {
@@ -11,6 +11,7 @@ type Props = {
   variant?: "default" | "button" | "card";
   onUploaded: (file: FileRecord) => void;
   onError: (message: string) => void;
+  onProgress?: (update: UploadProgress | null) => void;
 };
 
 export function FileUploader({
@@ -22,19 +23,25 @@ export function FileUploader({
   variant = "default",
   onUploaded,
   onError,
+  onProgress,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<(() => void) | null>(null);
-  const [progress, setProgress] = useState<number | null>(null);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
+
+  function report(update: UploadProgress | null) {
+    setProgress(update);
+    onProgress?.(update);
+  }
 
   function chooseFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
       return;
     }
-    const { promise, abort } = uploadFileWithProgress(file, setProgress, endpoint);
+    const { promise, abort } = uploadFileWithProgress(file, (update) => report(update), endpoint);
     abortRef.current = abort;
-    setProgress(0);
+    report({ percent: 0, phase: "uploading" });
     void promise
       .then(onUploaded)
       .catch((error: unknown) => {
@@ -42,7 +49,7 @@ export function FileUploader({
       })
       .finally(() => {
         abortRef.current = null;
-        setProgress(null);
+        report(null);
         if (inputRef.current) {
           inputRef.current.value = "";
         }
@@ -95,8 +102,18 @@ export function FileUploader({
       )}
       {variant === "button" || variant === "card" ? input : null}
       {progress !== null ? (
-        <div className="progress">
-          <p>Uploading {progress}%</p>
+        <div className="upload-progress" role="status" aria-live="polite">
+          <div className="upload-progress-track">
+            <span
+              className={progress.phase === "processing" ? "is-processing" : undefined}
+              style={{ width: `${progress.percent}%` }}
+            />
+          </div>
+          <p>
+            {progress.phase === "processing"
+              ? "Preparing file…"
+              : `Uploading ${progress.percent}%`}
+          </p>
           <button type="button" onClick={() => abortRef.current?.()}>
             Cancel
           </button>

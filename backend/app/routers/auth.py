@@ -54,7 +54,8 @@ def login(body: SignInRequest, response: Response) -> OperatorView:
         COOKIE_NAME,
         session.id,
         httponly=True,
-        samesite="lax",
+        samesite=settings.cookie_samesite_value,
+        secure=settings.cookie_secure_flag,
         max_age=settings.session_idle_hours * 3600,
     )
     return _view(operator)
@@ -65,7 +66,12 @@ def logout(request: Request, response: Response) -> dict:
     operator_id = current_operator_id.get()
     access.drop_session(request.cookies.get(COOKIE_NAME))
     access.append_audit("logout", operator_id=operator_id, handle=None, ok=True)
-    response.delete_cookie(COOKIE_NAME)
+    response.delete_cookie(
+        COOKIE_NAME,
+        httponly=True,
+        samesite=settings.cookie_samesite_value,
+        secure=settings.cookie_secure_flag,
+    )
     return {"ok": True}
 
 

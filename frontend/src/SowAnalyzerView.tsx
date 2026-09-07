@@ -10,7 +10,7 @@ type CategoryKey = Exclude<keyof AnalysisReport, "request_handle" | "processed_p
 const ANALYZE_STAGES = [
   "Reading the file",
   "Extracting text",
-  "Analyzing the SOW",
+  "Analyzing the Scope of Work",
   "Rendering findings",
 ];
 
@@ -30,6 +30,7 @@ function asFinding(item: string | SowFinding, category: string): SowFinding {
       title: item,
       description: item,
       recommendation: "",
+      evidence: "",
     };
   }
   return {
@@ -38,6 +39,7 @@ function asFinding(item: string | SowFinding, category: string): SowFinding {
     title: item.title || item.description,
     description: item.description || item.title,
     recommendation: item.recommendation || "",
+    evidence: item.evidence || "",
   };
 }
 
@@ -68,8 +70,9 @@ export function SowAnalyzerView() {
   const [uploaded, setUploaded] = useState<FileRecord | null>(null);
   const [job, setJob] = useState<ProcessingResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [stage, setStage] = useState(0);
-  const [message, setMessage] = useState("Upload a Statement of Work (PDF or Word), then start analysis.");
+  const [message, setMessage] = useState("Upload a Scope of Work (PDF or Word), then start analysis.");
   const [selected, setSelected] = useState<CategoryKey>("gray_areas");
 
   const report = asReport(job?.result ?? null);
@@ -104,7 +107,7 @@ export function SowAnalyzerView() {
 
   async function runAnalysis(handle: string) {
     setBusy(true);
-    setMessage("Reading the file, extracting text, analyzing the SOW, and rendering findings…");
+    setMessage("Reading the file, extracting text, analyzing the Scope of Work, and rendering findings…");
     try {
       const result = await analyzeSow(handle);
       setJob(result);
@@ -155,8 +158,8 @@ export function SowAnalyzerView() {
         tone="sow"
         icon="analytics"
         kicker="SOW Analyzer"
-        title="Read the signed statement of work"
-        subtitle="Upload a PDF or Word SOW. Findings stay grouped by gray areas, risks, gaps, assumptions, dependencies, and questions."
+        title="Read the signed Scope of Work"
+        subtitle="Upload a PDF or Word Scope of Work. Findings stay grouped by gray areas, risks, gaps, assumptions, dependencies, and questions — each grounded in the uploaded text."
       />
 
       <div className="wsr-upload-card">
@@ -178,7 +181,7 @@ export function SowAnalyzerView() {
                 onClick={() => {
                   setUploaded(null);
                   setJob(null);
-                  setMessage("Upload a Statement of Work (PDF or Word), then start analysis.");
+                  setMessage("Upload a Scope of Work (PDF or Word), then start analysis.");
                 }}
               >
                 ×
@@ -189,12 +192,24 @@ export function SowAnalyzerView() {
               variant="card"
               disabled={busy}
               accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              label="Upload Statement of Work"
+              label="Upload Scope of Work"
               hint="PDF or Word (.pdf, .docx)"
               endpoint="/api/v1/sow/uploads"
+              onProgress={(update) => {
+                setPreparing(update !== null);
+                if (!update) {
+                  return;
+                }
+                setMessage(
+                  update.phase === "processing"
+                    ? "Preparing the Scope of Work…"
+                    : `Uploading ${update.percent}%…`,
+                );
+              }}
               onUploaded={(file) => {
                 setUploaded(file);
                 setJob(null);
+                setPreparing(false);
                 setMessage("File ready. Start analysis to review findings.");
               }}
               onError={setMessage}
@@ -215,7 +230,8 @@ export function SowAnalyzerView() {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={!uploaded || busy}
+              disabled={!uploaded || busy || preparing}
+              title={!uploaded || preparing ? "Start analysis is available after the file is ready" : undefined}
               onClick={() => uploaded && void runAnalysis(uploaded.id)}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
@@ -295,9 +311,14 @@ export function SowAnalyzerView() {
                     </p>
                     <h4>{item.title}</h4>
                     <p>{item.description}</p>
+                    {item.evidence ? (
+                      <blockquote className="sow-evidence">
+                        <strong>From the document:</strong> {item.evidence}
+                      </blockquote>
+                    ) : null}
                     {item.recommendation ? (
                       <p className="sow-recommendation">
-                        <strong>AI recommendation:</strong> {item.recommendation}
+                        <strong>Recommendation:</strong> {item.recommendation}
                       </p>
                     ) : null}
                   </li>
@@ -310,7 +331,7 @@ export function SowAnalyzerView() {
         <ModuleLanding
           tone="sow"
           steps={[
-            { icon: "upload_file", title: "Upload the SOW", copy: "PDF or Word. The original file stays the source of truth." },
+            { icon: "upload_file", title: "Upload the Scope of Work", copy: "PDF or Word. The original file stays the source of truth." },
             { icon: "auto_awesome", title: "Start analysis", copy: "Text is extracted and findings are grouped into six categories." },
             { icon: "fact_check", title: "Review and download", copy: "Open a category, then download the analysis report when you are ready." },
           ]}

@@ -10,6 +10,7 @@ from app.ai.criteria import RETRO_CRITERIA, SOW_CRITERIA, WSR_CRITERIA
 from app.config import settings
 from app.errors import AppError
 from app.models import AnalysisReport, RetrospectiveReport
+from app.sow.classify import analyze_scope_of_work, merge_scope_reports
 
 _client = OpenAiClient()
 
@@ -33,36 +34,23 @@ _RETRO_LISTS = (
 
 
 def analyze_sow(sow_text: str) -> AnalysisReport:
+    grounded = analyze_scope_of_work(sow_text)
     if settings.ai_stub:
-        snippet = sow_text.strip()[:80] or "uploaded SOW"
-        return AnalysisReport(
-            summary="Stub analysis of the uploaded SOW. Findings stay limited to extractable text.",
-            gray_areas=[
-                {
-                    "category": "gray_areas",
-                    "priority": "medium",
-                    "title": "Undefined delivery language",
-                    "description": f"Review undefined terms in: {snippet}",
-                    "recommendation": "Replace vague wording with measurable acceptance criteria.",
-                }
-            ],
-            risks=[],
-            missing_requirements=[],
-            assumptions=[],
-            dependencies=[],
-            clarification_questions=[],
-        )
+        return grounded
     parsed = _client.complete_json(
         system_prompt=(
-            "You are a PMO analyst. Return JSON only with keys summary, gray_areas, risks, "
-            "missing_requirements, assumptions, dependencies, clarification_questions. "
-            "summary is 1-2 sentences from the SOW, or an empty string if insufficient. "
-            "Each other value is an array of objects with priority (high, medium, or low), "
-            "title, description, and recommendation. Do not invent facts. " + SOW_CRITERIA
+            "You are a PMO analyst reviewing a Scope of Work. Return JSON only with keys summary, "
+            "gray_areas, risks, missing_requirements, assumptions, dependencies, "
+            "clarification_questions. summary is 1-2 sentences from the document, or an empty "
+            "string if insufficient. Each other value is an array of objects with priority "
+            "(high, medium, or low), title, description, recommendation, and evidence. "
+            "evidence must be a verbatim quote copied from the supplied text. "
+            "Do not invent facts. Drop any finding you cannot quote. " + SOW_CRITERIA
         ),
         user_prompt=sow_text,
     )
-    return _report(AnalysisReport, parsed, _SOW_LISTS)
+    ai_report = _report(AnalysisReport, parsed, _SOW_LISTS)
+    return merge_scope_reports(grounded, ai_report, sow_text)
 
 
 def analyze_wsr(plan_data: dict[str, Any]) -> dict[str, Any]:

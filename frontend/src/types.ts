@@ -187,6 +187,9 @@ export type ProgressItem = {
   scheduled_start?: string | null;
   scheduled_finish?: string | null;
   progress?: number | null;
+  phase_name?: string | null;
+  parent_name?: string | null;
+  label?: string | null;
 };
 
 export type MilestoneItem = {
@@ -194,6 +197,9 @@ export type MilestoneItem = {
   date?: string | null;
   scheduled_start?: string | null;
   scheduled_finish?: string | null;
+  phase_name?: string | null;
+  parent_name?: string | null;
+  label?: string | null;
 };
 
 export type ExecutiveHighlight = {
@@ -318,6 +324,7 @@ export type SowFinding = {
   title: string;
   description: string;
   recommendation?: string;
+  evidence?: string;
 };
 
 export type AnalysisReport = {

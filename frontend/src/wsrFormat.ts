@@ -23,11 +23,20 @@ export function unavailable(value: string | number | null | undefined): string {
   return String(value);
 }
 
+export function asPercent(value: number): number {
+  // MSP stores 0–100. 1 is 1%, not 100%. Only (0, 1) is a fraction.
+  if (value > 0 && value < 1) {
+    return value * 100;
+  }
+  return value;
+}
+
 export function percent(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return "Unavailable";
   }
-  return Number.isInteger(value) ? `${value}%` : `${value}%`;
+  const pct = asPercent(value);
+  return Number.isInteger(pct) ? `${pct}%` : `${pct}%`;
 }
 
 export function namedDate(value: NamedDateValue | null | undefined): string {

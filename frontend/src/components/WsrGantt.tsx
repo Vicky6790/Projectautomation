@@ -1,5 +1,5 @@
 import type { PhaseStatus } from "../types";
-import { durationDays, phaseWbs, windowRange } from "../wsrFormat";
+import { durationDays, percent, phaseState, phaseWbs, windowRange } from "../wsrFormat";
 
 const COLORS = ["#475569", "#6366f1", "#6366f1", "#10b981", "#10b981", "#8b5cf6", "#8b5cf6", "#f59e0b"];
 
@@ -33,12 +33,21 @@ function dateToPercent(value: Date, months: Date[]): number {
 type Props = {
   phases: PhaseStatus[];
   asOf?: string | null;
+  endMode?: "planned" | "deviated";
+  showProgress?: boolean;
 };
 
-export function WsrGantt({ phases, asOf }: Props) {
+function phaseFinish(phase: PhaseStatus, endMode: "planned" | "deviated"): string | null | undefined {
+  if (endMode === "deviated") {
+    return phase.actual_finish || phase.planned_finish;
+  }
+  return phase.planned_finish || phase.actual_finish;
+}
+
+export function WsrGantt({ phases, asOf, endMode = "planned", showProgress = false }: Props) {
   const rows = phases.map((phase, index) => {
     const startValue = phase.planned_start || phase.actual_start;
-    const finishValue = phase.planned_finish || phase.actual_finish;
+    const finishValue = phaseFinish(phase, endMode);
     return {
       ...phase,
       wbs: phaseWbs(phase, index),
@@ -69,12 +78,13 @@ export function WsrGantt({ phases, asOf }: Props) {
     );
 
   return (
-    <div className="gantt-exec">
+    <div className={`gantt-exec${showProgress ? " has-progress" : ""}`}>
       <div className="gantt-exec-inner">
         <div className="gantt-row-exec gantt-head-exec">
           <div>Phase</div>
           <div>Window · Dur</div>
           <div />
+          {showProgress ? <div>Progress</div> : null}
           <div className="gantt-months-exec" style={{ gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
             {months.map((month, index) => (
               <span
@@ -108,6 +118,12 @@ export function WsrGantt({ phases, asOf }: Props) {
                     : "—"}
                 </div>
                 <div className="gantt-dur-exec">{days != null ? `${days}d` : "—"}</div>
+                {showProgress ? (
+                  <div className="gantt-progress-exec">
+                    <span>{phaseState(phase.state)}</span>
+                    <strong>{phase.progress == null ? "—" : percent(phase.progress)}</strong>
+                  </div>
+                ) : null}
                 <div className="gantt-track-exec">
                   {todayLeft !== null ? (
                     <span className="gantt-today-exec" style={{ left: `${todayLeft}%` }} aria-hidden="true" />

@@ -30,6 +30,11 @@ export class ApiRequestError extends Error {
 const SESSION: RequestInit = { credentials: "include" };
 export const AUTH_LOST_EVENT = "pa-auth-lost";
 
+function apiUrl(path: string): string {
+  const base = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+  return `${base}${path}`;
+}
+
 function notifyAuthLost(code?: string) {
   if (code === "AUTH_REQUIRED" && typeof window !== "undefined") {
     window.dispatchEvent(new Event(AUTH_LOST_EVENT));
@@ -37,7 +42,7 @@ function notifyAuthLost(code?: string) {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { ...SESSION, ...init });
+  const response = await fetch(apiUrl(path), { ...SESSION, ...init });
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as
       | {
@@ -110,7 +115,7 @@ export function getSowRequest(handle: string): Promise<ProcessingResponse> {
 export async function downloadSowReport(
   handle: string,
 ): Promise<{ blob: Blob; filename: string }> {
-  const response = await fetch(`/api/v1/sow/requests/${handle}/report`, SESSION);
+  const response = await fetch(apiUrl(`/api/v1/sow/requests/${handle}/report`), SESSION);
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as
       | {
@@ -138,19 +143,35 @@ export async function downloadSowReport(
   };
 }
 
+export type UploadProgress = {
+  percent: number;
+  phase: "uploading" | "processing";
+};
+
 export function uploadFileWithProgress(
   file: File,
-  onProgress: (percent: number) => void,
+  onProgress: (update: UploadProgress) => void,
   path = "/api/v1/sow/uploads",
 ): { promise: Promise<FileRecord>; abort: () => void } {
   const xhr = new XMLHttpRequest();
   const promise = new Promise<FileRecord>((resolve, reject) => {
-    xhr.open("POST", path);
+    xhr.open("POST", apiUrl(path));
     xhr.withCredentials = true;
     xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        onProgress(Math.round((event.loaded / event.total) * 100));
+      if (!event.lengthComputable || event.total <= 0) {
+        return;
       }
+      if (event.loaded >= event.total) {
+        onProgress({ percent: 90, phase: "processing" });
+        return;
+      }
+      onProgress({
+        percent: Math.min(89, Math.round((event.loaded / event.total) * 90)),
+        phase: "uploading",
+      });
+    };
+    xhr.upload.onload = () => {
+      onProgress({ percent: 90, phase: "processing" });
     };
     xhr.onload = () => {
       try {
@@ -211,7 +232,7 @@ export function approvePlan(handle: string): Promise<ProcessingResponse> {
 }
 
 export async function downloadPlanMpp(handle: string): Promise<Blob> {
-  const response = await fetch(`/api/v1/plan/requests/${handle}/mpp`, SESSION);
+  const response = await fetch(apiUrl(`/api/v1/plan/requests/${handle}/mpp`), SESSION);
   if (!response.ok) {
     throw new ApiRequestError("Plan file download failed");
   }
@@ -247,7 +268,10 @@ export async function downloadWsrReport(
   scope?: "delay_mapping",
 ): Promise<{ blob: Blob; filename: string }> {
   const query = scope ? `?scope=${encodeURIComponent(scope)}` : "";
-  const response = await fetch(`/api/v1/wsr/requests/${handle}/report${query}`, SESSION);
+  const response = await fetch(
+    apiUrl(`/api/v1/wsr/requests/${handle}/report${query}`),
+    SESSION,
+  );
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as
       | {
@@ -324,7 +348,10 @@ export function getRetrospectiveRequest(handle: string): Promise<ProcessingRespo
 }
 
 export async function downloadRetrospectiveReport(handle: string): Promise<Blob> {
-  const response = await fetch(`/api/v1/retrospective/requests/${handle}/report`, SESSION);
+  const response = await fetch(
+    apiUrl(`/api/v1/retrospective/requests/${handle}/report`),
+    SESSION,
+  );
   if (!response.ok) {
     throw new ApiRequestError("Retrospective download failed");
   }

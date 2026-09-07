@@ -103,8 +103,20 @@ def test_analyze_sow_stub_skips_provider(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(settings, "ai_stub", True)
     monkeypatch.setattr(settings, "openai_api_key", "")
     result = engine.analyze_sow("The vendor shall deliver a portal.")
-    assert result.gray_areas
+    assert result.gray_areas == []
     assert result.risks == []
+    assert "stub" not in result.summary.casefold()
+
+
+def test_analyze_sow_stub_quotes_uploaded_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_stub", True)
+    result = engine.analyze_sow("The vendor shall deliver a portal in a reasonable time.")
+    assert result.gray_areas
+    quoted = f"{result.gray_areas[0].evidence} {result.gray_areas[0].description}".casefold()
+    assert "reasonable" in quoted
+    assert result.missing_requirements == []
 
 
 def test_analyze_sow_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -126,9 +138,12 @@ def test_analyze_sow_parses_structured_result(monkeypatch: pytest.MonkeyPatch) -
     fake = _FakeClient(_FakeResponse(200, _sow_payload()))
     monkeypatch.setattr("app.ai.client.httpx.Client", lambda **_kwargs: fake)
     result = engine.analyze_sow("The vendor shall deliver a portal in a reasonable time.")
-    assert result.gray_areas[0].description == "Term 'reasonable' is undefined"
+    quoted = " ".join(
+        f"{item.evidence} {item.description}" for item in result.gray_areas
+    ).casefold()
+    assert "reasonable" in quoted
     assert result.risks == []
-    assert result.missing_requirements[0].description == "No acceptance criteria"
+    assert result.missing_requirements == []
     assert result.clarification_questions
 
 
@@ -273,7 +288,7 @@ def test_retry_after_transient_provider_error(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(ai_client.time, "sleep", lambda _seconds: None)
     seq = _SeqClient([_FakeResponse(429, {}), _FakeResponse(200, _sow_payload())])
     monkeypatch.setattr("app.ai.client.httpx.Client", lambda **_kwargs: seq)
-    result = engine.analyze_sow("SOW text for retry")
+    result = engine.analyze_sow("The vendor shall deliver a portal in a reasonable time.")
     assert result.gray_areas
     assert seq.calls == 2
 

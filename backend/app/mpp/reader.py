@@ -93,9 +93,10 @@ def project_from_mpxj(project) -> ProjectPlanData:
         actual_start = iso_date(task.getActualStart())
         actual_finish = iso_date(task.getActualFinish())
         percent = _percent(task.getPercentageComplete())
+        work_complete = _mpp_percent(_task_value(task, "getPercentageWorkComplete"))
         planned_work = duration_hours(task.getWork(), calendar)
         actual_work = duration_hours(task.getActualWork(), calendar)
-        if actual_start or actual_finish or percent > 0 or (actual_work or 0) > 0:
+        if actual_start or actual_finish or percent > 0 or (actual_work or 0) > 0 or (work_complete or 0) > 0:
             has_actuals = True
         predecessor_ids: list[int] = []
         predecessor_names: list[str] = []
@@ -152,6 +153,7 @@ def project_from_mpxj(project) -> ProjectPlanData:
                 actual_start=actual_start,
                 actual_finish=actual_finish,
                 percent_complete=percent,
+                percent_work_complete=work_complete,
                 predecessor_ids=predecessor_ids,
                 predecessor_names=predecessor_names,
                 predecessor_links=predecessor_links,
@@ -456,6 +458,19 @@ def _percent(value) -> float:
         return 0.0
 
 
+def _mpp_percent(value) -> float | None:
+    if value is None:
+        return None
+    try:
+        pct = float(value)
+    except (TypeError, ValueError):
+        return None
+    # MSP/MPXJ store 0–100. 1 means 1%, not 100%.
+    if 0 < pct < 1.0:
+        pct *= 100.0
+    return min(100.0, max(0.0, pct))
+
+
 def _number(value) -> float | None:
     if value is None:
         return None
@@ -623,4 +638,7 @@ def _phase(task: PlanTaskData) -> PlanPhaseData:
         baseline_finish=task.baseline_finish,
         actual_start=task.actual_start,
         percent_complete=task.percent_complete,
+        percent_work_complete=task.percent_work_complete,
+        planned_work_hours=task.planned_work_hours,
+        actual_work_hours=task.actual_work_hours,
     )

@@ -1,3 +1,5 @@
+import { asPercent } from "../wsrFormat";
+
 type Props = {
   value: number | null | undefined;
   size?: "sm" | "lg";
@@ -5,7 +7,7 @@ type Props = {
 
 export function WsrProgressRing({ value, size = "sm" }: Props) {
   const ready = value !== null && value !== undefined;
-  const pct = ready ? Math.min(100, Math.max(0, value)) : 0;
+  const pct = ready ? Math.min(100, Math.max(0, asPercent(value))) : 0;
   const radius = 16;
   const circumference = 2 * Math.PI * radius;
   const dash = (pct / 100) * circumference;

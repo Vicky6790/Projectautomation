@@ -16,6 +16,7 @@ import type {
   WsrPlanFacts,
 } from "./types";
 import {
+  asPercent,
   personDaysLabel,
   percent,
   phaseState,
@@ -47,6 +48,18 @@ function asReport(result: ProcessingResponse["result"]) {
   return asWsrReport(result);
 }
 
+function reportSaveName(raw: string | null | undefined, kind: "wsr" | "executive" = "wsr"): string {
+  const now = new Date();
+  const yymmdd = [
+    String(now.getFullYear()).slice(-2),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("");
+  const withoutExt = String(raw || "Project").replace(/\.[^./\\]+$/, "");
+  const projectName = withoutExt.replace(/[^A-Za-z0-9]+/g, "") || "Project";
+  return kind === "executive" ? `${yymmdd}_${projectName}_Exec_V1` : `${yymmdd}_${projectName}_V1`;
+}
+
 function visibleInsights(items: AiDerivedItem[]): AiDerivedItem[] {
   return items.filter((item) => item.review_status !== "removed");
 }
@@ -63,13 +76,16 @@ function WsrProjectBoard({
   asOf,
   active,
   sharedProgramMetrics,
+  variant = "wsr",
 }: {
   board: ProjectWsrDashboard;
   asOf?: string | null;
   active: boolean;
   sharedProgramMetrics?: boolean;
+  variant?: "wsr" | "executive";
 }) {
   const facts = board.facts;
+  const executive = variant === "executive";
   const deployed = facts.resources_deployed ?? facts.people_planned;
   const kpis = [
     {
@@ -96,6 +112,7 @@ function WsrProjectBoard({
           : "of planned work items",
     },
   ];
+  let section = 1;
   return (
     <div className={active ? "dashboard wsr-project-pane is-active" : "dashboard wsr-project-pane"}>
       <WsrHero
@@ -107,47 +124,55 @@ function WsrProjectBoard({
         progressHint={sharedProgramMetrics ? "This project" : "By work completion"}
       />
 
-      <div className="kpi-grid">
-        {kpis.map((kpi, index) => (
-          <KpiCard
-            key={kpi.label}
-            label={kpi.label}
-            value={kpi.value}
-            hint={kpi.hint}
-            icon={KPI_ICONS[index]}
-            tone={KPI_TONES[index]}
-          />
-        ))}
-      </div>
+      {executive ? null : (
+        <div className="kpi-grid">
+          {kpis.map((kpi, index) => (
+            <KpiCard
+              key={kpi.label}
+              label={kpi.label}
+              value={kpi.value}
+              hint={kpi.hint}
+              icon={KPI_ICONS[index]}
+              tone={KPI_TONES[index]}
+            />
+          ))}
+        </div>
+      )}
 
-      <Section n={1} title="Executive Summary" flush>
-        <p className="overview-copy">
-          {unavailable(facts.executive_summary?.summary || facts.executive_overview)}
-        </p>
-      </Section>
+      {executive ? null : (
+        <Section n={section++} title="Executive Summary" flush>
+          <OverviewCopy text={facts.executive_summary?.summary || facts.executive_overview} />
+        </Section>
+      )}
 
       <Section
-        n={2}
+        n={section++}
         title="Project Timeline"
         hint="Phases from project planning to Go-Live. The dashed marker shows today's position; hover any bar for full dates."
       >
         {facts.timeline?.length ? (
-          <WsrGantt phases={facts.timeline} asOf={asOf} />
+          <WsrGantt
+            phases={facts.timeline}
+            asOf={asOf}
+            endMode={executive ? "deviated" : "planned"}
+            showProgress={executive}
+          />
         ) : (
           <p>A timeline cannot be generated</p>
         )}
       </Section>
 
-      <Section n={3} title="Phase-Wise Status">
+      {executive ? null : (
+      <Section n={section++} title="Phase-Wise Status">
         {facts.phase_statuses?.length ? (
           <table className="phase-table">
             <thead>
               <tr>
                 <th>WBS</th>
                 <th>Phases</th>
-                <th>Start Date</th>
-                <th>Planned End</th>
-                <th>Deviated Date</th>
+                <th>Baseline Start Date</th>
+                <th>Baseline End Date</th>
+                <th>Deviated End Date</th>
                 <th>Progress</th>
               </tr>
             </thead>
@@ -179,7 +204,7 @@ function WsrProjectBoard({
                       ) : (
                         <div className="phase-progress">
                           <div className={`phase-bar state-${phase.state}`}>
-                            <span style={{ width: `${Math.min(100, Math.max(0, phase.progress ?? 0))}%` }} />
+                            <span style={{ width: `${Math.min(100, Math.max(0, asPercent(phase.progress ?? 0)))}%` }} />
                           </div>
                           <strong>
                             {phase.progress == null ? phaseState(phase.state) : percent(phase.progress)}
@@ -196,10 +221,12 @@ function WsrProjectBoard({
           <p>Unavailable</p>
         )}
       </Section>
+      )}
 
+      {executive ? null : (
       <div className="wsr-paired">
         <Section
-          n={4}
+          n={section++}
           title="Progress of current week"
           hint={`Tasks in the Monday–Sunday week of the WSR publish date (${publishWeekRange(asOf)}).`}
         >
@@ -216,7 +243,7 @@ function WsrProjectBoard({
               <tbody>
                 {facts.progress_to_date.map((item: ProgressItem, index) => (
                   <tr key={`${item.name}-${index}`}>
-                    <td>{item.name}</td>
+                    <td className="task-hierarchy">{item.label || item.name}</td>
                     <td className="mono">{shortDate(item.scheduled_start)}</td>
                     <td className="mono">{shortDate(item.scheduled_finish || item.date)}</td>
                     <td>{item.progress == null ? "Unavailable" : percent(item.progress)}</td>
@@ -230,7 +257,7 @@ function WsrProjectBoard({
         </Section>
 
         <Section
-          n={5}
+          n={section++}
           title="Upcoming Milestones Of Next Week"
           hint={`Incomplete work in the Monday–Sunday week after the WSR publish date (${publishWeekRange(asOf, 1)}).`}
         >
@@ -251,7 +278,7 @@ function WsrProjectBoard({
                     <tr key={`${item.name}-${index}`} className={today ? "milestone-today" : undefined}>
                       <td className="mono">{weekDate(item.scheduled_start)}</td>
                       <td className="mono">{weekDate(item.scheduled_finish || item.date)}</td>
-                      <td>{item.name}</td>
+                      <td className="task-hierarchy">{item.label || item.name}</td>
                       <td>{today ? <span className="today-badge">Today</span> : null}</td>
                     </tr>
                   );
@@ -263,14 +290,17 @@ function WsrProjectBoard({
           )}
         </Section>
       </div>
+      )}
 
-      <Section n={6} title="Risks & Focus Areas">
+      {executive ? null : (
+      <Section n={section++} title="Risks & Focus Areas">
         <InsightCards
           items={visibleInsights(board.risks)}
           tone="risk"
-          empty="No items identified from the plan"
+          empty="No material risks identified in the current phase."
         />
       </Section>
+      )}
     </div>
   );
 }
@@ -319,6 +349,27 @@ function WsrHero({
         </div>
       </div>
     </section>
+  );
+}
+
+function OverviewCopy({ text }: { text?: string | null }) {
+  const paras = (text || "")
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (!paras.length) {
+    return (
+      <div className="overview-copy">
+        <p>Unavailable</p>
+      </div>
+    );
+  }
+  return (
+    <div className="overview-copy">
+      {paras.map((part, index) => (
+        <p key={index}>{part}</p>
+      ))}
+    </div>
   );
 }
 
@@ -428,6 +479,7 @@ export function WsrDashboardView() {
   );
 
   const [activeCode, setActiveCode] = useState<string | null>(null);
+  const [reportKind, setReportKind] = useState<"wsr" | "executive">("wsr");
 
   useEffect(() => {
     const reset = () => {
@@ -436,6 +488,7 @@ export function WsrDashboardView() {
       setBusy(false);
       setStage(0);
       setActiveCode(null);
+      setReportKind("wsr");
       setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
     };
     window.addEventListener(WSR_RESET_EVENT, reset);
@@ -476,7 +529,8 @@ export function WsrDashboardView() {
     return () => window.clearInterval(timer);
   }, [busy]);
 
-  async function runGenerate(handle: string) {
+  async function runGenerate(handle: string, kind: "wsr" | "executive" = "wsr") {
+    setReportKind(kind);
     setBusy(true);
     setMessage("Reading the file, extracting plan values, creating narrative, and rendering the report…");
     try {
@@ -505,14 +559,54 @@ export function WsrDashboardView() {
     } catch {
       // Generate re-runs a failed handle even if retry is not needed.
     }
-    await runGenerate(uploaded.id);
+    await runGenerate(uploaded.id, reportKind);
   }
 
   function printForMeeting() {
-    document.documentElement.classList.add("wsr-printing");
-    const cleanup = () => document.documentElement.classList.remove("wsr-printing");
-    window.addEventListener("afterprint", cleanup, { once: true });
-    window.setTimeout(() => window.print(), 50);
+    if (!report) {
+      return;
+    }
+    const previousTitle = document.title;
+    document.title = reportSaveName(
+      facts.project_name ||
+        report.portfolio?.name ||
+        report.portfolio_name ||
+        uploaded?.filename,
+      reportKind,
+    );
+    const root = document.documentElement;
+    root.classList.add("wsr-printing");
+    if (reportKind === "executive") {
+      root.classList.add("wsr-printing-exec");
+    }
+    const pageStyle = document.createElement("style");
+    pageStyle.id = "wsr-long-page";
+    const cleanup = () => {
+      root.classList.remove("wsr-printing", "wsr-printing-exec");
+      document.title = previousTitle;
+      pageStyle.remove();
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.setTimeout(() => {
+      const node = document.querySelector(".wsr-report");
+      const heightPx = Math.max(
+        node?.scrollHeight ?? 0,
+        node instanceof HTMLElement ? node.offsetHeight : 0,
+        900,
+      );
+      const widthPx = Math.max(
+        node?.scrollWidth ?? 0,
+        node instanceof HTMLElement ? node.offsetWidth : 0,
+        1123,
+      );
+      const toMm = (px: number) => Math.ceil((px / 96) * 25.4);
+      const widthMm = Math.max(toMm(widthPx), 297);
+      const heightMm = Math.ceil(toMm(heightPx) * 1.25) + 20;
+      pageStyle.textContent = `@media print { @page { size: ${widthMm}mm ${heightMm}mm; margin: 8mm; } }`;
+      document.head.appendChild(pageStyle);
+      window.print();
+    }, 50);
   }
 
   return (
@@ -545,6 +639,7 @@ export function WsrDashboardView() {
                   setUploaded(null);
                   setJob(null);
                   setActiveCode(null);
+                  setReportKind("wsr");
                   clearWsrSession();
                   setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
                 }}
@@ -564,6 +659,7 @@ export function WsrDashboardView() {
                 setUploaded(file);
                 setJob(null);
                 setActiveCode(null);
+                setReportKind("wsr");
                 clearWsrSession();
                 setMessage("File ready. Generate WSR & Insights to build the dashboard.");
               }}
@@ -584,9 +680,20 @@ export function WsrDashboardView() {
             </button>
             <button
               type="button"
-              className="btn btn-primary"
+              className={report && reportKind === "executive" ? "btn btn-primary" : "btn btn-outline"}
               disabled={!uploaded || busy}
-              onClick={() => uploaded && void runGenerate(uploaded.id)}
+              onClick={() => uploaded && void runGenerate(uploaded.id, "executive")}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                summarize
+              </span>
+              Generate Executive Summary
+            </button>
+            <button
+              type="button"
+              className={report && reportKind === "executive" ? "btn btn-outline" : "btn btn-primary"}
+              disabled={!uploaded || busy}
+              onClick={() => uploaded && void runGenerate(uploaded.id, "wsr")}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
                 insights
@@ -651,6 +758,7 @@ export function WsrDashboardView() {
               asOf={report.as_of_date}
               active={board.project_code === activeBoard?.project_code}
               sharedProgramMetrics={Boolean(report.portfolio)}
+              variant={reportKind}
             />
           ))}
         </div>
@@ -660,6 +768,7 @@ export function WsrDashboardView() {
           steps={[
             { icon: "upload_file", title: "Upload the MPP", copy: "Microsoft Project is the single source for dates, work, and Go-Live." },
             { icon: "insights", title: "Generate the WSR", copy: "Plan facts, phase status, and this week’s work are assembled for the meeting." },
+            { icon: "summarize", title: "Or generate an Executive Summary", copy: "The same plan, with a timeline that uses Deviated End Date plus phase progress." },
             { icon: "picture_as_pdf", title: "Share the dashboard", copy: "Download to PDF when the report is ready for the weekly review." },
           ]}
         />

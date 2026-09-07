@@ -19,7 +19,7 @@ from app.wsr.detection import (
     sign_off_markers,
     upcoming_horizon_days,
 )
-from app.wsr.outline import is_phase_code, parse_outline_code
+from app.wsr.outline import is_phase_code, is_portfolio_code, is_project_code, parse_outline_code
 
 _LIBRARY_PHASE_NAMES = frozenset(
     " ".join(str(phase["name"]).casefold().split()) for phase in PHASES
@@ -69,6 +69,7 @@ def derive_wsr_facts(
         completed_count = sum(1 for task in leaves if _complete(task))
     title = _project_title(plan, project_code)
     phases = _phase_statuses(plan, project_name=title, project_code=project_code)
+    phase_ids = _phase_ids(plan, title, project_code)
     progress = _overall_progress(leaves)
     if progress is None:
         wanted = (project_code or "1").strip()
@@ -98,8 +99,8 @@ def derive_wsr_facts(
         timeline=phases or None,
         phase_statuses=phases,
         delay_mapping=_delay_mapping(plan, as_of_d, phases, go_live),
-        progress_to_date=_progress_to_date(leaves, as_of_d),
-        upcoming_milestones=_next_planned_tasks(leaves, as_of_d),
+        progress_to_date=_progress_to_date(leaves, plan.tasks, as_of_d, phase_ids),
+        upcoming_milestones=_next_planned_tasks(leaves, plan.tasks, as_of_d, phase_ids),
     )
 
 
@@ -131,7 +132,8 @@ def _normalized_percent(value: float | None) -> float:
         pct = float(value)
     except (TypeError, ValueError):
         return 0.0
-    if 0 < pct <= 1.0:
+    # MSP/MPXJ store 0–100. 1 means 1%, not 100%. Only (0, 1) is a fraction.
+    if 0 < pct < 1.0:
         return pct * 100.0
     return pct
 
@@ -257,6 +259,26 @@ def _leaf_work_hours(task: PlanTaskData) -> tuple[float | None, float | None]:
 def _overall_progress(tasks: list[PlanTaskData]) -> float | None:
     percent = work_based_progress(tasks)["overall_percent"]
     return None if percent is None else float(percent)
+
+
+def _work_complete_percent(task: PlanTaskData) -> float | None:
+    """Phase % from the MPP % Work Complete column on that row."""
+
+    if task.percent_work_complete is not None:
+        return round(min(100.0, max(0.0, _normalized_percent(task.percent_work_complete))), 1)
+    planned = task.planned_work_hours
+    actual = task.actual_work_hours
+    if planned and planned > 0 and actual is not None:
+        return round(min(100.0, max(0.0, actual / planned * 100)), 1)
+    return None
+
+
+def _phase_state_from_progress(phase: PlanTaskData, progress: float | None) -> str:
+    if progress is not None and progress >= 99.5:
+        return "complete"
+    if (progress or 0) > 0 or bool(phase.actual_start):
+        return "in_progress"
+    return "not_started"
 
 
 def _capacity(plan: ProjectPlanData) -> float | None:
@@ -528,8 +550,19 @@ def _phase_statuses(
     return [_phase_status(phase) for phase in plan.phases]
 
 
+def _under_phase(tasks: list[PlanTaskData], phase: PlanTaskData) -> list[PlanTaskData]:
+    outlined = _descendants(tasks, phase)
+    if outlined:
+        return outlined
+    prefix = (phase.wbs or "").strip()
+    if not prefix:
+        return []
+    nested = prefix + "."
+    return [task for task in tasks if task.id != phase.id and (task.wbs or "").strip().startswith(nested)]
+
+
 def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseStatus:
-    children = _descendants(tasks, phase)
+    children = _under_phase(tasks, phase)
     leaves = [task for task in children if not task.is_summary] or children
     dated = [phase, *leaves]
     baseline_starts = [parse_date(task.baseline_start) for task in dated]
@@ -540,15 +573,7 @@ def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseSta
     baseline_finish_ok = [item for item in baseline_finishes if item]
     current_start_ok = [item for item in current_starts if item]
     current_finish_ok = [item for item in current_finishes if item]
-    if phase.percent_complete >= 100:
-        state = "complete"
-    elif not phase.actual_start and phase.percent_complete == 0:
-        if any(task.percent_complete or task.actual_start for task in leaves):
-            state = "in_progress"
-        else:
-            state = "not_started"
-    else:
-        state = "in_progress"
+    progress = _work_complete_percent(phase)
     return PhaseStatus(
         name=phase.name,
         wbs=(phase.wbs or "").strip() or None,
@@ -556,18 +581,13 @@ def _phase_from_task(tasks: list[PlanTaskData], phase: PlanTaskData) -> PhaseSta
         planned_finish=None if not baseline_finish_ok else max(baseline_finish_ok).isoformat(),
         actual_start=None if not current_start_ok else min(current_start_ok).isoformat(),
         actual_finish=None if not current_finish_ok else max(current_finish_ok).isoformat(),
-        progress=phase.percent_complete,
-        state=state,
+        progress=progress,
+        state=_phase_state_from_progress(phase, progress),
     )
 
 
 def _phase_status(phase) -> PhaseStatus:
-    if phase.percent_complete >= 100:
-        state = "complete"
-    elif not phase.actual_start and phase.percent_complete == 0:
-        state = "not_started"
-    else:
-        state = "in_progress"
+    progress = _work_complete_percent(phase)
     return PhaseStatus(
         name=phase.name,
         wbs=getattr(phase, "wbs", None),
@@ -575,8 +595,8 @@ def _phase_status(phase) -> PhaseStatus:
         planned_finish=phase.baseline_finish,
         actual_start=phase.scheduled_start,
         actual_finish=phase.scheduled_finish,
-        progress=phase.percent_complete,
-        state=state,
+        progress=progress,
+        state=_phase_state_from_progress(phase, progress),
     )
 
 
@@ -602,6 +622,99 @@ def _delay_mapping(
     return build_delay_mapping(plan, as_of, phases, go_live_date, baseline_plan=baseline_plan)
 
 
+def _phase_ids(plan: ProjectPlanData, project_name: str | None, project_code: str | None) -> set[int]:
+    rows = select_phase_summaries(
+        plan.tasks,
+        project_name=project_name or plan.name,
+        project_code=project_code,
+    )
+    return {row.id for row in rows}
+
+
+def _phase_and_parent(
+    task: PlanTaskData,
+    tasks: list[PlanTaskData],
+    phase_ids: set[int],
+) -> tuple[str | None, str | None]:
+    ancestors = _ancestors(task, tasks)
+    parent = next((item for item in ancestors if not _is_project_container(item)), None)
+    phase = next((item for item in ancestors if item.id in phase_ids), None)
+    if phase is None:
+        phase = next((item for item in ancestors if is_phase_code(item.wbs)), None)
+    return _clean_name(None if phase is None else phase.name), _clean_name(
+        None if parent is None else parent.name
+    )
+
+
+def _ancestors(task: PlanTaskData, tasks: list[PlanTaskData]) -> list[PlanTaskData]:
+    """Nearest parent first."""
+    wbs_map = {(item.wbs or "").strip(): item for item in tasks if (item.wbs or "").strip()}
+    code = (task.wbs or "").strip()
+    found: list[PlanTaskData] = []
+    while "." in code:
+        code = code.rsplit(".", 1)[0]
+        parent = wbs_map.get(code)
+        if parent is not None:
+            found.append(parent)
+    if found:
+        return found
+    index = next((i for i, item in enumerate(tasks) if item.id == task.id), None)
+    if index is None:
+        return []
+    level = task.outline_level
+    chain: list[PlanTaskData] = []
+    for prev in reversed(tasks[:index]):
+        if prev.outline_level < level:
+            chain.append(prev)
+            level = prev.outline_level
+    return chain
+
+
+def _is_project_container(task: PlanTaskData) -> bool:
+    return is_portfolio_code(task.wbs) or is_project_code(task.wbs)
+
+
+def _clean_name(value: str | None) -> str | None:
+    text = " ".join((value or "").split())
+    return text or None
+
+
+def _join_hierarchy(*parts: str | None) -> str:
+    seen: list[str] = []
+    for part in parts:
+        text = _clean_name(part)
+        if not text:
+            continue
+        if seen and _norm_name(text) == _norm_name(seen[-1]):
+            continue
+        seen.append(text)
+    return " / ".join(seen)
+
+
+def task_labeler(
+    tasks: list[PlanTaskData],
+    *,
+    project_name: str | None = None,
+    project_code: str | None = None,
+):
+    """Return phase / parent / task labels for WSR risk and week copy."""
+
+    phase_ids = {
+        row.id
+        for row in select_phase_summaries(
+            tasks,
+            project_name=project_name,
+            project_code=project_code,
+        )
+    }
+
+    def label(task: PlanTaskData) -> str:
+        phase_name, parent_name = _phase_and_parent(task, tasks, phase_ids)
+        return _join_hierarchy(phase_name, parent_name, task.name) or task.name
+
+    return label
+
+
 def _week_bounds(as_of: date) -> tuple[date, date]:
     start = as_of - timedelta(days=as_of.weekday())
     return start, start + timedelta(days=6)
@@ -623,13 +736,19 @@ def _overlaps_week(task: PlanTaskData, week_start: date, week_end: date) -> bool
     return start <= week_end and finish >= week_start
 
 
-def _progress_to_date(tasks: list[PlanTaskData], as_of: date) -> list[ProgressItem]:
+def _progress_to_date(
+    tasks: list[PlanTaskData],
+    all_tasks: list[PlanTaskData],
+    as_of: date,
+    phase_ids: set[int],
+) -> list[ProgressItem]:
     week_start, week_end = _week_bounds(as_of)
     items: list[ProgressItem] = []
     for task in tasks:
         if not _overlaps_week(task, week_start, week_end):
             continue
         when = _candidate_date(task)
+        phase_name, parent_name = _phase_and_parent(task, all_tasks, phase_ids)
         items.append(
             ProgressItem(
                 name=task.name,
@@ -637,6 +756,9 @@ def _progress_to_date(tasks: list[PlanTaskData], as_of: date) -> list[ProgressIt
                 scheduled_start=task.scheduled_start,
                 scheduled_finish=task.scheduled_finish,
                 progress=task.percent_complete,
+                phase_name=phase_name,
+                parent_name=parent_name,
+                label=_join_hierarchy(phase_name, parent_name, task.name),
             )
         )
     items.sort(
@@ -649,7 +771,12 @@ def _progress_to_date(tasks: list[PlanTaskData], as_of: date) -> list[ProgressIt
     return items
 
 
-def _next_planned_tasks(tasks: list[PlanTaskData], as_of: date) -> list[MilestoneItem]:
+def _next_planned_tasks(
+    tasks: list[PlanTaskData],
+    all_tasks: list[PlanTaskData],
+    as_of: date,
+    phase_ids: set[int],
+) -> list[MilestoneItem]:
     current_start, current_end = _week_bounds(as_of)
     next_start, next_end = _next_week_bounds(as_of)
     items: list[MilestoneItem] = []
@@ -661,12 +788,16 @@ def _next_planned_tasks(tasks: list[PlanTaskData], as_of: date) -> list[Mileston
         if not _overlaps_week(task, next_start, next_end):
             continue
         when = _candidate_date(task)
+        phase_name, parent_name = _phase_and_parent(task, all_tasks, phase_ids)
         items.append(
             MilestoneItem(
                 name=task.name,
                 date=None if when is None else when.isoformat(),
                 scheduled_start=task.scheduled_start,
                 scheduled_finish=task.scheduled_finish,
+                phase_name=phase_name,
+                parent_name=parent_name,
+                label=_join_hierarchy(phase_name, parent_name, task.name),
             )
         )
     items.sort(key=lambda item: item.scheduled_start or item.date or "")
