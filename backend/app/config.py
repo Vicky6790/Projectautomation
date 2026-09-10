@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     session_idle_hours: int = 8
     data_dir: Path = Path("./data")
     cors_origins: str = "http://localhost:5173"
+    cors_origin_regex: str = ""
     cookie_samesite: str = "lax"
     cookie_secure: bool = False
     openai_api_key: str = ""

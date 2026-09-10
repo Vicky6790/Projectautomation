@@ -5,3 +5,8 @@ scripts
 .venv
 venv
 node_modules
+**/Dockerfile
+docker-compose.yml
+docker-compose.onprem.yml
+.pytest_cache
+**/__pycache__

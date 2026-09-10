@@ -96,6 +96,10 @@ docker compose -f docker-compose.yml -f docker-compose.onprem.yml up -d --build
 python scripts/verify_onprem.py
 ```
 
+## Vercel (UI only)
+
+Vercel hosts the React SPA from the **`vercel`** Git branch. It cannot run the API (Java 17, JPype, 50 MB uploads). Host `backend/Dockerfile` separately and set `VITE_API_BASE` on Vercel. Steps: `docs/VERCEL.md`.
+
 ## Tests
 
 ```powershell
