@@ -97,6 +97,9 @@ def test_generate_uses_publish_date_not_mpp_status_date(client: TestClient, monk
     assert result["exportable"] is True
     assert result["progress"] == ["Build"]
     assert result["milestones"] == []
+    assert result["facts"]["report_date"] == "2026-08-22"
+    assert result["facts"]["current_week_start"] == "2026-08-16"
+    assert result["facts"]["upcoming_end"] == "2026-08-29"
     assert len(result["projects"]) == 1
     assert result["projects"][0]["facts"]["project_name"] == result["facts"]["project_name"]
     status = client.get(f"/api/v1/wsr/requests/{handle}")
@@ -113,8 +116,13 @@ def test_generate_week_sections_follow_publish_date(client: TestClient, monkeypa
     assert response.status_code == 200, response.text
     result = response.json()["result"]
     assert result["as_of_date"] == "2026-08-31"
-    assert result["progress"] == []
-    assert result["milestones"] == ["Go Live"]
+    assert result["facts"]["report_date"] == "2026-08-31"
+    assert result["facts"]["current_week_start"] == "2026-08-25"
+    assert result["facts"]["current_week_end"] == "2026-08-31"
+    assert result["facts"]["upcoming_start"] == "2026-09-01"
+    assert result["facts"]["upcoming_end"] == "2026-09-07"
+    assert result["progress"] == ["Build"]
+    assert result["milestones"] == []
 
 
 def test_generate_falls_back_to_today_without_status_date(client: TestClient, monkeypatch) -> None:
@@ -159,13 +167,13 @@ def test_report_available_after_generation(client: TestClient, monkeypatch) -> N
     assert ".pdf" in report.headers["content-disposition"]
     text = pdf_text(report.content)
     assert "WSR & Insights" in text
-    assert "WSR Publish Date: 22 Aug 2026" in text
+    assert "Report Date: 22 Aug 2026" in text
     for heading in (
         "Executive Summary",
         "Project Timeline",
         "Phase-Wise Status",
         "Progress of current week",
-        "Upcoming Milestones Of Next Week",
+        "Upcoming Milestones",
         "Risks & Focus Areas",
     ):
         assert heading in text

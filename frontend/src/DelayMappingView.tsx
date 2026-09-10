@@ -2,11 +2,13 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { compareDelayMapping } from "./api";
 import { FileUploader } from "./components/FileUploader";
 import { ModuleHero, ModuleLanding } from "./components/ModuleHero";
+import { PrintViewBar } from "./components/PrintViewBar";
 import { emptyComparison, fromWsrDelayMapping, listedItems } from "./delayMapping/service";
 import { exportDelayMappingExcel, printDelayMappingSheet } from "./delayMapping/exportSheet";
 import type { CompareMppResult, DelayMappingItem } from "./delayMapping/types";
 import { ShellMetaContext } from "./shellMeta";
 import type { FileRecord } from "./types";
+import { delayMappingPrintTitle } from "./delayMapping/clientName";
 import { delaySheetDate, unavailable } from "./wsrFormat";
 
 type SortKey = "taskName" | "taskType" | "delayDays" | "owner";
@@ -30,6 +32,13 @@ export function DelayMappingView() {
   const [sortKey, setSortKey] = useState<SortKey>("taskName");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("asc");
   const [drawer, setDrawer] = useState<DelayMappingItem | null>(null);
+  const [printView, setPrintView] = useState(false);
+  const [savingPdf, setSavingPdf] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("pa-print-view", printView);
+    return () => document.documentElement.classList.remove("pa-print-view");
+  }, [printView]);
 
   useEffect(() => {
     setPageMeta(mppFile?.filename || "");
@@ -54,6 +63,7 @@ export function DelayMappingView() {
     setFailed(false);
     setLoading(false);
     setDrawer(null);
+    setPrintView(false);
     setMessage("Upload a Microsoft Project (.mpp) file, then build Delay Mapping.");
   }
 
@@ -182,7 +192,7 @@ export function DelayMappingView() {
               type="button"
               className="btn btn-outline"
               disabled={!canExport}
-              onClick={() => printDelayMappingSheet()}
+              onClick={() => setPrintView(true)}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
                 picture_as_pdf
@@ -227,6 +237,18 @@ export function DelayMappingView() {
 
       {ready ? (
         <>
+      {printView ? (
+        <PrintViewBar
+          saving={savingPdf}
+          onSave={() => {
+            setSavingPdf(true);
+            void printDelayMappingSheet(mppFile?.filename).finally(() => setSavingPdf(false));
+          }}
+          onExit={() => setPrintView(false)}
+        />
+      ) : null}
+      <div className="dms-report">
+      <h1 className="dms-print-title">{delayMappingPrintTitle(mppFile?.filename)}</h1>
       <table className="dms-summary">
         <tbody>
           <SummaryRow label="Baselined Go-Live Date" value={delaySheetDate(result.summary.baselineGoLive)} />
@@ -304,6 +326,7 @@ export function DelayMappingView() {
             ) : null}
           </table>
         </div>
+      </div>
       </div>
 
       {drawer ? (

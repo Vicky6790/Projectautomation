@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+from app.config import settings
 from app.models import (
     MilestoneItem,
     NamedDateValue,
@@ -17,7 +18,6 @@ from app.wsr.detection import (
     gate_name_markers,
     go_live_markers,
     sign_off_markers,
-    upcoming_horizon_days,
 )
 from app.wsr.outline import is_phase_code, is_portfolio_code, is_project_code, parse_outline_code
 
@@ -30,13 +30,15 @@ def parse_date(value: str | None) -> date | None:
     if not value:
         return None
     text = value.strip().replace("Z", "+00:00")
-    try:
-        return datetime.fromisoformat(text[:19]).date()
-    except ValueError:
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
         try:
             return date.fromisoformat(text[:10])
         except ValueError:
-            return None
+            pass
+    try:
+        return datetime.fromisoformat(text[:19]).date()
+    except ValueError:
+        return None
 
 
 def resolve_as_of(plan: ProjectPlanData, *, generated_on: date | None = None) -> str:
@@ -45,8 +47,25 @@ def resolve_as_of(plan: ProjectPlanData, *, generated_on: date | None = None) ->
 
 
 def wsr_publish_date(*, generated_on: date | None = None) -> str:
-    """Date the WSR is issued. Current/next-week task lists use this date's calendar weeks."""
+    """System date when the WSR is generated, unless WSR_REPORT_DATE is set."""
+    if generated_on is None:
+        override = parse_date((settings.wsr_report_date or "").strip() or None)
+        if override is not None:
+            return override.isoformat()
     return (generated_on or datetime.now(UTC).date()).isoformat()
+
+
+def reporting_windows(report_date: date) -> tuple[date, date, date, date]:
+    """Inclusive current week and upcoming 7-day windows from a frozen report date.
+
+    Current week is the 7 calendar days ending on reportDate (reportDate-6 .. reportDate).
+    Upcoming is the next 7 calendar days (reportDate+1 .. reportDate+7).
+    """
+    current_start = report_date - timedelta(days=6)
+    current_end = report_date
+    upcoming_start = report_date + timedelta(days=1)
+    upcoming_end = report_date + timedelta(days=7)
+    return current_start, current_end, upcoming_start, upcoming_end
 
 
 def derive_wsr_facts(
@@ -57,6 +76,7 @@ def derive_wsr_facts(
     project_code: str | None = None,
 ) -> WsrPlanFacts:
     as_of_d = date.fromisoformat(as_of)
+    current_start, current_end, upcoming_start, upcoming_end = reporting_windows(as_of_d)
     now = datetime.now(UTC).replace(microsecond=0).isoformat()
     stamp = generated_at or now.replace("+00:00", "Z")
     leaves = [task for task in plan.tasks if not task.is_summary]
@@ -81,6 +101,11 @@ def derive_wsr_facts(
         project_name=title,
         project_owner=plan.owner,
         as_of_date=as_of,
+        report_date=as_of,
+        current_week_start=current_start.isoformat(),
+        current_week_end=current_end.isoformat(),
+        upcoming_start=upcoming_start.isoformat(),
+        upcoming_end=upcoming_end.isoformat(),
         generated_at=stamp,
         project_health=health,
         countdown_days=countdown,
@@ -604,7 +629,7 @@ def delay_mapping_from_plans(
     current: ProjectPlanData,
     baseline: ProjectPlanData | None = None,
 ):
-    as_of_d = date.fromisoformat(resolve_as_of(current))
+    as_of_d = date.fromisoformat(wsr_publish_date())
     phases = _phase_statuses(current)
     go_live = _planned_go_live(current.tasks, as_of_d)
     return _delay_mapping(current, as_of_d, phases, go_live, baseline_plan=baseline)
@@ -716,24 +741,103 @@ def task_labeler(
 
 
 def _week_bounds(as_of: date) -> tuple[date, date]:
-    start = as_of - timedelta(days=as_of.weekday())
-    return start, start + timedelta(days=6)
+    current_start, current_end, _upcoming_start, _upcoming_end = reporting_windows(as_of)
+    return current_start, current_end
 
 
 def _next_week_bounds(as_of: date) -> tuple[date, date]:
-    _week_start, week_end = _week_bounds(as_of)
-    next_start = week_end + timedelta(days=1)
-    return next_start, next_start + timedelta(days=6)
+    _current_start, _current_end, upcoming_start, upcoming_end = reporting_windows(as_of)
+    return upcoming_start, upcoming_end
 
 
-def _overlaps_week(task: PlanTaskData, week_start: date, week_end: date) -> bool:
+def _current_schedule_span(task: PlanTaskData) -> tuple[date, date] | None:
     start = parse_date(task.scheduled_start) or parse_date(task.actual_start)
     finish = parse_date(task.scheduled_finish) or parse_date(task.actual_finish)
     if start is None and finish is None:
-        return False
+        return None
     start = start or finish
     finish = finish or start
+    if finish < start:
+        start, finish = finish, start
+    return start, finish
+
+
+def _overlaps_window(span: tuple[date, date] | None, week_start: date, week_end: date) -> bool:
+    if span is None:
+        return False
+    start, finish = span
     return start <= week_end and finish >= week_start
+
+
+def _in_current_week(task: PlanTaskData, week_start: date, week_end: date) -> bool:
+    if _overlaps_window(_current_schedule_span(task), week_start, week_end):
+        return True
+    actual_finish = parse_date(task.actual_finish)
+    return actual_finish is not None and week_start <= actual_finish <= week_end
+
+
+def _planned_or_current_finish(task: PlanTaskData) -> date | None:
+    return parse_date(task.scheduled_finish) or parse_date(task.actual_finish)
+
+
+def _is_milestone_like(task: PlanTaskData) -> bool:
+    if task.is_summary:
+        return False
+    if task.is_milestone or (task.gate or "").strip():
+        return True
+    return _contains(task.name, go_live_markers()) or _contains(task.name, sign_off_markers())
+
+
+def _dedupe_week_items(items: list, *, by_name_only: bool = False):
+    seen: set[tuple[str, str, str]] = set()
+    unique = []
+    for item in items:
+        name = _norm_name(item.name)
+        if not name:
+            continue
+        if by_name_only:
+            key = (name, "", "")
+        else:
+            key = (name, item.scheduled_start or "", item.scheduled_finish or item.date or "")
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique
+
+
+def _progress_item(task: PlanTaskData, all_tasks: list[PlanTaskData], phase_ids: set[int]) -> ProgressItem:
+    when = _candidate_date(task)
+    phase_name, parent_name = _phase_and_parent(task, all_tasks, phase_ids)
+    return ProgressItem(
+        name=task.name,
+        date=None if when is None else when.isoformat(),
+        scheduled_start=task.scheduled_start,
+        scheduled_finish=task.scheduled_finish,
+        progress=task.percent_complete,
+        phase_name=phase_name,
+        parent_name=parent_name,
+        label=_join_hierarchy(phase_name, parent_name, task.name),
+    )
+
+
+def _milestone_item(
+    task: PlanTaskData,
+    all_tasks: list[PlanTaskData],
+    phase_ids: set[int],
+    finish: date | None,
+) -> MilestoneItem:
+    when = finish or _candidate_date(task)
+    phase_name, parent_name = _phase_and_parent(task, all_tasks, phase_ids)
+    return MilestoneItem(
+        name=task.name,
+        date=None if when is None else when.isoformat(),
+        scheduled_start=task.scheduled_start,
+        scheduled_finish=task.scheduled_finish,
+        phase_name=phase_name,
+        parent_name=parent_name,
+        label=_join_hierarchy(phase_name, parent_name, task.name),
+    )
 
 
 def _progress_to_date(
@@ -745,22 +849,9 @@ def _progress_to_date(
     week_start, week_end = _week_bounds(as_of)
     items: list[ProgressItem] = []
     for task in tasks:
-        if not _overlaps_week(task, week_start, week_end):
+        if not _in_current_week(task, week_start, week_end):
             continue
-        when = _candidate_date(task)
-        phase_name, parent_name = _phase_and_parent(task, all_tasks, phase_ids)
-        items.append(
-            ProgressItem(
-                name=task.name,
-                date=None if when is None else when.isoformat(),
-                scheduled_start=task.scheduled_start,
-                scheduled_finish=task.scheduled_finish,
-                progress=task.percent_complete,
-                phase_name=phase_name,
-                parent_name=parent_name,
-                label=_join_hierarchy(phase_name, parent_name, task.name),
-            )
-        )
+        items.append(_progress_item(task, all_tasks, phase_ids))
     items.sort(
         key=lambda item: (
             item.scheduled_start or item.scheduled_finish or item.date or "",
@@ -768,7 +859,7 @@ def _progress_to_date(
             item.name,
         )
     )
-    return items
+    return _dedupe_week_items(items)
 
 
 def _next_planned_tasks(
@@ -778,40 +869,53 @@ def _next_planned_tasks(
     phase_ids: set[int],
 ) -> list[MilestoneItem]:
     current_start, current_end = _week_bounds(as_of)
-    next_start, next_end = _next_week_bounds(as_of)
-    items: list[MilestoneItem] = []
+    upcoming_start, upcoming_end = _next_week_bounds(as_of)
+    items: list[tuple[MilestoneItem, bool]] = []
     for task in tasks:
         if _complete(task):
             continue
-        if _overlaps_week(task, current_start, current_end):
+        span = _current_schedule_span(task)
+        finish = _planned_or_current_finish(task)
+        in_current = _in_current_week(task, current_start, current_end)
+        finish_in_upcoming = finish is not None and upcoming_start <= finish <= upcoming_end
+        overlaps_upcoming = _overlaps_window(span, upcoming_start, upcoming_end)
+        milestone = _is_milestone_like(task)
+        if milestone:
+            if not finish_in_upcoming:
+                continue
+        elif in_current or not overlaps_upcoming:
             continue
-        if not _overlaps_week(task, next_start, next_end):
+        items.append((_milestone_item(task, all_tasks, phase_ids, finish), milestone))
+    items.sort(
+        key=lambda pair: pair[0].scheduled_start or pair[0].scheduled_finish or pair[0].date or ""
+    )
+    collapsed: list[MilestoneItem] = []
+    seen_milestones: set[str] = set()
+    seen_rows: set[tuple[str, str, str]] = set()
+    for item, milestone in items:
+        name = _norm_name(item.name)
+        if milestone:
+            if name in seen_milestones:
+                continue
+            seen_milestones.add(name)
+            collapsed.append(item)
             continue
-        when = _candidate_date(task)
-        phase_name, parent_name = _phase_and_parent(task, all_tasks, phase_ids)
-        items.append(
-            MilestoneItem(
-                name=task.name,
-                date=None if when is None else when.isoformat(),
-                scheduled_start=task.scheduled_start,
-                scheduled_finish=task.scheduled_finish,
-                phase_name=phase_name,
-                parent_name=parent_name,
-                label=_join_hierarchy(phase_name, parent_name, task.name),
-            )
-        )
-    items.sort(key=lambda item: item.scheduled_start or item.date or "")
-    return items[:12]
+        key = (name, item.scheduled_start or "", item.scheduled_finish or item.date or "")
+        if key in seen_rows:
+            continue
+        seen_rows.add(key)
+        collapsed.append(item)
+    return collapsed
 
 
 def next_seven_day_tasks(plan: ProjectPlanData, as_of: str) -> list[PlanTaskData]:
     as_of_d = date.fromisoformat(as_of)
-    horizon = as_of_d + timedelta(days=upcoming_horizon_days())
+    upcoming_start, upcoming_end = _next_week_bounds(as_of_d)
     due: list[PlanTaskData] = []
     for task in plan.tasks:
         if task.is_summary or _complete(task):
             continue
         finish = _due_date(task) or _candidate_date(task)
-        if finish and as_of_d < finish <= horizon:
+        if finish and upcoming_start <= finish <= upcoming_end:
             due.append(task)
     return due

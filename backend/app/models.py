@@ -463,6 +463,11 @@ class WsrPlanFacts(BaseModel):
     project_name: str | None = None
     project_owner: str | None = None
     as_of_date: str
+    report_date: str | None = None
+    current_week_start: str | None = None
+    current_week_end: str | None = None
+    upcoming_start: str | None = None
+    upcoming_end: str | None = None
     generated_at: str
     project_health: Literal["on_track", "at_risk", "off_track", "unavailable"]
     countdown_days: int | None = None

@@ -176,7 +176,7 @@ def test_wsr_report_matches_dashboard_sections() -> None:
     assert body.startswith(b"%PDF")
     text = " ".join(pdf_text(body).split())
     assert "WSR & Insights" in text
-    assert "WSR Publish Date: 22 Aug 2026" in text
+    assert "Report Date: 22 Aug 2026" in text
     assert "Overall Progress" in text
     for label in (
         "Phases to Go-Live",

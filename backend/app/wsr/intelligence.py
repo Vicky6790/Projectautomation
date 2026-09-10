@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 from app.models import PlanTaskData, ProjectPlanData, WsrPlanFacts
@@ -18,6 +18,7 @@ from app.wsr.facts import (
     _normalized_percent,
     _work_complete_percent,
     parse_date,
+    reporting_windows,
     select_phase_summaries,
     task_labeler,
     work_based_progress,
@@ -156,7 +157,7 @@ def _milestones(
     as_of: date,
     go_live: PlanTaskData | None,
 ) -> dict[str, list[dict[str, Any]]]:
-    horizon = as_of + timedelta(days=upcoming_horizon_days())
+    _current_start, _current_end, upcoming_start, upcoming_end = reporting_windows(as_of)
     completed: list[dict[str, Any]] = []
     upcoming: list[dict[str, Any]] = []
     overdue: list[dict[str, Any]] = []
@@ -189,7 +190,7 @@ def _milestones(
                     "percentComplete": _normalized_percent(task.percent_complete),
                 }
             )
-        elif planned <= horizon:
+        elif upcoming_start <= planned <= upcoming_end:
             upcoming.append(
                 {
                     "id": str(task.id),

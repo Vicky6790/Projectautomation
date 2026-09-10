@@ -160,16 +160,6 @@ export function durationDays(
   return days > 0 ? days : 1;
 }
 
-function mondayOf(isoDate: string): Date | null {
-  const parsed = parseDay(isoDate);
-  if (!parsed) {
-    return null;
-  }
-  const weekday = (parsed.getDay() + 6) % 7;
-  parsed.setDate(parsed.getDate() - weekday);
-  return parsed;
-}
-
 function isoDay(value: Date): string {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");
@@ -177,21 +167,48 @@ function isoDay(value: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function publishWeekRange(
-  asOf: string | null | undefined,
-  weeksAhead = 0,
+export function addCalendarDays(value: string | null | undefined, days: number): string | null {
+  const parsed = parseDay(value);
+  if (!parsed) {
+    return null;
+  }
+  parsed.setDate(parsed.getDate() + days);
+  return isoDay(parsed);
+}
+
+export function reportingWindows(reportDate: string | null | undefined): {
+  currentStart: string | null;
+  currentEnd: string | null;
+  upcomingStart: string | null;
+  upcomingEnd: string | null;
+} {
+  if (!reportDate) {
+    return { currentStart: null, currentEnd: null, upcomingStart: null, upcomingEnd: null };
+  }
+  return {
+    currentStart: addCalendarDays(reportDate, -6),
+    currentEnd: reportDate.slice(0, 10),
+    upcomingStart: addCalendarDays(reportDate, 1),
+    upcomingEnd: addCalendarDays(reportDate, 7),
+  };
+}
+
+export function currentWeekRange(
+  reportDate: string | null | undefined,
+  start?: string | null,
+  end?: string | null,
 ): string {
-  if (!asOf) {
-    return "Unavailable";
-  }
-  const start = mondayOf(asOf);
-  if (!start) {
-    return "Unavailable";
-  }
-  start.setDate(start.getDate() + weeksAhead * 7);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  return `${shortDate(isoDay(start))} – ${shortDate(isoDay(end))}`;
+  const windows = reportingWindows(reportDate);
+  return windowRange(start || windows.currentStart, end || windows.currentEnd);
+}
+
+export function upcomingWeekRange(
+  reportDate: string | null | undefined,
+  start?: string | null,
+  end?: string | null,
+): string {
+  const windows = reportingWindows(reportDate);
+  return windowRange(start || windows.upcomingStart, end || windows.upcomingEnd);
 }
 
 export function personDaysLabel(value: number | null | undefined): string {

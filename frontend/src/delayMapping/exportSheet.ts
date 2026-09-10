@@ -1,4 +1,6 @@
 import { delaySheetDate } from "../wsrFormat";
+import { delayMappingPrintTitle } from "./clientName";
+import { downloadLandscapePdf } from "../printPage";
 import type { CompareMppResult, DelayMappingItem } from "./types";
 
 export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMappingItem[]): void {
@@ -55,16 +57,8 @@ export function exportDelayMappingExcel(result: CompareMppResult, rows: DelayMap
   );
 }
 
-export function printDelayMappingSheet(): void {
-  const root = document.documentElement;
-  root.classList.add("dms-printing");
-  const restore = () => {
-    root.classList.remove("dms-printing");
-    window.removeEventListener("afterprint", restore);
-  };
-  window.addEventListener("afterprint", restore);
-  window.print();
-  window.setTimeout(restore, 1000);
+export async function printDelayMappingSheet(filename?: string | null): Promise<void> {
+  await downloadLandscapePdf(".dms-report", `${delayMappingPrintTitle(filename)}.pdf`);
 }
 
 function shiftLabel(value: number | null): string {

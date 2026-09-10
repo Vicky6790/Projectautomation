@@ -1,7 +1,7 @@
 from datetime import date
 
 from app.models import PlanAssignmentData, PlanPhaseData, PlanResourceData, PlanTaskData, ProjectPlanData
-from app.wsr.facts import derive_portfolio_summary, derive_wsr_facts
+from app.wsr.facts import derive_portfolio_summary, derive_wsr_facts, reporting_windows, wsr_publish_date
 
 
 def _plan(
@@ -984,6 +984,11 @@ def test_week_sections_follow_publish_date() -> None:
     )
     current_week = derive_wsr_facts(plan, "2026-08-22", generated_at="2026-08-22T10:00:00Z")
     next_week = derive_wsr_facts(plan, "2026-08-29", generated_at="2026-08-29T10:00:00Z")
+    assert current_week.report_date == "2026-08-22"
+    assert current_week.current_week_start == "2026-08-16"
+    assert current_week.current_week_end == "2026-08-22"
+    assert current_week.upcoming_start == "2026-08-23"
+    assert current_week.upcoming_end == "2026-08-29"
     assert [item.name for item in current_week.progress_to_date] == ["This week build"]
     assert [item.name for item in current_week.upcoming_milestones] == ["Next week review"]
     assert [item.name for item in next_week.progress_to_date] == ["Next week review"]
@@ -1176,4 +1181,131 @@ def test_portfolio_summary_falls_back_to_wbs_zero_percent_when_work_missing() ->
         "2026-08-22",
     )
     assert summary.overall_progress == 42.0
+
+
+def test_reporting_windows_follow_report_date_example() -> None:
+    current_start, current_end, upcoming_start, upcoming_end = reporting_windows(date(2026, 9, 8))
+    assert current_start.isoformat() == "2026-09-02"
+    assert current_end.isoformat() == "2026-09-08"
+    assert upcoming_start.isoformat() == "2026-09-09"
+    assert upcoming_end.isoformat() == "2026-09-15"
+
+
+def test_current_week_includes_overlap_not_start_date_only() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Started last month",
+                    scheduled_start="2026-08-01",
+                    scheduled_finish="2026-09-10",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Starts after report date",
+                    scheduled_start="2026-09-20",
+                    scheduled_finish="2026-09-22",
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Delayed in the window",
+                    baseline_finish="2026-09-05",
+                    scheduled_finish="2026-09-20",
+                ),
+                PlanTaskData(
+                    id=4,
+                    name="Content build",
+                    scheduled_start="2026-09-03",
+                    scheduled_finish="2026-09-04",
+                ),
+                PlanTaskData(
+                    id=5,
+                    name="Content build",
+                    scheduled_start="2026-09-05",
+                    scheduled_finish="2026-09-06",
+                ),
+            ]
+        ),
+        "2026-09-08",
+        generated_at="2026-09-08T10:00:00Z",
+    )
+    names = [item.name for item in facts.progress_to_date]
+    assert "Started last month" in names
+    assert names.count("Content build") == 2
+    assert "Delayed in the window" not in names
+    assert "Starts after report date" not in names
+
+
+def test_upcoming_uses_finish_in_next_seven_days() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="UAT Sign-off",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-12",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="UAT Sign-off",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-13",
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Already signed off",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-10",
+                    percent_complete=100,
+                    actual_finish="2026-09-04",
+                ),
+                PlanTaskData(
+                    id=4,
+                    name="Go Live",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-20",
+                ),
+            ]
+        ),
+        "2026-09-08",
+        generated_at="2026-09-08T10:00:00Z",
+    )
+    assert facts.report_date == "2026-09-08"
+    assert facts.current_week_start == "2026-09-02"
+    assert facts.upcoming_start == "2026-09-09"
+    assert facts.upcoming_end == "2026-09-15"
+    assert [item.name for item in facts.upcoming_milestones] == ["UAT Sign-off"]
+
+
+def test_upcoming_includes_tasks_that_start_in_the_window() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="Starts next week",
+                    scheduled_start="2026-09-10",
+                    scheduled_finish="2026-09-22",
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Already in current week",
+                    scheduled_start="2026-09-04",
+                    scheduled_finish="2026-09-12",
+                ),
+            ]
+        ),
+        "2026-09-08",
+        generated_at="2026-09-08T10:00:00Z",
+    )
+    assert [item.name for item in facts.progress_to_date] == ["Already in current week"]
+    assert [item.name for item in facts.upcoming_milestones] == ["Starts next week"]
+
+
+def test_wsr_publish_date_uses_configured_override(monkeypatch) -> None:
+    monkeypatch.setattr("app.wsr.facts.settings", type("S", (), {"wsr_report_date": "2026-09-08"})())
+    assert wsr_publish_date() == "2026-09-08"
+    assert wsr_publish_date(generated_on=date(2026, 9, 15)) == "2026-09-15"
 

@@ -9,7 +9,7 @@ from app.models import (
     StatusReport,
     WsrPlanFacts,
 )
-from app.wsr.facts import _next_week_bounds, _week_bounds
+from app.wsr.facts import reporting_windows
 
 _AI_SECTIONS = (
     ("risks", "Risks & Focus Areas"),
@@ -36,7 +36,7 @@ p { margin: 0 0 6px; }
 }
 .label { color: #64748b; font-size: 8px; }
 .value { font-size: 14px; font-weight: bold; color: #1e293b; }
-.countdown { font-size: 28px; font-weight: bold; color: #f43f5e; }
+.countdown { font-size: 28px; font-weight: bold; color: #c17f2a; }
 .ring { font-size: 22px; font-weight: bold; text-align: center; }
 .num { color: #ffffff; background: #4f46e5; padding: 2px 6px; }
 .gantt { width: 100%; border-collapse: collapse; margin: 0 0 6px; }
@@ -108,7 +108,7 @@ def _project_body(
             _section(2, "Project Timeline", _timeline(facts)),
             _section(3, "Phase-Wise Status", _phases(facts)),
             _section(4, "Progress of current week", _progress(facts)),
-            _section(5, "Upcoming Milestones Of Next Week", _milestones(facts, payload.as_of_date)),
+            _section(5, "Upcoming Milestones", _milestones(facts, payload.as_of_date)),
             *[
                 _section(index + 6, label, _insights(getattr(board, key)))
                 for index, (key, label) in enumerate(_AI_SECTIONS)
@@ -125,7 +125,7 @@ def render_delay_mapping_html(handle: str, payload: StatusReport) -> str:
     )
     identity = facts.project_name or "Unavailable"
     as_of = payload.as_of_date or facts.as_of_date
-    stamp = f"As of {_short_date(as_of)}" if as_of else "As of Unavailable"
+    stamp = f"Report Date: {_short_date(as_of)}" if as_of else "Report Date: Unavailable"
     body = (
         f"<p class='muted'>{html.escape(identity)} · {html.escape(stamp)}</p>"
         + _delay_mapping(facts, as_of)
@@ -154,7 +154,7 @@ def _html_document(title: str, body: str, handle: str) -> str:
 
 
 def _hero(payload: StatusReport, facts: WsrPlanFacts, _health: str, *, compact: bool = False) -> str:
-    stamp = f"WSR Publish Date: {_short_date(payload.as_of_date)}"
+    stamp = _report_period_html(facts, payload.as_of_date)
     progress = _percent(facts.overall_progress)
     progress_cell = f"""
 <td width="27%" align="center">
@@ -169,7 +169,7 @@ def _hero(payload: StatusReport, facts: WsrPlanFacts, _health: str, *, compact: 
 <tr>
 <td width="73%">
 <h2>{_esc(facts.project_name)}</h2>
-<p class="muted">{stamp}</p>
+{stamp}
 </td>
 {progress_cell}
 </tr>
@@ -183,7 +183,7 @@ def _hero(payload: StatusReport, facts: WsrPlanFacts, _health: str, *, compact: 
 <tr>
 <td width="46%">
 <h2>{_esc(facts.project_name)}</h2>
-<p class="muted">{stamp}</p>
+{stamp}
 </td>
 <td width="27%" align="center">
 <p class="label">Countdown</p>
@@ -208,13 +208,13 @@ def _portfolio_hero(payload: StatusReport) -> str:
         str(summary.countdown_days) if summary.countdown_days is not None else "Unavailable"
     )
     progress = _percent(summary.overall_progress)
-    stamp = f"WSR Publish Date: {_short_date(payload.as_of_date)}"
+    stamp = _report_period_html(payload.facts, payload.as_of_date)
     return f"""
 <table class="hero">
 <tr>
 <td width="46%">
 <h2>{_esc(summary.name)}</h2>
-<p class="muted">{stamp}</p>
+{stamp}
 </td>
 <td width="27%" align="center">
 <p class="label">Countdown</p>
@@ -458,7 +458,7 @@ def _count_or_unavailable(value: int | None) -> str:
 
 def _progress(facts: WsrPlanFacts) -> str:
     items = facts.progress_to_date or []
-    intro = _week_window_copy(facts.as_of_date, next_week=False)
+    intro = _week_window_copy(facts, next_week=False)
     if not items:
         return intro + "<p>No tasks scheduled in the current week</p>"
     rows = [
@@ -479,7 +479,7 @@ def _progress(facts: WsrPlanFacts) -> str:
 
 def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
     items = facts.upcoming_milestones or []
-    intro = _week_window_copy(as_of or facts.as_of_date, next_week=True)
+    intro = _week_window_copy(facts, next_week=True, as_of=as_of)
     if not items:
         return intro + "<p>No upcoming planned tasks</p>"
     as_of_d = _day(as_of)
@@ -524,14 +524,47 @@ def _gantt_bar(name: str, left: int, width: int, color: str) -> str:
     )
 
 
-def _week_window_copy(as_of: str | None, *, next_week: bool) -> str:
-    day = _day(as_of)
+def _period_dates(
+    facts: WsrPlanFacts | None,
+    as_of: str | None,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    current_start = None if facts is None else facts.current_week_start
+    current_end = None if facts is None else facts.current_week_end
+    upcoming_start = None if facts is None else facts.upcoming_start
+    upcoming_end = None if facts is None else facts.upcoming_end
+    if current_start and current_end and upcoming_start and upcoming_end:
+        return current_start, current_end, upcoming_start, upcoming_end
+    day = _day(as_of or (None if facts is None else facts.as_of_date) or (None if facts is None else facts.report_date))
     if day is None:
-        return ""
-    start, end = _next_week_bounds(day) if next_week else _week_bounds(day)
-    label = "Upcoming week" if next_week else "Current week"
-    window = f"{_short_date(start.isoformat())} - {_short_date(end.isoformat())}"
-    return f"<p class='muted'>{html.escape(label)} from WSR publish date: {html.escape(window)}</p>"
+        return current_start, current_end, upcoming_start, upcoming_end
+    start, end, next_start, next_end = reporting_windows(day)
+    return (
+        current_start or start.isoformat(),
+        current_end or end.isoformat(),
+        upcoming_start or next_start.isoformat(),
+        upcoming_end or next_end.isoformat(),
+    )
+
+
+def _report_period_html(facts: WsrPlanFacts | None, as_of: str | None) -> str:
+    report = as_of or (None if facts is None else facts.report_date) or (None if facts is None else facts.as_of_date)
+    return f"<p class='muted'>{html.escape(f'Report Date: {_short_date(report)}')}</p>"
+
+
+def _week_window_copy(
+    facts: WsrPlanFacts,
+    *,
+    next_week: bool,
+    as_of: str | None = None,
+) -> str:
+    current_start, current_end, upcoming_start, upcoming_end = _period_dates(facts, as_of)
+    if next_week:
+        label = "Upcoming 7 Days"
+        window = f"{_short_date(upcoming_start)} - {_short_date(upcoming_end)}"
+    else:
+        label = "Current Week"
+        window = f"{_short_date(current_start)} - {_short_date(current_end)}"
+    return f"<p class='muted'>{html.escape(f'{label}: {window}')}</p>"
 
 
 def _section(number: int, title: str, inner: str) -> str:

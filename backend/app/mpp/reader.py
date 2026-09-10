@@ -260,14 +260,33 @@ def _call(source, method: str):
 def iso_date(value) -> str | None:
     if value is None:
         return None
+    parsed = _temporal_date(value)
+    if parsed is not None:
+        return parsed
     text = str(value).strip()
-    if not text or text.lower() == "none":
+    if not text or text.lower() in {"none", "null"}:
         return None
-    if "T" in text:
-        return text.split("T", 1)[0]
-    if " " in text and len(text) >= 10:
+    if len(text) >= 10 and text[0].isdigit() and text[4] == "-" and text[7] == "-":
         return text[:10]
-    return text[:10] if len(text) >= 10 else text
+    return None
+
+
+def _temporal_date(value) -> str | None:
+    local = _call(value, "toLocalDate")
+    if local is not None and local is not value:
+        return _temporal_date(local)
+    year = _call(value, "getYear")
+    day = _call(value, "getDayOfMonth")
+    month = _call(value, "getMonthValue")
+    if month is None:
+        raw_month = _call(value, "getMonth")
+        month = _call(raw_month, "getValue") if raw_month is not None else None
+    try:
+        if year is not None and month is not None and day is not None:
+            return date(int(year), int(month), int(day)).isoformat()
+    except (TypeError, ValueError):
+        return None
+    return None
 
 
 def _successor_task(relation):

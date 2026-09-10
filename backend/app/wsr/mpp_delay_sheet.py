@@ -24,8 +24,8 @@ from app.wsr.delay_engine import (
 from app.wsr.facts import _candidate_date, _contains, parse_date, wsr_publish_date
 
 
-def build_delay_sheet(plan: ProjectPlanData) -> DelayMappingSheet:
-    as_of = parse_date(plan.status_date) or date.fromisoformat(wsr_publish_date())
+def build_delay_sheet(plan: ProjectPlanData, *, report_date: str | None = None) -> DelayMappingSheet:
+    as_of = parse_date(report_date) or date.fromisoformat(wsr_publish_date())
     holidays = _holiday_set(plan, parse_date)
     calendar_source = (
         "project" if (plan.calendar_available or plan.holiday_dates) else "weekdays_fallback"

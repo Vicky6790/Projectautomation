@@ -136,7 +136,6 @@ export function WsrGantt({ phases, asOf, endMode = "planned", showProgress = fal
                         width: `${width}%`,
                         background: COLORS[index % COLORS.length],
                       }}
-                      title={`${phase.name}: ${windowRange(phase.startValue, phase.finishValue, "dash")}`}
                     >
                       {showLabel ? phase.name : ""}
                     </span>

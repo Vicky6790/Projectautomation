@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     wsr_client_owner_markers: str = ""
     wsr_internal_owner_markers: str = ""
     wsr_upcoming_days: int = 7
+    wsr_report_date: str = ""
     request_ttl_hours: int = 24
 
     def ensure_storage(self) -> None:

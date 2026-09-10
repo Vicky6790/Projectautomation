@@ -4,6 +4,8 @@ import { FileUploader } from "./components/FileUploader";
 import { ModuleHero, ModuleLanding } from "./components/ModuleHero";
 import { WsrGantt } from "./components/WsrGantt";
 import { WsrProgressRing } from "./components/WsrProgressRing";
+import { PrintViewBar } from "./components/PrintViewBar";
+import { downloadLandscapePdf } from "./printPage";
 import { ShellMetaContext } from "./shellMeta";
 import type {
   AiDerivedItem,
@@ -21,7 +23,8 @@ import {
   percent,
   phaseState,
   phaseWbs,
-  publishWeekRange,
+  currentWeekRange,
+  upcomingWeekRange,
   shortDate,
   splitInsight,
   unavailable,
@@ -46,18 +49,6 @@ const KPI_ICONS = ["calendar_today", "person_add", "schedule", "assignment"] as 
 
 function asReport(result: ProcessingResponse["result"]) {
   return asWsrReport(result);
-}
-
-function reportSaveName(raw: string | null | undefined, kind: "wsr" | "executive" = "wsr"): string {
-  const now = new Date();
-  const yymmdd = [
-    String(now.getFullYear()).slice(-2),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("");
-  const withoutExt = String(raw || "Project").replace(/\.[^./\\]+$/, "");
-  const projectName = withoutExt.replace(/[^A-Za-z0-9]+/g, "") || "Project";
-  return kind === "executive" ? `${yymmdd}_${projectName}_Exec_V1` : `${yymmdd}_${projectName}_V1`;
 }
 
 function visibleInsights(items: AiDerivedItem[]): AiDerivedItem[] {
@@ -148,7 +139,7 @@ function WsrProjectBoard({
       <Section
         n={section++}
         title="Project Timeline"
-        hint="Phases from project planning to Go-Live. The dashed marker shows today's position; hover any bar for full dates."
+        hint="Phases from project planning to Go-Live. The dashed marker shows today's position."
       >
         {facts.timeline?.length ? (
           <WsrGantt
@@ -228,7 +219,7 @@ function WsrProjectBoard({
         <Section
           n={section++}
           title="Progress of current week"
-          hint={`Tasks in the Monday–Sunday week of the WSR publish date (${publishWeekRange(asOf)}).`}
+          hint={`Current Week: ${currentWeekRange(asOf, facts.current_week_start, facts.current_week_end)}`}
         >
           {facts.progress_to_date?.length ? (
             <table className="milestone-table">
@@ -258,8 +249,8 @@ function WsrProjectBoard({
 
         <Section
           n={section++}
-          title="Upcoming Milestones Of Next Week"
-          hint={`Incomplete work in the Monday–Sunday week after the WSR publish date (${publishWeekRange(asOf, 1)}).`}
+          title="Upcoming Milestones"
+          hint={`Upcoming 7 Days: ${upcomingWeekRange(asOf, facts.upcoming_start, facts.upcoming_end)}`}
         >
           {facts.upcoming_milestones?.length ? (
             <table className="milestone-table">
@@ -329,12 +320,12 @@ function WsrHero({
           </span>
           {unavailable(name)}
         </h3>
-        <p className="hero-publish">WSR Publish Date: {shortDate(asOf)}</p>
+        <p className="hero-publish">Report Date: {shortDate(asOf)}</p>
       </div>
       {hideCountdown ? null : (
         <div className="hero-countdown">
           <p className="metric-label">Countdown</p>
-          <p className={`countdown-value ${countdownDays != null ? "tone-bad" : ""}`}>
+          <p className={`countdown-value ${countdownDays != null ? "countdown-ochre" : ""}`}>
             {countdownDays != null ? countdownDays : "Unavailable"}
             {countdownDays != null ? <span>Days</span> : null}
           </p>
@@ -480,6 +471,13 @@ export function WsrDashboardView() {
 
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [reportKind, setReportKind] = useState<"wsr" | "executive">("wsr");
+  const [printView, setPrintView] = useState(false);
+  const [savingPdf, setSavingPdf] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("pa-print-view", printView);
+    return () => document.documentElement.classList.remove("pa-print-view");
+  }, [printView]);
 
   useEffect(() => {
     const reset = () => {
@@ -489,6 +487,7 @@ export function WsrDashboardView() {
       setStage(0);
       setActiveCode(null);
       setReportKind("wsr");
+      setPrintView(false);
       setMessage("Upload a Microsoft Project (.mpp) file, then generate WSR & Insights.");
     };
     window.addEventListener(WSR_RESET_EVENT, reset);
@@ -562,51 +561,21 @@ export function WsrDashboardView() {
     await runGenerate(uploaded.id, reportKind);
   }
 
-  function printForMeeting() {
+  async function printForMeeting() {
     if (!report) {
       return;
     }
-    const previousTitle = document.title;
-    document.title = reportSaveName(
-      facts.project_name ||
-        report.portfolio?.name ||
-        report.portfolio_name ||
-        uploaded?.filename,
-      reportKind,
-    );
-    const root = document.documentElement;
-    root.classList.add("wsr-printing");
-    if (reportKind === "executive") {
-      root.classList.add("wsr-printing-exec");
+    setSavingPdf(true);
+    try {
+      await downloadLandscapePdf(
+        ".wsr-report",
+        reportKind === "executive" ? "Executive Summary.pdf" : "WSR Report.pdf",
+      );
+    } catch {
+      setMessage("Could not save the PDF.");
+    } finally {
+      setSavingPdf(false);
     }
-    const pageStyle = document.createElement("style");
-    pageStyle.id = "wsr-long-page";
-    const cleanup = () => {
-      root.classList.remove("wsr-printing", "wsr-printing-exec");
-      document.title = previousTitle;
-      pageStyle.remove();
-      window.removeEventListener("afterprint", cleanup);
-    };
-    window.addEventListener("afterprint", cleanup);
-    window.setTimeout(() => {
-      const node = document.querySelector(".wsr-report");
-      const heightPx = Math.max(
-        node?.scrollHeight ?? 0,
-        node instanceof HTMLElement ? node.offsetHeight : 0,
-        900,
-      );
-      const widthPx = Math.max(
-        node?.scrollWidth ?? 0,
-        node instanceof HTMLElement ? node.offsetWidth : 0,
-        1123,
-      );
-      const toMm = (px: number) => Math.ceil((px / 96) * 25.4);
-      const widthMm = Math.max(toMm(widthPx), 297);
-      const heightMm = Math.ceil(toMm(heightPx) * 1.25) + 20;
-      pageStyle.textContent = `@media print { @page { size: ${widthMm}mm ${heightMm}mm; margin: 8mm; } }`;
-      document.head.appendChild(pageStyle);
-      window.print();
-    }, 50);
   }
 
   return (
@@ -671,7 +640,7 @@ export function WsrDashboardView() {
               type="button"
               className="btn btn-outline"
               disabled={!report || busy}
-              onClick={printForMeeting}
+              onClick={() => setPrintView(true)}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
                 download
@@ -721,6 +690,14 @@ export function WsrDashboardView() {
       ) : null}
 
       {report ? (
+        <>
+          {printView ? (
+            <PrintViewBar
+              saving={savingPdf}
+              onSave={() => void printForMeeting()}
+              onExit={() => setPrintView(false)}
+            />
+          ) : null}
         <div className="wsr-report">
           {report.portfolio ? (
             <WsrHero
@@ -762,6 +739,7 @@ export function WsrDashboardView() {
             />
           ))}
         </div>
+        </>
       ) : busy ? null : (
         <ModuleLanding
           tone="wsr"

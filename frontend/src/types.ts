@@ -238,6 +238,11 @@ export type WsrPlanFacts = {
   project_name?: string | null;
   project_owner?: string | null;
   as_of_date?: string;
+  report_date?: string | null;
+  current_week_start?: string | null;
+  current_week_end?: string | null;
+  upcoming_start?: string | null;
+  upcoming_end?: string | null;
   generated_at?: string | null;
   project_health?: string | null;
   countdown_days?: number | null;

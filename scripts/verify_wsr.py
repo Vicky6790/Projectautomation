@@ -178,7 +178,7 @@ def main() -> int:
         "Project Timeline",
         "Phase-Wise Status",
         "Progress of current week",
-        "Upcoming Milestones Of Next Week",
+        "Upcoming Milestones",
         "Risks & Focus Areas",
     ):
         if heading not in text:
@@ -194,7 +194,7 @@ def main() -> int:
         "Resources Deployed",
         "Person-Days Planned",
         "Work Items Complete",
-        "WSR Publish Date",
+        "Report Date",
     ):
         if label not in text:
             print("report missing label", label)

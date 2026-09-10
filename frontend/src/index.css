@@ -1705,6 +1705,10 @@ label select {
   text-transform: uppercase;
 }
 
+.countdown-ochre {
+  color: #c17f2a;
+}
+
 .hero-progress {
   display: flex;
   align-items: center;
@@ -3112,7 +3116,7 @@ label select {
 @media print {
   @page {
     size: A4 landscape;
-    margin: 8mm;
+    margin: 0;
   }
 
   html.wsr-printing {
@@ -3166,9 +3170,11 @@ label select {
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
+    width: 297mm;
+    max-width: 297mm;
+    box-sizing: border-box;
     margin: 0;
-    padding: 0;
+    padding: 10mm 12mm;
     background: #fff;
     overflow: visible;
   }
@@ -3195,7 +3201,7 @@ label select {
 
   html.wsr-printing .kpi-grid {
     margin: 0 0 10px;
-    gap: 12px;
+    gap: 20px;
     box-shadow: none;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
@@ -3225,7 +3231,7 @@ label select {
   }
 
   html.wsr-printing .gantt-exec-inner {
-    min-width: 0;
+    min-width: 1000px;
   }
 }
 
@@ -3868,16 +3874,86 @@ label select {
   }
 }
 
+.dms-print-title {
+  display: none;
+}
+
 @media print {
   html.dms-printing {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    height: auto !important;
+  }
+
+  html.dms-printing,
+  html.dms-printing body {
+    background: #fff !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  html.dms-printing * {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+    break-before: auto !important;
+    page-break-before: auto !important;
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+
+  html.dms-printing body * {
+    visibility: hidden;
+  }
+
+  html.dms-printing .dms-report,
+  html.dms-printing .dms-report * {
+    visibility: visible;
   }
 
   html.dms-printing .sidebar,
   html.dms-printing .shell-top,
+  html.dms-printing .mod-hero,
+  html.dms-printing .mod-landing,
   html.dms-printing .dms-no-print {
     display: none !important;
+  }
+
+  html.dms-printing .dms-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 297mm;
+    max-width: 297mm;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 10mm 12mm;
+    background: #fff;
+    overflow: visible;
+  }
+
+  html.dms-printing .dms-sheet,
+  html.dms-printing .dms-table-wrap {
+    overflow: visible;
+  }
+
+  html.dms-printing .dms-print-title {
+    display: block;
+    margin: 0 0 16px;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #0f172a;
+  }
+
+  html.dms-printing .dms-summary {
+    width: 100%;
+    max-width: none;
+  }
+
+  html.dms-printing .dms-table th button {
+    all: unset;
+    font-weight: 700;
+    color: inherit;
   }
 
   html.dms-printing .shell,
@@ -3886,8 +3962,101 @@ label select {
   html.dms-printing .dms-page {
     display: block;
     width: 100%;
+    min-height: 0;
+    height: auto !important;
     margin: 0;
     padding: 0;
     background: #fff;
+    box-shadow: none;
+    overflow: visible !important;
   }
 }
+
+.pa-print-view-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 12px;
+}
+
+.pa-print-view-bar p {
+  margin: 0;
+  margin-right: auto;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+html.pa-print-view .pa-print-view-bar .pa-print-view-back {
+  background: #fff;
+  color: #0f172a;
+  border-color: #fff;
+}
+
+html.pa-print-view .sidebar,
+html.pa-print-view .shell-top,
+html.pa-print-view .mod-hero,
+html.pa-print-view .mod-landing,
+html.pa-print-view .wsr-upload-card,
+html.pa-print-view .wsr-status-msg,
+html.pa-print-view .wsr-stages,
+html.pa-print-view .wsr-project-tabs,
+html.pa-print-view .dms-toolbar,
+html.pa-print-view .dms-drawer-root {
+  display: none !important;
+}
+
+html.pa-print-view .shell,
+html.pa-print-view .shell-main,
+html.pa-print-view .shell-content,
+html.pa-print-view .wsr-page,
+html.pa-print-view .dms-page {
+  display: block;
+  width: 100%;
+  height: auto !important;
+  min-height: 0;
+  margin: 0;
+  padding: 24px 32px 48px;
+  background: #fff;
+  box-shadow: none;
+  overflow: visible !important;
+}
+
+html.pa-print-view .kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+html.pa-print-view .wsr-hero {
+  flex-wrap: nowrap;
+}
+
+html.pa-print-view .gantt-exec,
+html.pa-print-view .gantt-exec-inner,
+html.pa-print-view .gantt-track-exec {
+  overflow: visible;
+}
+
+html.pa-print-view .wsr-project-pane {
+  display: block !important;
+  margin: 0 0 36px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+  page-break-after: always;
+  break-after: page;
+}
+
+html.pa-print-view .wsr-project-pane:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  page-break-after: auto;
+  break-after: auto;
+}
+
