@@ -78,7 +78,7 @@ export function WsrGantt({ phases, asOf, endMode = "planned", showProgress = fal
     );
 
   return (
-    <div className={`gantt-exec${showProgress ? " has-progress" : ""}`}>
+    <div className={`gantt-exec${showProgress ? " has-progress" : ""}`} style={{ ["--gantt-months" as string]: months.length }}>
       <div className="gantt-exec-inner">
         <div className="gantt-row-exec gantt-head-exec">
           <div>Phase</div>

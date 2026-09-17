@@ -190,6 +190,7 @@ export type ProgressItem = {
   phase_name?: string | null;
   parent_name?: string | null;
   label?: string | null;
+  owner?: string | null;
 };
 
 export type MilestoneItem = {
@@ -200,6 +201,7 @@ export type MilestoneItem = {
   phase_name?: string | null;
   parent_name?: string | null;
   label?: string | null;
+  owner?: string | null;
 };
 
 export type ExecutiveHighlight = {

@@ -462,13 +462,14 @@ def _progress(facts: WsrPlanFacts) -> str:
     if not items:
         return intro + "<p>No tasks scheduled in the current week</p>"
     rows = [
-        "<tr><td><b>Tasks</b></td><td><b>Start Date</b></td><td><b>End Date</b></td>"
+        "<tr><td><b>Tasks</b></td><td><b>Owner</b></td><td><b>Start Date</b></td><td><b>End Date</b></td>"
         "<td><b>Complete</b></td></tr>"
     ]
     for item in items:
         rows.append(
             "<tr>"
             f"<td>{html.escape(item.label or item.name)}</td>"
+            f"<td>{html.escape(item.owner or 'Unavailable')}</td>"
             f"<td>{html.escape(_short_date(item.scheduled_start))}</td>"
             f"<td>{html.escape(_short_date(item.scheduled_finish or item.date))}</td>"
             f"<td>{html.escape(_percent(item.progress))}</td>"
@@ -485,7 +486,7 @@ def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
     as_of_d = _day(as_of)
     rows = [
         "<tr><td><b>Start Date</b></td><td><b>End Date</b></td>"
-        "<td><b>Milestone / Activity</b></td><td></td></tr>"
+        "<td><b>Milestone / Activity</b></td><td><b>Owner</b></td><td></td></tr>"
     ]
     for item in items:
         item_day = _day(item.scheduled_start) or _day(item.date)
@@ -495,8 +496,9 @@ def _milestones(facts: WsrPlanFacts, as_of: str | None) -> str:
         start = html.escape(_week_date(item.scheduled_start))
         finish = html.escape(_week_date(item.scheduled_finish or item.date))
         name = html.escape(item.label or item.name)
+        owner = html.escape(item.owner or "Unavailable")
         rows.append(
-            f"<tr><td>{start}</td><td>{finish}</td><td>{name}</td><td>{today}</td></tr>"
+            f"<tr><td>{start}</td><td>{finish}</td><td>{name}</td><td>{owner}</td><td>{today}</td></tr>"
         )
     return intro + f"<table>{''.join(rows)}</table>"
 

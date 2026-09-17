@@ -880,6 +880,41 @@ def test_progress_to_date_is_current_week_only() -> None:
     assert item.progress == 50
 
 
+def test_week_items_include_task_owner() -> None:
+    facts = derive_wsr_facts(
+        _plan(
+            [
+                PlanTaskData(
+                    id=1,
+                    name="This week build",
+                    scheduled_start="2026-08-17",
+                    scheduled_finish="2026-08-21",
+                    percent_complete=50,
+                    assignments=[PlanAssignmentData(resource_name="Idealake")],
+                ),
+                PlanTaskData(
+                    id=2,
+                    name="Build screens",
+                    scheduled_start="2026-08-25",
+                    scheduled_finish="2026-08-28",
+                    assignments=[PlanAssignmentData(resource_name="Axis")],
+                ),
+                PlanTaskData(
+                    id=3,
+                    name="Go Live",
+                    is_milestone=True,
+                    scheduled_finish="2026-09-11",
+                ),
+            ]
+        ),
+        "2026-08-22",
+        generated_at="2026-08-22T10:00:00Z",
+    )
+    assert facts.progress_to_date[0].owner == "Idealake"
+    assert facts.upcoming_milestones[0].owner == "Axis"
+    assert facts.upcoming_milestones[0].name == "Build screens"
+
+
 def test_current_week_progress_is_ordered_by_date_then_completion() -> None:
     facts = derive_wsr_facts(
         _plan(

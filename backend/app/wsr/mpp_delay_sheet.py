@@ -1,11 +1,18 @@
 """Delay Mapping sheet from one MPP.
 
-Lists only tasks that:
-- are marked Delay or Additional in the MPP column "Delay And Or Additional"
+Lists tasks that:
+- are marked Delay or Additional in the MPP column "Delay And Or Additional", or
+  whose name uses those words when the column is empty
 - sit on the driving path to Go-Live (predecessor links plus outline children of
   summaries on that chain — phase summaries often have no predecessors of their own)
 - shift Go-Live because Finish is later than Baseline Finish, Duration grew, or
   an inserted Delay/Additional task has no Baseline Finish
+
+A real predecessor of Go-Live is listed even when Total Slack is positive. Slack is
+versus project finish, so post-Go-Live work can hide the tasks that moved Go-Live.
+
+If Go-Live slipped and no tagged tasks remain, slipped leaves on that path are listed
+so the sheet is not empty while the summary still shows a shift.
 """
 
 from __future__ import annotations
@@ -17,7 +24,7 @@ from app.wsr.delay_engine import (
     _holiday_set,
     _holiday_weekdays_after,
     _owner_class,
-    _owner_names,
+    _resolved_owner_names,
     _select_go_live,
     _weekdays_after,
 )
@@ -31,7 +38,7 @@ def build_delay_sheet(plan: ProjectPlanData, *, report_date: str | None = None) 
         "project" if (plan.calendar_available or plan.holiday_dates) else "weekdays_fallback"
     )
     go_live_task, go_live_status = _select_go_live(plan.tasks, as_of, _contains, _candidate_date)
-    pred_path_ids = _predecessor_path_ids(go_live_task, plan.tasks)
+    link_path_ids, pred_path_ids = _go_live_path_ids(go_live_task, plan.tasks)
     go_live_id = None if go_live_task is None else go_live_task.id
     baseline_go_live = None
     current_go_live = None
@@ -67,6 +74,7 @@ def build_delay_sheet(plan: ProjectPlanData, *, report_date: str | None = None) 
         row = _shifting_row(
             task,
             plan.tasks,
+            link_path_ids=link_path_ids,
             pred_path_ids=pred_path_ids,
             go_live_id=go_live_id,
             holidays=holidays,
@@ -74,6 +82,20 @@ def build_delay_sheet(plan: ProjectPlanData, *, report_date: str | None = None) 
         )
         if row is not None:
             rows.append(row)
+    if not rows and net:
+        for task in plan.tasks:
+            row = _shifting_row(
+                task,
+                plan.tasks,
+                link_path_ids=link_path_ids,
+                pred_path_ids=pred_path_ids,
+                go_live_id=go_live_id,
+                holidays=holidays,
+                calendar_source=calendar_source,
+                require_mark=False,
+            )
+            if row is not None:
+                rows.append(row)
     rows = _fit_to_go_live_shift(rows, net)
     rows.sort(key=lambda item: ((item.wbs or ""), item.current_task_id or 0, item.name))
     delay_rows = [row for row in rows if row.task_type == "delay"]
@@ -130,19 +152,29 @@ def _shifting_row(
     task: PlanTaskData,
     tasks: list[PlanTaskData],
     *,
+    link_path_ids: set[int],
     pred_path_ids: set[int],
     go_live_id: int | None,
     holidays: set[date],
     calendar_source: str,
+    require_mark: bool = True,
 ) -> DelayMappingRow | None:
     if task.is_summary or not (task.name or "").strip():
         return None
     if go_live_id is not None and task.id == go_live_id:
         return None
-    marked = classify_marked_type(task.delay_or_additional)
+    marked = classify_marked_type(task.delay_or_additional) or classify_marked_type(task.name)
     if marked is None:
-        return None
-    if not _shifts_go_live(task, tasks, pred_path_ids=pred_path_ids, go_live_id=go_live_id):
+        if require_mark:
+            return None
+        marked = "delay"
+    if not _shifts_go_live(
+        task,
+        tasks,
+        link_path_ids=link_path_ids,
+        pred_path_ids=pred_path_ids,
+        go_live_id=go_live_id,
+    ):
         return None
     planned = parse_date(task.baseline0_finish) or parse_date(task.baseline_finish)
     finish = parse_date(task.scheduled_finish) or parse_date(task.actual_finish)
@@ -155,7 +187,7 @@ def _shifting_row(
     )
     if not shift or shift <= 0:
         return None
-    names = _owner_names(task)
+    names = _resolved_owner_names(task, tasks)
     parent_name = _phase_name(task, tasks)
     return DelayMappingRow(
         name=task.name,
@@ -186,6 +218,14 @@ def _shifting_row(
     )
 
 
+def _go_live_path_ids(
+    go_live: PlanTaskData | None, tasks: list[PlanTaskData]
+) -> tuple[set[int], set[int]]:
+    link_path = _walk_go_live_path(go_live, tasks, include_outline_children=False)
+    expanded = _walk_go_live_path(go_live, tasks, include_outline_children=True)
+    return link_path, expanded
+
+
 def _predecessor_path_ids(go_live: PlanTaskData | None, tasks: list[PlanTaskData]) -> set[int]:
     """Predecessor chain plus outline children of summaries on that chain.
 
@@ -193,6 +233,15 @@ def _predecessor_path_ids(go_live: PlanTaskData | None, tasks: list[PlanTaskData
     The Delay/Additional work that moved the date sits under earlier summaries and
     is reached only by walking those children's predecessor links.
     """
+    return _walk_go_live_path(go_live, tasks, include_outline_children=True)
+
+
+def _walk_go_live_path(
+    go_live: PlanTaskData | None,
+    tasks: list[PlanTaskData],
+    *,
+    include_outline_children: bool,
+) -> set[int]:
     if go_live is None:
         return set()
     wbs_map = {(task.wbs or "").strip(): task for task in tasks if (task.wbs or "").strip()}
@@ -215,7 +264,8 @@ def _predecessor_path_ids(go_live: PlanTaskData | None, tasks: list[PlanTaskData
             continue
         on.add(nid)
         queue.extend(preds.get(nid, []))
-        queue.extend(children.get(nid, []))
+        if include_outline_children:
+            queue.extend(children.get(nid, []))
     return on
 
 
@@ -234,6 +284,7 @@ def _shifts_go_live(
     task: PlanTaskData,
     tasks: list[PlanTaskData],
     *,
+    link_path_ids: set[int],
     pred_path_ids: set[int],
     go_live_id: int | None,
 ) -> bool:
@@ -241,6 +292,8 @@ def _shifts_go_live(
         if task.critical is True:
             return True
         return task.total_slack_days is not None and task.total_slack_days <= 0
+    if task.id in link_path_ids:
+        return True
     if task.id in pred_path_ids:
         return not _has_float(task)
     parent = _parent_summary(task, tasks)

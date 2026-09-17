@@ -806,6 +806,13 @@ def _dedupe_week_items(items: list, *, by_name_only: bool = False):
     return unique
 
 
+def _task_owner_label(task: PlanTaskData, all_tasks: list[PlanTaskData]) -> str | None:
+    from app.wsr.delay_engine import _resolved_owner_names
+
+    names = _resolved_owner_names(task, all_tasks)
+    return " & ".join(names) if names else None
+
+
 def _progress_item(task: PlanTaskData, all_tasks: list[PlanTaskData], phase_ids: set[int]) -> ProgressItem:
     when = _candidate_date(task)
     phase_name, parent_name = _phase_and_parent(task, all_tasks, phase_ids)
@@ -818,6 +825,7 @@ def _progress_item(task: PlanTaskData, all_tasks: list[PlanTaskData], phase_ids:
         phase_name=phase_name,
         parent_name=parent_name,
         label=_join_hierarchy(phase_name, parent_name, task.name),
+        owner=_task_owner_label(task, all_tasks),
     )
 
 
@@ -837,6 +845,7 @@ def _milestone_item(
         phase_name=phase_name,
         parent_name=parent_name,
         label=_join_hierarchy(phase_name, parent_name, task.name),
+        owner=_task_owner_label(task, all_tasks),
     )
 
 

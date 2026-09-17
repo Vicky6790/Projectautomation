@@ -369,6 +369,7 @@ class ProgressItem(BaseModel):
     phase_name: str | None = None
     parent_name: str | None = None
     label: str = ""
+    owner: str | None = None
 
     @model_validator(mode="after")
     def _default_label(self):
@@ -385,6 +386,7 @@ class MilestoneItem(BaseModel):
     phase_name: str | None = None
     parent_name: str | None = None
     label: str = ""
+    owner: str | None = None
 
     @model_validator(mode="after")
     def _default_label(self):

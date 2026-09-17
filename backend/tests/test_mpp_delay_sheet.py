@@ -487,3 +487,119 @@ def test_delay_column_alias_matches_tasks_suffix() -> None:
     )
     assert not _field_label_matches("Gate", _DELAY_OR_ADDITIONAL_ALIASES, contains=True)
     assert not _field_label_matches("indendation", _DELAY_OR_ADDITIONAL_ALIASES, contains=True)
+
+
+def test_linked_predecessor_with_slack_is_listed() -> None:
+    mapping = build_delay_sheet(
+        _plan(
+            [
+                _task(
+                    1,
+                    "Delay In Client Sign-off",
+                    delay_or_additional="Delay",
+                    baseline0_finish="2026-10-06",
+                    scheduled_finish="2026-10-09",
+                    total_slack_days=12,
+                    critical=False,
+                    owner="Idealake",
+                ),
+                _task(
+                    2,
+                    "Go Live",
+                    is_milestone=True,
+                    baseline0_finish="2026-10-06",
+                    scheduled_finish="2026-10-09",
+                    predecessor_ids=[1],
+                ),
+            ]
+        )
+    )
+    assert [row.name for row in mapping.rows] == ["Delay In Client Sign-off"]
+    assert mapping.rows[0].shift_days == 3
+    assert mapping.rows[0].owner == "Idealake"
+    assert mapping.actual_shift_working_days == 3
+
+
+def test_name_marks_delay_when_column_empty() -> None:
+    mapping = build_delay_sheet(
+        _plan(
+            [
+                _task(
+                    1,
+                    "Delay In Sharing Walkthrough",
+                    baseline0_finish="2026-10-06",
+                    scheduled_finish="2026-10-09",
+                    owner="Axis",
+                ),
+                _task(
+                    2,
+                    "Go Live",
+                    is_milestone=True,
+                    baseline0_finish="2026-10-06",
+                    scheduled_finish="2026-10-09",
+                    predecessor_ids=[1],
+                ),
+            ]
+        )
+    )
+    assert [row.name for row in mapping.rows] == ["Delay In Sharing Walkthrough"]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].owner == "Axis"
+
+
+def test_untagged_path_slip_listed_when_go_live_shifted() -> None:
+    mapping = build_delay_sheet(
+        _plan(
+            [
+                _task(
+                    1,
+                    "UAT execution",
+                    baseline0_finish="2026-10-06",
+                    scheduled_finish="2026-10-09",
+                    owner="Idealake",
+                ),
+                _task(
+                    2,
+                    "Go Live",
+                    is_milestone=True,
+                    baseline0_finish="2026-10-06",
+                    scheduled_finish="2026-10-09",
+                    predecessor_ids=[1],
+                ),
+            ]
+        )
+    )
+    assert [row.name for row in mapping.rows] == ["UAT execution"]
+    assert mapping.rows[0].task_type == "delay"
+    assert mapping.rows[0].shift_days == 3
+    assert mapping.rows[0].owner == "Idealake"
+
+
+def test_parent_resource_used_when_task_has_no_assignment() -> None:
+    mapping = build_delay_sheet(
+        _plan(
+            [
+                _task(1, "UAT", wbs="1", is_summary=True, owner="Idealake"),
+                _task(
+                    2,
+                    "Delay In UAT Sign-off",
+                    wbs="1.1",
+                    delay_or_additional="Delay",
+                    baseline0_finish="2026-10-06",
+                    scheduled_finish="2026-10-09",
+                    total_slack_days=4,
+                ),
+                _task(
+                    3,
+                    "Go Live",
+                    wbs="1.2",
+                    is_milestone=True,
+                    baseline0_finish="2026-10-06",
+                    scheduled_finish="2026-10-09",
+                    predecessor_ids=[2],
+                ),
+            ]
+        )
+    )
+    assert [row.name for row in mapping.rows] == ["Delay In UAT Sign-off"]
+    assert mapping.rows[0].owner == "Idealake"

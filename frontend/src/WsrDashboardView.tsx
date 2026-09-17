@@ -5,7 +5,7 @@ import { ModuleHero, ModuleLanding } from "./components/ModuleHero";
 import { WsrGantt } from "./components/WsrGantt";
 import { WsrProgressRing } from "./components/WsrProgressRing";
 import { PrintViewBar } from "./components/PrintViewBar";
-import { downloadLandscapePdf } from "./printPage";
+import { printWithWsrEngine } from "./printPage";
 import { ShellMetaContext } from "./shellMeta";
 import type {
   AiDerivedItem,
@@ -226,6 +226,7 @@ function WsrProjectBoard({
               <thead>
                 <tr>
                   <th>Tasks</th>
+                  <th>Owner</th>
                   <th>Start Date</th>
                   <th>End Date</th>
                   <th>Complete</th>
@@ -235,6 +236,7 @@ function WsrProjectBoard({
                 {facts.progress_to_date.map((item: ProgressItem, index) => (
                   <tr key={`${item.name}-${index}`}>
                     <td className="task-hierarchy">{item.label || item.name}</td>
+                    <td>{unavailable(item.owner)}</td>
                     <td className="mono">{shortDate(item.scheduled_start)}</td>
                     <td className="mono">{shortDate(item.scheduled_finish || item.date)}</td>
                     <td>{item.progress == null ? "Unavailable" : percent(item.progress)}</td>
@@ -259,6 +261,7 @@ function WsrProjectBoard({
                   <th>Start Date</th>
                   <th>End Date</th>
                   <th>Milestone / Activity</th>
+                  <th>Owner</th>
                   <th />
                 </tr>
               </thead>
@@ -270,6 +273,7 @@ function WsrProjectBoard({
                       <td className="mono">{weekDate(item.scheduled_start)}</td>
                       <td className="mono">{weekDate(item.scheduled_finish || item.date)}</td>
                       <td className="task-hierarchy">{item.label || item.name}</td>
+                      <td>{unavailable(item.owner)}</td>
                       <td>{today ? <span className="today-badge">Today</span> : null}</td>
                     </tr>
                   );
@@ -567,10 +571,7 @@ export function WsrDashboardView() {
     }
     setSavingPdf(true);
     try {
-      await downloadLandscapePdf(
-        ".wsr-report",
-        reportKind === "executive" ? "Executive Summary.pdf" : "WSR Report.pdf",
-      );
+      await printWithWsrEngine(".wsr-report");
     } catch {
       setMessage("Could not save the PDF.");
     } finally {
@@ -698,7 +699,7 @@ export function WsrDashboardView() {
               onExit={() => setPrintView(false)}
             />
           ) : null}
-        <div className="wsr-report">
+        <div className={reportKind === "executive" ? "wsr-report wsr-report-exec" : "wsr-report"}>
           {report.portfolio ? (
             <WsrHero
               name={report.portfolio.name}

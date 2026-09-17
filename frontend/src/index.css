@@ -3162,7 +3162,9 @@ label select {
   html.wsr-printing .wsr-action-buttons,
   html.wsr-printing .delay-head-actions,
   html.wsr-printing .delay-head .btn,
-  html.wsr-printing .wsr-page > .btn {
+  html.wsr-printing .wsr-page > .btn,
+  html.wsr-printing .pa-print-view-bar,
+  html.wsr-printing .dms-no-print {
     display: none !important;
   }
 
@@ -3197,6 +3199,12 @@ label select {
   html.wsr-printing .wsr-hero {
     margin: 0 0 10px;
     box-shadow: none;
+    overflow: visible !important;
+  }
+
+  html.wsr-printing .hero-progress,
+  html.wsr-printing .progress-ring {
+    flex-shrink: 0;
   }
 
   html.wsr-printing .kpi-grid {
@@ -3231,7 +3239,20 @@ label select {
   }
 
   html.wsr-printing .gantt-exec-inner {
-    min-width: 1000px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  html.wsr-printing .gantt-head-exec {
+    position: static;
+  }
+
+  html.wsr-printing .gantt-exec.has-progress .gantt-row-exec {
+    grid-template-columns: 170px 100px 40px 68px minmax(0, 1fr);
+  }
+
+  html.pa-print-view.wsr-printing .wsr-project-pane {
+    display: block !important;
   }
 }
 
@@ -4021,6 +4042,7 @@ html.pa-print-view .dms-page {
   display: block;
   width: 100%;
   height: auto !important;
+  max-height: none !important;
   min-height: 0;
   margin: 0;
   padding: 24px 32px 48px;
@@ -4033,14 +4055,70 @@ html.pa-print-view .kpi-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
 
-html.pa-print-view .wsr-hero {
-  flex-wrap: nowrap;
+html.pa-print-view,
+html.pa-print-view body {
+  overflow: visible !important;
+  max-width: none !important;
+  width: auto;
+  height: auto !important;
 }
 
-html.pa-print-view .gantt-exec,
-html.pa-print-view .gantt-exec-inner,
+html.pa-print-capture,
+html.pa-print-capture body {
+  overflow: visible !important;
+  max-width: none !important;
+  width: auto !important;
+  height: auto !important;
+  background: #fff;
+}
+
+html.pa-print-capture .wsr-report,
+html.pa-print-capture .dms-report {
+  width: 100%;
+  max-width: none !important;
+  overflow: visible !important;
+}
+
+html.pa-print-view .wsr-hero {
+  overflow: visible !important;
+  min-width: 0;
+}
+
+html.pa-print-view .gantt-exec {
+  margin: 0 0 8px !important;
+  overflow: visible !important;
+}
+
+html.pa-print-view .gantt-exec-inner {
+  min-width: 100%;
+  width: 100%;
+  overflow: visible !important;
+}
+
+html.pa-print-view .gantt-head-exec {
+  position: static;
+}
+
 html.pa-print-view .gantt-track-exec {
   overflow: visible;
+}
+
+html.pa-print-view .wsr-section {
+  overflow: visible;
+}
+
+html.pa-print-view .wsr-report {
+  padding-bottom: 24px;
+  min-width: 0;
+  width: 100%;
+}
+
+html.pa-print-view .gantt-exec.has-progress .gantt-row-exec {
+  grid-template-columns: 200px 118px 44px 76px minmax(0, 1fr);
+}
+
+html.pa-print-view .hero-progress {
+  flex-shrink: 0;
 }
 
 html.pa-print-view .wsr-project-pane {
